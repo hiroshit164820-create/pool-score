@@ -343,9 +343,11 @@ button:focus-visible {
 .score-panel {
   /* min-height を固定にすると、縦の短い端末でスコアボード（overflow:hidden）から
      2つ目のパネルがはみ出して丸ごと見えなくなる。
-     画面に追随させて、狭いときは両方を縮める */
+     一方で下げすぎるとタップ領域（120px以上）を割るため、
+     広い画面では120pxを保ち、狭いときだけ縮める。
+     ※ grid-mode・has-sheet・solo-mode は別途この下で上書きしている */
   flex: 1 1 0;
-  min-height: min(120px, 13vh);
+  min-height: min(120px, 17vh);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -633,6 +635,19 @@ button:focus-visible {
 .match-card .mc-main .vs {
   color: var(--text-dim);
   font-size: 14px;
+}
+/* 試合のメモ。書いてあれば履歴を開くだけで読める */
+.match-card .mc-note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  /* --bg は空の水色なので使わない。付箋のような淡い紙色にして本文を読ませる */
+  background: #fdf6e3;
+  border: 2px solid var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .match-card .mc-score {
   font-weight: 900;
@@ -1387,6 +1402,7 @@ input,
 textarea,
 .ev-desc,
 .mc-main,
+.mc-note,
 .stat-val {
   -webkit-user-select: text;
   user-select: text;
@@ -2046,10 +2062,11 @@ button,
 #screenMatch .scoreboard {
   flex: 1 1 auto;
   /* 縦の短い端末では固定の下限が盤面のボタンを画面外へ押し出すため、
-     画面の高さに追随させる。スコアが読める最低限（110px）は残す。
-     overflow:hidden は付けない——中身（2つ目のパネルや帯）が
-     切り落とされて「あるのに見えない」状態になるため */
-  min-height: clamp(110px, 22vh, 150px);
+     画面の高さに追随させる。
+     下限は「スコア欄のタップ領域は120px以上」という決まりから来ていて、
+     パネル2つぶん（240px）＋間の余白を割らない値にする。
+     ここを下げると browser_test の「タップ領域が120px以上」が落ちる */
+  min-height: clamp(150px, 30vh, 260px);
   overflow: hidden;
 }
 /* 盤面つきの種目（ローテーション）は、スコアボードの中に
@@ -2380,6 +2397,28 @@ body.match-active .app {
 .resume-card .rc-actions .primary {
   background: var(--accent);
   color: #fff;
+}
+
+/* ---------- 終了ダイアログのメモ ---------- */
+.finish-note-label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.finish-note {
+  width: 100%;
+  /* 本文は16px。これより小さいとiOSで入力時に画面が拡大する */
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.5;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: #fff;
+  border: var(--bw) solid var(--ink);
+  border-radius: 0;
+  resize: vertical;
 }
 
 /* ---------- どこからでも戻れるボタン ---------- */

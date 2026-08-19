@@ -965,6 +965,47 @@ const SETUP = (function () {
     });
     wrap.appendChild(UI.el("div", { class: "field" }, [UI.el("label", { text: "ハンデ" }), modeToggle]));
 
+    // 決まった選択肢からだけ選ばせる種目（ローテーションの120/180/240/300）。
+    // 自由入力にすると規程に無い数字が入るため、裏の取れた値だけを並べる
+    if (g.goalChoices) {
+      if (g.goalNote) wrap.appendChild(UI.el("p", { class: "hint", text: g.goalNote }));
+
+      const label = goalMode === "handicap" ? null : "何点先取で勝ちか";
+      const sides = goalMode === "handicap" ? ["A", "B"] : [null];
+
+      sides.forEach(function (side) {
+        const cur = side ? goalValues[side] : goalValues.A;
+        const chips = UI.el("div", { class: "chips goal-choices" });
+        g.goalChoices.forEach(function (v) {
+          chips.appendChild(
+            UI.el("button", {
+              type: "button",
+              class: "chip",
+              "aria-pressed": String(cur === v),
+              text: v + "点",
+              onclick: function () {
+                if (side) goalValues[side] = v;
+                else goalValues = { A: v, B: v };
+                renderGoalArea();
+              },
+            })
+          );
+        });
+        wrap.appendChild(
+          UI.el("div", { class: "field" }, [
+            UI.el("label", {
+              text: side ? nameForSide(side) + " の目標（点）" : label,
+            }),
+            chips,
+          ])
+        );
+      });
+
+      renderBallHandicap();
+      renderBallSet();
+      return;
+    }
+
     // 種目によっては先取点の入力自体を出さない（games_data.js の goalHidden）
     if (g.goalHidden) {
       wrap.appendChild(

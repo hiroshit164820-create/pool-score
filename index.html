@@ -354,6 +354,10 @@
   <div class="modal">
     <h2>試合を終了します</h2>
     <div id="finishSummary"></div>
+    <!-- その試合のメモ。あとから履歴でも書き足せる -->
+    <label class="finish-note-label" for="finishNote">メモ（任意）</label>
+    <textarea id="finishNote" class="finish-note" rows="2"
+      placeholder="気づいたこと・調子・相手のことなど"></textarea>
     <div class="modal-actions">
       <button id="cancelFinishBtn" class="ghost">まだ続ける</button>
       <button id="confirmFinishBtn" class="primary">終了して保存</button>

@@ -25,6 +25,28 @@ const HISTORY = (function () {
     UI.showScreen("screenHistory");
   }
 
+  /**
+   * メモの編集。
+   *
+   * 台の脇で使うため、専用画面へ移動せずその場で書けるようにする。
+   * 空にすればメモを消せる。
+   */
+  function editNote(entry) {
+    const cur = (entry.note || "");
+    const who = entry.names.A + " 対 " + entry.names.B;
+    const next = window.prompt(
+      [entry.gameLabel + "／" + who, "", "この試合のメモ（空にすると消えます）"].join(String.fromCharCode(10)),
+      cur
+    );
+    if (next === null) return; // 取り消し
+    if (!STORE.setMatchNote(entry.id, next)) {
+      UI.toast("メモを保存できませんでした。", "warn");
+      return;
+    }
+    render();
+    UI.toast(next.trim() ? "メモを保存しました。" : "メモを消しました。");
+  }
+
   function fmtDate(iso) {
     try {
       const d = new Date(iso);
@@ -97,6 +119,14 @@ const HISTORY = (function () {
       } else if (m.winner) {
         foot.appendChild(UI.el("span", { class: "badge", text: (m.winner === "A" ? m.names.A : m.names.B) + " の勝ち" }));
       }
+      // メモ。書いてあれば内容を、無ければ「メモを追加」を出す
+      foot.appendChild(
+        UI.el("button", {
+          class: "small ghost",
+          text: (m.note || "").trim() ? "メモを編集" : "メモを追加",
+          onclick: function () { editNote(m); },
+        })
+      );
       // 削除は取り消せないため、ここだけ確認を挟む
       foot.appendChild(
         UI.el("button", {
@@ -118,6 +148,12 @@ const HISTORY = (function () {
         })
       );
       card.appendChild(foot);
+
+      // 書いてあるメモは開かなくても読めるようにする
+      const noteText = (m.note || "").trim();
+      if (noteText) {
+        card.appendChild(UI.el("p", { class: "mc-note", text: noteText }));
+      }
 
       list.appendChild(card);
     });

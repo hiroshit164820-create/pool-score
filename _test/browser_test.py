@@ -137,12 +137,11 @@ def run():
         page.screenshot(path=os.path.join(SHOT_DIR, "03_match.png"), full_page=True)
 
         # ---------- 記録 ----------
-        # マスワリ付きでAが1ラック取る
+        # マスワリはボタンを押した時点でラック取得まで記録される（本人指示9）。
+        # 以前は「押しておいて、次にスコアをタップすると効く」予約式だった
         page.click('#flagButtons button:has-text("マスワリ")')
-        page.wait_for_timeout(100)
-        page.click("#panelA")
-        page.wait_for_timeout(300)
-        check(page.text_content("#scoreA") == "1", "Aが1ラック取った")
+        page.wait_for_timeout(400)
+        check(page.text_content("#scoreA") == "1", "マスワリを押すとAが1ラック取る")
         # 勝者ブレイクなのでブレイク権はAのまま
         check(page.text_content("#breakMarkA") == "BREAK", "勝者ブレイク: Aがブレイク継続")
 

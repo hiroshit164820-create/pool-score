@@ -54,6 +54,7 @@ const STORE = (function () {
       winner: match.result ? match.result.winner : null,
       scores: match.result ? match.result.scores : null,
       racks: match.result ? match.result.racks : null,
+      note: match.note || "",
       deletedAt: match.deletedAt || null,
     };
   }
@@ -89,6 +90,30 @@ const STORE = (function () {
     });
     if (at >= 0) {
       idx[at].deletedAt = new Date().toISOString();
+      writeJSON(KEY_INDEX, idx);
+    }
+    return true;
+  }
+
+  /**
+   * 試合のメモを書き換える。
+   *
+   * 本体と一覧（インデックス）の両方を更新する。
+   * 一覧にも持たせておくと、履歴を開くたびに全試合を読み込まずに済む。
+   */
+  function setMatchNote(id, note) {
+    const text = String(note == null ? "" : note);
+    const m = loadMatch(id);
+    if (!m) return false;
+    m.note = text;
+    m.updatedAt = new Date().toISOString();
+    if (!writeJSON(KEY_MATCH + id, m)) return false;
+
+    const idx = readJSON(KEY_INDEX, []);
+    const at = idx.findIndex(function (e) { return e.id === id; });
+    if (at >= 0) {
+      idx[at].note = text;
+      idx[at].updatedAt = m.updatedAt;
       writeJSON(KEY_INDEX, idx);
     }
     return true;
@@ -366,6 +391,7 @@ const STORE = (function () {
     saveMatch: saveMatch,
     loadMatch: loadMatch,
     deleteMatch: deleteMatch,
+    setMatchNote: setMatchNote,
     findOngoing: findOngoing,
     listPlayers: listPlayers,
     upsertPlayer: upsertPlayer,

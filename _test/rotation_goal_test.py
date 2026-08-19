@@ -111,15 +111,27 @@ with sync_playwright() as p:
     bt_field = pg.locator("#breakTypeToggle").locator("xpath=ancestor::div[@class='field'][1]")
     check(bt_field.is_hidden(), "ブレイク方式の選択は出さない（規程で決まっているため）")
 
-    # ローテーションには「何点先取」という決め方が無いので入力を出さない
-    check(pg.locator("#goalArea .goal-picker").count() == 0,
-          "先取点の入力を出さない", pg.locator("#goalArea .goal-picker").count())
+    # 目標点は決まった選択肢（120/180/240/300）から選ぶ。
+    # 61点は公式規程に無いのでプリセットに入れない（04_種目ルール仕様.md）
+    choices = pg.locator("#goalArea .goal-choices .chip").all_text_contents()
+    choices = [c.strip() for c in choices]
+    check(choices == ["120点", "180点", "240点", "300点"],
+          "目標点は120/180/240/300から選ぶ", choices)
+    check("61点" not in choices, "61点は選択肢に入れない（公式規程に無いため）", choices)
     goal_label = pg.text_content("#goalArea") or ""
     check("120点" in goal_label, "1ラック120点だと案内される", goal_label[:80])
-    check("61点" in goal_label, "61点で決着すると案内される", goal_label[:80])
 
-    # 既定の決着点は61点（120点の過半数）
-    goal_default = pg.evaluate("() => null")  # 保存後に確認する
+    # 既定は120点（JAPA B級・女子級／CUESの記載と一致）
+    pressed = pg.locator('#goalArea .goal-choices .chip[aria-pressed="true"]').all_text_contents()
+    check([p.strip() for p in pressed] == ["120点"], "既定は120点", pressed)
+
+    # 選び直せる
+    pg.click('#goalArea .goal-choices .chip:text-is("180点")')
+    pg.wait_for_timeout(200)
+    pressed = pg.locator('#goalArea .goal-choices .chip[aria-pressed="true"]').all_text_contents()
+    check([p.strip() for p in pressed] == ["180点"], "選び直すと切り替わる", pressed)
+    pg.click('#goalArea .goal-choices .chip:text-is("120点")')
+    pg.wait_for_timeout(200)
 
     pg.fill("#inNameA", "山田")
     pg.fill("#inNameB", "佐藤")
@@ -132,7 +144,7 @@ with sync_playwright() as p:
       const m = JSON.parse(localStorage.getItem('pool_match_' + idx[0].id));
       return m.goal.targets;
     }""")
-    check(saved["A"] == 61 and saved["B"] == 61, "決着点は61点（120点の過半数）", saved)
+    check(saved["A"] == 120 and saved["B"] == 120, "決着点は選んだ120点", saved)
 
     # ================================================================
     section("④ 盤面から得点を記録できる")
@@ -194,20 +206,34 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "71_rotation.png"), full_page=False)
 
     # ================================================================
-    section("⑤ ローテーションの決着（61点）")
-    # Aは17点。残りの球を全部入れて61点を超えさせる
-    pg.click("#turnBtn")
-    pg.wait_for_timeout(300)
+    section("⑤ ローテーションの決着（120点・ラックをまたぐ）")
+    # 1ラックは合計120点。目標も120点なので、
+    # 「1ラック取り切っても、途中で相手に取られた点があれば決着しない」ことを見る。
+    # ここまでで A=17点 / B=0点。残りの球（合計103点）を全部Aが入れれば120点になる
+    # いまAの番になるまで交代する（直前の取り消しで番が変わっているため）
+    for _ in range(3):
+        cur = pg.evaluate("() => document.querySelector('.score-panel.is-turn')?.id || ''")
+        if cur == "panelA":
+            break
+        pg.click("#turnBtn")
+        pg.wait_for_timeout(300)
+    check(pg.evaluate("() => document.querySelector('.score-panel.is-turn')?.id || ''") == "panelA",
+          "Aの番になっている")
+
     for n in [1, 2, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15]:
         btn = pg.locator('#ballGrid .ball-btn[data-ball="%d"]' % n)
         if btn.count() and not btn.is_disabled():
             btn.click()
-            pg.wait_for_timeout(180)
+            pg.wait_for_timeout(150)
         if pg.is_visible("#finishModal"):
             break
+
     score = int(pg.text_content("#scoreA") or "0")
-    check(score >= 61, "61点以上になる", score)
-    check(pg.is_visible("#finishModal"), "61点で終了の確認が出る")
+    check(score >= 61, "61点を超えても続く（61点では決着しない）", score)
+    ended_at_61 = pg.is_visible("#finishModal") and score < 120
+    check(not ended_at_61, "61点で終了の確認は出ない", score)
+    if score >= 120:
+        check(pg.is_visible("#finishModal"), "120点に届いたら終了の確認が出る", score)
 
     # ================================================================
     real = [e for e in errs if "favicon" not in e.lower()]

@@ -325,13 +325,20 @@ const MATCH = (function () {
     if (match) STORE.saveMatch(match);
   }
 
-  function recordRackWin(side) {
+  /**
+   * ラックを取ったことを記録する。
+   *
+   * opts.instantFlag に "masuwari" / "breakAce" を渡すと、
+   * その項目を付けたうえでラック取得を記録する（ボタンを押した時点で確定させる）。
+   */
+  function recordRackWin(side, opts) {
     const st = reduceMatch(match);
     if (st.winner) {
       UI.toast("この試合はもう終わっています。", "warn");
       return;
     }
 
+    const instant = (opts && opts.instantFlag) || null;
     const r = resolveGame(match.gameId);
 
     // 球1個=1点の種目（14-1）は、タップ1回を「1個ポケットした」として記録する。
@@ -346,8 +353,9 @@ const MATCH = (function () {
       side: side,
       d: {
         winner: side,
-        masuwari: flags.masuwari && r.base.hasMasuwari,
-        breakAce: flags.breakAce && r.base.hasBreakAce,
+        // 予約されているぶんに加え、押して即記録したぶんも立てる
+        masuwari: (flags.masuwari || instant === "masuwari") && r.base.hasMasuwari,
+        breakAce: (flags.breakAce || instant === "breakAce") && r.base.hasBreakAce,
         safety: flags.safety && r.base.safetyCallable,
       },
     });
@@ -967,21 +975,43 @@ const MATCH = (function () {
     }
 
     const defs = [
-      { key: "masuwari", label: "マスワリ", show: base.hasMasuwari, hint: "ブレイクして撞き切った" },
-      { key: "breakAce", label: "ブレイクエース", show: base.hasBreakAce, hint: "ブレイクで直接入れた" },
+      // instant: 押した時点でラック取得まで記録する（予約にしない）
+      { key: "masuwari", label: "マスワリ", show: base.hasMasuwari,
+        hint: "ブレイクして撞き切った", instant: true },
+      { key: "breakAce", label: "ブレイクエース", show: base.hasBreakAce,
+        hint: "ブレイクで直接入れた", instant: true },
       { key: "safety", label: "セーフティ", show: base.safetyCallable, hint: "" },
     ];
 
     const shown = defs.filter(function (d) { return d.show; });
+    const st = reduceMatch(match);
+    const breaker = st.breakSide || st.firstSide;
+
     shown.forEach(function (d) {
+      // マスワリとブレイクエースは「ブレイクした側がそのラックを取り切った」形。
+      // 押した時点でラック取得まで確定するので、予約にせずその場で記録する（本人の指示）。
+      if (d.instant) {
+        wrap.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "flag-instant",
+            title: d.hint,
+            text: d.label,
+            onclick: UI.guard(function () {
+              recordRackWin(breaker, { instantFlag: d.key });
+            }),
+          })
+        );
+        return;
+      }
+
+      // セーフティはラックの取得と関係しないので、これまでどおり予約式のまま
       const on = !!flags[d.key];
       wrap.appendChild(
         UI.el("button", {
           type: "button",
           "aria-pressed": String(on),
           title: d.hint,
-          // 押した状態が「これから記録される予約」だと分かるようにする。
-          // 押した瞬間には何も起きず、次にラックを取ったときに効くため
           text: (on ? "✓ " : "") + d.label,
           onclick: function () {
             flags[d.key] = !flags[d.key];
@@ -994,8 +1024,20 @@ const MATCH = (function () {
       );
     });
 
+    // マスワリ・ブレイクエースを押すと誰の得点になるのかを明示する。
+    // 「押したら勝手に点が入った」と見えないようにするため
+    if (shown.some(function (d) { return d.instant; })) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "マスワリ・ブレイクエースを押すと、ブレイクした "
+            + sideName(breaker) + " がこのラックを取ったものとして記録します。",
+        })
+      );
+    }
+
     // 予約中のものがあれば、その場に文章で出しておく
-    const on = shown.filter(function (d) { return flags[d.key]; });
+    const on = shown.filter(function (d) { return !d.instant && flags[d.key]; });
     if (on.length) {
       wrap.appendChild(
         UI.el("p", {
@@ -1095,11 +1137,17 @@ const MATCH = (function () {
         text: sideName("A") + " " + cur.A + unit + " 対 " + sideName("B") + " " + cur.B + unit,
       })
     );
+    // すでに書いてあるメモがあれば引き継ぐ（中断→再開でも消えない）
+    const noteBox = $("finishNote");
+    if (noteBox) noteBox.value = match.note || "";
     $("finishModal").hidden = false;
   }
 
   function confirmFinish() {
     const st = reduceMatch(match);
+    // メモは結果を組み立てる前に入れる（保存する内容に含めるため）
+    const noteBox = $("finishNote");
+    if (noteBox) match.note = (noteBox.value || "").trim();
     appendEvent(match, {
       t: "MATCH_END",
       side: null,
