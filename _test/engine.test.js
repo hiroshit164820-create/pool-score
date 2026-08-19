@@ -530,6 +530,154 @@ section("JPAチームポイント: 合計が常に20 / result生成");
 }
 
 /* ============================================================ */
+section("14-1: 球1個=1点、番号は関係ない");
+{
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  pocket(m, "A", [15]); // 15番でも1点
+  eq(app.reduceMatch(m).score.A, 1, "15番でも1点");
+  pocket(m, "A", [1, 2, 3]);
+  eq(app.reduceMatch(m).score.A, 4, "3個入れて合計4点");
+}
+
+/* ============================================================ */
+section("14-1: ラックを跨いで得点が連続する（ブレイクボール方式）");
+{
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  // 14個入れて、ブレイクボール1個を残してラックを組み直す
+  pocket(m, "A", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  eq(app.reduceMatch(m).score.A, 14, "14個で14点");
+  rackStart(m, 2, "A", { continuation: true });
+  pocket(m, "A", [15]); // ブレイクボールを入れて次のラックへ
+  eq(app.reduceMatch(m).score.A, 15, "ラックを跨いで得点が続く");
+  eq(app.reduceMatch(m).racks.A, 0, "ラック勝ちの概念は使わない");
+}
+
+/* ============================================================ */
+section("14-1: ファウル1回につき1点減点（第9条第2項）");
+{
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  pocket(m, "A", [1, 2, 3, 4, 5]);
+  eq(app.reduceMatch(m).score.A, 5, "5点");
+  foul(m, "A", false);
+  eq(app.reduceMatch(m).score.A, 4, "ファウルで1点減点");
+  eq(app.reduceMatch(m).stats.A.penaltyPoints, -1, "減点が記録される");
+}
+
+/* ============================================================ */
+section("14-1: スリーファールは合計16点減点（第9条第3項）");
+{
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  pocket(m, "A", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // 20点まで貯める
+  pocket(m, "A", [11, 12, 13, 14]);
+  eq(app.reduceMatch(m).score.A, 14, "14点");
+
+  foul(m, "A", false); // 1回目 -1
+  eq(app.reduceMatch(m).score.A, 13, "1回目のファウルで13点");
+  foul(m, "A", false); // 2回目 -1
+  eq(app.reduceMatch(m).score.A, 12, "2回目のファウルで12点");
+  // 第9条第3項:「スリーファール目の減点は、ファールの1点とスリーファールの15点、
+  // 合計16点が減点される」→ 3回目のショットだけで-16。1・2回目の-1ずつと合わせて通算-18
+  foul(m, "A", false);
+  const st = app.reduceMatch(m);
+  eq(st.score.A, -4, "3回目で16点減点され -4点になる（12-16）");
+  eq(14 - st.score.A, 18, "3連続ファウルの通算減点は18点（-1,-1,-16）");
+  eq(st.stats.A.threeFouls, 1, "スリーファールが記録される");
+  eq(st.foulStreak.A, 0, "カウントはリセットされる");
+}
+
+/* ============================================================ */
+section("14-1: スリーファールに2ファール宣告は不要（9ボールとの違い）");
+{
+  // 14-1: 宣告なしでも成立する（第8条第2項に宣告の要件がない）
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  pocket(m, "A", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  foul(m, "A", false);
+  foul(m, "A", false);
+  foul(m, "A", false);
+  eq(app.reduceMatch(m).stats.A.threeFouls, 1, "宣告なしでもスリーファールが成立する");
+
+  // 9ボールは宣告がないと成立しない（対比）
+  const m2 = app.createMatch({
+    gameId: "9ball",
+    goal: { type: "racks", targets: { A: 5, B: 5 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  foul(m2, "A", false);
+  foul(m2, "A", false);
+  foul(m2, "A", false);
+  eq(app.reduceMatch(m2).racks.B, 0, "9ボールは宣告なしだと成立しない（対比）");
+}
+
+/* ============================================================ */
+section("14-1: ブレイクの減点（第9条第4項）");
+{
+  // 正常でないオープニングブレイク → 2点減点
+  const m = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  app.appendEvent(m, { t: "FOUL", side: "A", d: { kind: "break", illegalBreak: true } }, tick());
+  eq(app.reduceMatch(m).score.A, -2, "正常でないブレイクは2点減点");
+
+  // 正常なブレイクでのスクラッチ → 1点減点
+  const m2 = app.createMatch({
+    gameId: "straight",
+    goal: { type: "score", targets: { A: 100, B: 100 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  app.appendEvent(m2, { t: "FOUL", side: "A", d: { kind: "break" } }, tick());
+  eq(app.reduceMatch(m2).score.A, -1, "正常なブレイクでのファウルは1点減点");
+
+  // ブレイクファウルはスリーファールにカウントしない
+  const st = app.reduceMatch(m2);
+  eq(st.foulStreak.A, 0, "ブレイクファウルはスリーファールに数えない");
+}
+
+/* ============================================================ */
+section("14-1以外の種目では減点が起きないこと");
+{
+  const m = app.createMatch({
+    gameId: "rotation",
+    goal: { type: "score", targets: { A: 120, B: 120 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  pocket(m, "A", [10]);
+  foul(m, "A", false);
+  eq(app.reduceMatch(m).score.A, 10, "ローテーションはファウルで減点されない");
+  eq(app.reduceMatch(m).stats.A.penaltyPoints, 0, "減点は記録されない");
+}
+
+/* ============================================================ */
 section("エンジンに種目名の分岐がないこと（設計ゲート）");
 {
   const fs = require("fs");

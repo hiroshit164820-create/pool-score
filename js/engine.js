@@ -219,6 +219,8 @@ function emptySideStats() {
     highRun: 0,
     stepPenalty: 0,
     stepCycles: 0,
+    penaltyPoints: 0, // 減点の合計（14-1・カイルン）
+    threeFouls: 0,
   };
 }
 
@@ -452,19 +454,48 @@ function applyFoul(st, ev, ctx) {
   if (!side) return;
   st.stats[side].fouls++;
   const kind = (ev.d && ev.d.kind) || "normal";
+  const sc = ctx.scoring;
 
   // ブレイキングファールはスリーファールにカウントしない（全種目共通で規程に明記）
-  if (kind === "break") return;
+  if (kind === "break") {
+    // ただし14-1は、オープニングブレイクが正常でないと2点減点（第9条第4項）
+    if (sc.badBreakPenalty && ev.d && ev.d.illegalBreak) {
+      st.score[side] += sc.badBreakPenalty;
+      st.stats[side].penaltyPoints += sc.badBreakPenalty;
+    } else if (sc.foulPenalty) {
+      // 正常なブレイクでのスクラッチ等は1点減点（同項の後段）
+      st.score[side] += sc.foulPenalty;
+      st.stats[side].penaltyPoints += sc.foulPenalty;
+    }
+    return;
+  }
+
+  // 14-1はファウル1回につき1点減点（第9条第2項）。他種目は減点なし
+  if (sc.foulPenalty) {
+    st.score[side] += sc.foulPenalty;
+    st.stats[side].penaltyPoints += sc.foulPenalty;
+  }
 
   st.foulStreak[side]++;
   st.foulStreak[other(side)] = 0;
   if (ev.d && ev.d.warned) st.twoFoulWarned[side] = true;
 
-  // スリーファール成立には「2ファールの宣告」が必要（宣告なしだと成立しない）
-  if (st.foulStreak[side] >= 3 && st.twoFoulWarned[side]) {
+  // スリーファールの成立条件は種目で違う。
+  //   9/10/8ボール : 2ファールの宣告が必要（宣告がなければ成立しない）
+  //   14-1        : 宣告の要件がない（第8条第2項）
+  const needsWarning = ctx.base.threeFoulResult !== "penaltyOnly";
+  const established =
+    st.foulStreak[side] >= 3 && (!needsWarning || st.twoFoulWarned[side]);
+
+  if (established) {
     const result = ctx.base.threeFoulResult;
     if (result === "loseRack") {
       finishRack(st, other(side), ctx);
+    } else if (result === "penaltyOnly" && sc.threeFoulPenalty) {
+      // 14-1: さらに15点減点（第9条第3項。当該ファールの1点と合わせて計16点減点）
+      st.score[side] += sc.threeFoulPenalty;
+      st.stats[side].penaltyPoints += sc.threeFoulPenalty;
+      st.stats[side].threeFouls++;
     }
     // ローテーション(freeBallOnly)はラック負けにならず、カウントだけリセット
     st.foulStreak[side] = 0;
@@ -484,6 +515,7 @@ function applyStep(st, ev, ctx) {
       st.score[other(side)] += 1;
     } else {
       st.score[side] += ctx.scoring.penaltyPoint;
+      st.stats[side].penaltyPoints += ctx.scoring.penaltyPoint;
     }
     st.stats[side].stepPenalty++;
     st.step[side] = 1;

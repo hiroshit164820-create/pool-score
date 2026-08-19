@@ -67,6 +67,25 @@ const BASE_RULES = {
     rackEndsScoring: false, // ★ ラックは盤面のリセット単位にすぎない
   },
 
+  // 14-1（ストレートプール）NBA2026 第13章
+  straight: {
+    label: "14-1",
+    balls: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    keyBall: null,
+    callShot: true, // 第1条第4項: ブレイクショットを含む全ショット
+    // 14個入れたらブレイクボール1個を残してラックを組み直す。
+    // 得点はラックを跨いで連続するため、ローテーションと同じ continuation 扱い
+    defaultBreakType: "continuation",
+    breakTypeFixed: true,
+    ballsPerRack: 14, // ラックを組み直すまでに入れる個数
+    hasBreakAce: false,
+    hasMasuwari: false, // ラック跨ぎ得点のため概念が成立しない
+    safetyCallable: true,
+    // 第8条第2項: スリーファールでもラック負けにはならない（減点＋選択権）
+    threeFoulResult: "penaltyOnly",
+    rackEndsScoring: false, // ★ ラックは盤面のリセット単位にすぎない
+  },
+
   kailun: {
     label: "カイルン",
     balls: [1, 3, 11], // 1番=黄球、3番と11番=赤球

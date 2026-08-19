@@ -100,7 +100,7 @@ const SETUP = (function () {
   const $ = UI.$;
 
   // Phase 1.0 で出す種目（実装済みのものだけ並べる）
-  const AVAILABLE = ["9ball", "9ball_doubles", "10ball", "10ball_doubles", "8ball"];
+  const AVAILABLE = ["9ball", "9ball_doubles", "10ball", "10ball_doubles", "8ball", "straight"];
 
   let selectedGame = "9ball";
   let goalMode = "same"; // same | handicap
@@ -164,6 +164,10 @@ const SETUP = (function () {
       base.defaultBreakType === "winner"
         ? "この種目は勝者ブレイクが一般的です。"
         : "この種目は交互ブレイクが一般的です。";
+
+    // 種目に合った既定値にする（ラック先取か点数先取かで桁が違う）
+    const preset = (g.goalPresets && g.goalPresets[0]) || null;
+    if (preset) goalValues = { A: preset.v, B: preset.v };
 
     renderPlayerFields();
     renderGoalArea();

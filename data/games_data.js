@@ -78,6 +78,20 @@ const GAMES = {
     ],
   },
 
+  straight: {
+    label: "14-1",
+    base: "straight", scoring: "straight", goal: "free",
+    playersPerSide: 1, mode: "rack",
+    goalType: "score",
+    // 先取点は大会・場によって決める（規程は数値を固定していない）。
+    // 実際によく使われる値をプリセットとして置く。
+    goalPresets: [
+      { label: "50点先取", v: 50 },
+      { label: "100点先取", v: 100 },
+      { label: "150点先取", v: 150 },
+    ],
+  },
+
   kailun: {
     label: "カイルン",
     base: "kailun", scoring: "step", goal: "free",

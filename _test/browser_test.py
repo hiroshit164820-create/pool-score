@@ -43,7 +43,7 @@ def run():
 
         # ---------- 初期表示 ----------
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
-        check(page.locator("#gameChips .chip").count() == 5, "種目が5つ出ている（Phase1.0）")
+        check(page.locator("#gameChips .chip").count() == 6, "種目が6つ出ている（9/9D/10/10D/8/14-1）")
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)
 
@@ -256,6 +256,46 @@ def run():
         check("マスワリ" in labels10, "10ボールでもマスワリはある", labels10)
         check(not page.is_visible("#shotClockBar"), "ショットクロックOFFなら表示されない")
         page.screenshot(path=os.path.join(SHOT_DIR, "07_10ball.png"), full_page=True)
+
+        # ---------- 14-1（球1個=1点・減点あり） ----------
+        page.click("#quitMatchBtn")
+        page.wait_for_timeout(300)
+        page.click("#newMatchBtn")
+        page.wait_for_timeout(300)
+        page.click('#gameChips .chip[data-game="straight"]')
+        page.wait_for_timeout(250)
+
+        goal_default = page.input_value("#goalSame")
+        check(goal_default == "50", "14-1の既定は50点先取", goal_default)
+
+        page.fill("#inNameA", "高橋")
+        page.fill("#inNameB", "伊藤")
+        page.click("#startMatchBtn")
+        page.wait_for_timeout(400)
+
+        hint141 = page.text_content("#tapHint") or ""
+        check("球を1個" in hint141, "14-1は球単位の案内文になる", hint141)
+
+        labels141 = page.locator("#flagButtons button").all_text_contents()
+        check(any("ファウル" in l for l in labels141), "14-1にはファウルボタンが出る", labels141)
+        check(not any("マスワリ" in l for l in labels141), "14-1にマスワリは出ない", labels141)
+
+        # 球を3個入れる → 3点
+        for _ in range(3):
+            page.click("#panelA")
+            page.wait_for_timeout(200)
+        check(page.text_content("#scoreA") == "3", "3球で3点", page.text_content("#scoreA"))
+
+        # ファウルで1点減点
+        page.click('#flagButtons button:has-text("高橋 ファウル")')
+        page.wait_for_timeout(300)
+        check(page.text_content("#scoreA") == "2", "ファウルで1点減点される", page.text_content("#scoreA"))
+
+        # 取り消しで戻る
+        page.click("#undoBtn")
+        page.wait_for_timeout(300)
+        check(page.text_content("#scoreA") == "3", "減点も取り消せる", page.text_content("#scoreA"))
+        page.screenshot(path=os.path.join(SHOT_DIR, "12_straight.png"), full_page=True)
 
         # ---------- タップ領域の確認 ----------
         small = page.evaluate("""() => {

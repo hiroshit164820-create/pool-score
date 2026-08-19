@@ -193,6 +193,14 @@ const MATCH = (function () {
     }
 
     const r = resolveGame(match.gameId);
+
+    // 球1個=1点の種目（14-1）は、タップ1回を「1個ポケットした」として記録する。
+    // ラック単位の種目とは記録するイベントが違う。
+    if (r.scoring.kind === "ballScore" && !r.base.keyBall) {
+      recordOneBall(side, r);
+      return;
+    }
+
     appendEvent(match, {
       t: "RACK_WIN",
       side: side,
@@ -228,6 +236,57 @@ const MATCH = (function () {
     } else if (clock) {
       startClockForCurrentTurn();
     }
+  }
+
+  /**
+   * 球1個ぶんの得点を記録する（14-1）。
+   * ballsPerRack 個たまったら、ブレイクボールを残してラックを組み直す（規程第13章第1条第3項）。
+   */
+  function recordOneBall(side, r) {
+    const before = reduceMatch(match);
+    // 盤面に残っている球のうち、若い番号を1つ消費する（番号は得点に影響しない）
+    const ball = before.onTable.length ? before.onTable[0] : 1;
+    appendEvent(match, { t: "POCKET", side: side, d: { balls: [ball], onBreak: false } });
+
+    const after = reduceMatch(match);
+    const perRack = r.base.ballsPerRack;
+    if (perRack && after.onTable.length <= r.base.balls.length - perRack) {
+      // 14個入れたので次のラックへ（ブレイクボール1個は残ったまま）
+      appendEvent(match, {
+        t: "RACK_START",
+        side: null,
+        d: { rackNo: after.rackNo + 1, breakSide: side, auto: true, continuation: true },
+      });
+      UI.toast("14個入りました。ラックを組み直してください。");
+    }
+
+    save();
+    render();
+    bump(side);
+
+    if (reduceMatch(match).winner) {
+      vibrate([120, 60, 120, 60, 200]);
+      openFinish();
+    } else if (clock) {
+      startClockForCurrentTurn();
+    }
+  }
+
+  /** ファウルを記録する（14-1は減点があるため専用ボタンを出す） */
+  function recordFoul(side) {
+    const st = reduceMatch(match);
+    if (st.winner) return;
+    appendEvent(match, { t: "FOUL", side: side, d: { kind: "normal", warned: false } });
+    save();
+    render();
+    const after = reduceMatch(match);
+    const diff = after.score[side] - st.score[side];
+    UI.toast(
+      diff < 0
+        ? sideName(side) + " のファウル（" + diff + "点）"
+        : sideName(side) + " のファウルを記録しました。",
+      "warn"
+    );
   }
 
   function onUndo() {
@@ -306,8 +365,11 @@ const MATCH = (function () {
     const finished = !!st.winner;
     $("panelA").disabled = finished;
     $("panelB").disabled = finished;
+    const perBall = r.scoring.kind === "ballScore" && !r.base.keyBall;
     $("tapHint").textContent = finished
       ? "この試合は終了しています。下の「試合終了」から保存してください。"
+      : perBall
+      ? "球を1個入れるごとに、その人のスコアをタップしてください"
       : "ラックを取った側のスコアをタップしてください";
 
     renderFlagButtons(r.base);
@@ -318,6 +380,27 @@ const MATCH = (function () {
   function renderFlagButtons(base) {
     const wrap = $("flagButtons");
     UI.clear(wrap);
+
+    const r = resolveGame(match.gameId);
+    // 減点がある種目（14-1）は、ファウルをその場で押せるようにする
+    if (r.scoring.foulPenalty) {
+      ["A", "B"].forEach(function (side) {
+        wrap.appendChild(
+          UI.el("button", {
+            type: "button",
+            text: sideName(side) + " ファウル",
+            onclick: UI.guard(function () { recordFoul(side); }),
+          })
+        );
+      });
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "ファウルは1点減点、3回連続で合計16点減点になります。",
+        })
+      );
+      return;
+    }
 
     const defs = [
       { key: "masuwari", label: "マスワリ", show: base.hasMasuwari, hint: "ブレイクして撞き切った" },

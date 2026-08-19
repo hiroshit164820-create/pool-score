@@ -63,6 +63,18 @@ const SCORING = {
     rackPoint: 1,
   },
 
+  // 14-1: 球1個=1点。ファウルで減点があるのが他種目と大きく違う（第9条）
+  straight: {
+    kind: "ballScore",
+    scoreOf: function () {
+      return 1; // 番号に関係なく1個1点
+    },
+    // 減点（NBA2026 第13章第9条）
+    foulPenalty: -1, // 第2項: ファール1回につき1点減点
+    threeFoulPenalty: -15, // 第3項: スリーファールで追加15点減点（合計16点減点）
+    badBreakPenalty: -2, // 第4項: オープニングブレイクが正常でない場合は2点減点
+  },
+
   // カイルン: 3ステップを順に完遂して1点。唯一の減点あり
   step: {
     kind: "stepMachine",
