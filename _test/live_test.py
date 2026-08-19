@@ -41,7 +41,10 @@ with sync_playwright() as p:
 
     check(pg.title() == "ビリヤードスコア記録", "タイトルが出る", pg.title())
     check(pg.is_visible("#startMatchBtn"), "試合作成画面が表示される")
-    check(pg.locator("#gameChips .chip").count() >= 5, "種目が並んでいる")
+    check(pg.locator("#gameChips .chip").count() == 6, "種目が6つ並んでいる",
+          pg.locator("#gameChips .chip").count())
+    labels = pg.locator("#gameChips .chip").all_text_contents()
+    check("14-1" in labels, "14-1が公開版に入っている", labels)
 
     # PWAの要素
     manifest = pg.evaluate("() => { const l = document.querySelector('link[rel=manifest]'); return l ? l.href : null; }")
