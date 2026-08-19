@@ -41,10 +41,14 @@ with sync_playwright() as p:
 
     check(pg.title() == "ビリヤードスコア記録", "タイトルが出る", pg.title())
     check(pg.is_visible("#startMatchBtn"), "試合作成画面が表示される")
-    check(pg.locator("#gameChips .chip").count() == 6, "種目が6つ並んでいる",
+    check(pg.locator("#gameChips .chip").count() == 9, "種目が9つ並んでいる",
           pg.locator("#gameChips .chip").count())
     labels = pg.locator("#gameChips .chip").all_text_contents()
     check("14-1" in labels, "14-1が公開版に入っている", labels)
+    check(any("JPA" in x for x in labels), "JPA種目が公開版に入っている", labels)
+    clocks = pg.locator("#clockTypeToggle button").all_text_contents()
+    check(len(clocks) == 3, "時計が3択になっている", clocks)
+    check(pg.locator("#toPlayersBtn2").count() == 1, "プレーヤー画面への導線がある")
 
     # PWAの要素
     manifest = pg.evaluate("() => { const l = document.querySelector('link[rel=manifest]'); return l ? l.href : null; }")
