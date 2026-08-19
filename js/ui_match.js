@@ -1401,11 +1401,8 @@ const MATCH = (function () {
       wrap.appendChild(row);
     }
 
-    if (!wrap.children.length) {
-      wrap.appendChild(
-        UI.el("p", { class: "hint", text: "この種目では追加で記録する項目はありません。" })
-      );
-    }
+    // 追加の記録項目が無い種目では、この欄ごと出さない。
+    // 「ありません」と書くだけの行は場所を取るだけになる
   }
 
   /**

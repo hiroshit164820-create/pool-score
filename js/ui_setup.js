@@ -151,6 +151,7 @@ const UI = (function () {
         return;
       }
       if (tab === "screenHome" && typeof HOME !== "undefined") { HOME.open(); return; }
+      if (tab === "screenLayout" && typeof LAYOUT !== "undefined") { LAYOUT.open(); return; }
       showScreen(tab);
     });
   }

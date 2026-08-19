@@ -10,6 +10,7 @@ const STORE = (function () {
   const KEY_MATCH = "pool_match_"; // + id
   const KEY_PLAYERS = "pool_players";
   const KEY_SETTINGS = "pool_settings";
+  const KEY_LAYOUTS = "pool_layouts"; // 練習配置
 
   function readJSON(key, fallback) {
     try {
@@ -129,6 +130,55 @@ const STORE = (function () {
       }
     }
     return null;
+  }
+
+  /* ---- 練習配置 ----
+   * 台の上の球の並びを保存して、あとで同じ配置を作り直せるようにする。
+   * ドリル練習で「前回と同じ配置からやる」ために使う。
+   * 試合の記録とは無関係なので、別のキーで持つ。
+   */
+
+  function listLayouts() {
+    const all = readJSON(KEY_LAYOUTS, []);
+    return all
+      .filter(function (l) { return !l.deletedAt; })
+      .sort(function (a, b) {
+        return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+      });
+  }
+
+  function saveLayout(layout) {
+    const all = readJSON(KEY_LAYOUTS, []);
+    const now = new Date().toISOString();
+    const item = {
+      id: layout.id || ("L_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+      name: String(layout.name || "名前なし"),
+      // balls: [{ n: 球番号(0=手玉), x: 0〜1, y: 0〜1 }]
+      // 位置は台の大きさに対する割合で持つ。画面の大きさが変わっても再現できる
+      balls: (layout.balls || []).map(function (b) {
+        return { n: b.n, x: Math.max(0, Math.min(1, b.x)), y: Math.max(0, Math.min(1, b.y)) };
+      }),
+      note: String(layout.note || ""),
+      createdAt: layout.createdAt || now,
+      updatedAt: now,
+    };
+    const at = all.findIndex(function (l) { return l.id === item.id; });
+    if (at >= 0) all[at] = item;
+    else all.unshift(item);
+    return writeJSON(KEY_LAYOUTS, all) ? item : null;
+  }
+
+  function loadLayout(id) {
+    const all = readJSON(KEY_LAYOUTS, []);
+    return all.find(function (l) { return l.id === id && !l.deletedAt; }) || null;
+  }
+
+  function deleteLayout(id) {
+    const all = readJSON(KEY_LAYOUTS, []);
+    const at = all.findIndex(function (l) { return l.id === id; });
+    if (at < 0) return false;
+    all[at].deletedAt = new Date().toISOString();
+    return writeJSON(KEY_LAYOUTS, all);
   }
 
   /* ---- プレーヤー ---- */
@@ -392,6 +442,10 @@ const STORE = (function () {
     loadMatch: loadMatch,
     deleteMatch: deleteMatch,
     setMatchNote: setMatchNote,
+    listLayouts: listLayouts,
+    saveLayout: saveLayout,
+    loadLayout: loadLayout,
+    deleteLayout: deleteLayout,
     findOngoing: findOngoing,
     listPlayers: listPlayers,
     upsertPlayer: upsertPlayer,

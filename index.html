@@ -321,6 +321,39 @@
     </div>
   </section>
 
+  <!-- ================= 練習配置 ================= -->
+  <section id="screenLayout" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>練習配置</h1>
+        <div class="sub" id="layoutSub"></div>
+      </div>
+      <button id="layoutListBtn" class="small ghost">保存した配置</button>
+    </div>
+
+    <div class="layout-body">
+      <!-- 台の俯瞰図。球を触って動かす -->
+      <div class="table-wrap">
+        <div id="poolTable" class="pool-table">
+          <div id="tableBalls" class="table-balls"></div>
+        </div>
+      </div>
+
+      <p class="hint" id="layoutHint">球をドラッグして並べます。下の番号を押すと台に足せます。</p>
+
+      <!-- 置ける球 -->
+      <div id="ballTray" class="ball-tray"></div>
+
+      <div class="layout-actions">
+        <button id="layoutSaveBtn" class="primary">この配置を保存</button>
+        <button id="layoutClearBtn" class="ghost">全部どける</button>
+      </div>
+
+      <!-- 保存した配置の一覧 -->
+      <div id="layoutList" class="layout-list" hidden></div>
+    </div>
+  </section>
+
   <!-- ================= 履歴 ================= -->
   <section id="screenHistory" class="screen">
     <div class="topbar">
@@ -450,6 +483,10 @@
     <span class="tb-icon" aria-hidden="true">◆</span>
     <span class="tb-label">成績</span>
   </button>
+  <button class="tab-btn" id="tabLayout" data-tab="screenLayout">
+    <span class="tb-icon" aria-hidden="true">▬</span>
+    <span class="tb-label">配置</span>
+  </button>
   <button class="tab-btn" id="tabHistory" data-tab="screenHistory">
     <span class="tb-icon" aria-hidden="true">▼</span>
     <span class="tb-label">履歴</span>
@@ -473,6 +510,7 @@
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
 <script src="js/ui_home.js"></script>
+<script src="js/ui_layout.js"></script>
 <script src="js/app.js"></script>
 <script>
 // オフラインでも使えるようにする。file:// で開いた場合は登録しない（動かないため）

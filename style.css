@@ -2899,6 +2899,168 @@ body.match-active .app {
   padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 
+/* ---------- 練習配置（台の俯瞰図） ---------- */
+.layout-body {
+  padding: 0 14px;
+}
+.table-wrap {
+  margin-bottom: 10px;
+}
+/* 台。9フィート台の比率（2:1）に合わせる */
+.pool-table {
+  position: relative;
+  /* 9フィート台は縦：横＝2：1。
+     max-height だけを掛けると幅が縮まず、比率が崩れて横長になるので、
+     高さを基準にして幅の方を決める */
+  height: min(46vh, 100vw * 2);
+  aspect-ratio: 1 / 2;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #2f8f4e;
+  border: 10px solid #6b4423;
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  touch-action: none; /* 球を動かすときに画面がスクロールしないように */
+}
+/* ポケット（見た目の目印。押せるものではない） */
+.pool-table::before,
+.pool-table::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.pool-table::before { top: 25%; }
+.pool-table::after { top: 75%; }
+
+.table-balls {
+  position: absolute;
+  inset: 0;
+}
+.tb-ball {
+  position: absolute;
+  /* 幅と高さを固定する。% 指定にすると台の縦横比で楕円になる */
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  margin: -15px 0 0 -15px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: #fff;
+  background: var(--ball-color, #888);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: none;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  touch-action: none;
+  z-index: 2;
+}
+.tb-ball.cue {
+  background: #f6f2e8;
+}
+/* ストライプ球は上下に白帯を入れて見分ける */
+.tb-ball.stripe {
+  background:
+    linear-gradient(180deg, #f6f2e8 0 22%, var(--ball-color, #888) 22% 78%, #f6f2e8 78% 100%);
+  color: var(--ink);
+  text-shadow: none;
+}
+.tb-ball.dragging {
+  z-index: 3;
+  transform: scale(1.15);
+}
+
+/* 置ける球の一覧 */
+.ball-tray {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.tray-ball {
+  aspect-ratio: 1 / 1;
+  min-height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: #fff;
+  background: var(--ball-color, #888);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+.tray-ball.cue {
+  color: var(--ink);
+  background: #f6f2e8;
+  text-shadow: none;
+}
+.tray-ball.stripe {
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, #f6f2e8 0 26%, var(--ball-color, #888) 26% 74%, #f6f2e8 74% 100%);
+  text-shadow: none;
+}
+.tray-ball.used {
+  opacity: 0.25;
+  box-shadow: none;
+}
+.tray-ball:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.layout-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.layout-actions button {
+  flex: 1 1 0;
+}
+
+.layout-list[hidden] {
+  display: none;
+}
+.layout-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.layout-item .li-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.layout-item .li-name {
+  font-size: 15px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layout-item .li-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ---------- ホーム（個人ダッシュボード） ---------- */
 .home-card {
   margin-bottom: 12px;
