@@ -2830,25 +2830,161 @@ body.match-active .app {
 /* ---------- どこからでも戻れるボタン ---------- */
 /* 画面ごとの「戻る」を探さずに済むよう、常に同じ位置に出す。
    親指の届く左下に置く（右下は主要ボタンが並ぶため避ける） */
-.global-back {
+/* 下部タブ。画面の切り替えと「戻る」をここ1か所に集約する。
+   固定ボタンがあちこちにあると、台の脇で押し間違えるため */
+.tab-bar {
   position: fixed;
-  left: calc(10px + env(safe-area-inset-left));
-  bottom: calc(84px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 40;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 48px;
-  padding: 6px 14px;
-  font-size: 14px;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--surface);
-  border-radius: 0;
+  border-top: var(--bw-thick) solid var(--ink);
 }
-.global-back[hidden] {
+.tab-bar[hidden] {
   display: none;
 }
-.global-back .gb-label {
+.tab-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  /* タップ目標。台の脇で確実に押せる大きさを確保する */
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tab-btn:active {
+  background: var(--bg);
+  transform: none;
+}
+.tab-btn[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--coin);
+}
+.tab-btn[disabled] {
+  opacity: 0.35;
+}
+.tab-btn .tb-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.tab-btn .tb-label {
+  font-size: 11px;
   font-weight: 800;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+/* 「戻る」は移動ではなく操作なので、線で区切って見た目を分ける */
+#tabBack {
+  flex: 0 0 auto;
+  width: 56px;
+  border-right: 2px solid var(--ink);
+}
+
+/* タブのぶんだけ画面の下に余白を作る（内容が隠れないように） */
+.screen:not(#screenMatch) {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+}
+
+/* ---------- ホーム（個人ダッシュボード） ---------- */
+.home-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.home-card .hc-title {
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.home-card .hc-main {
+  font-size: 18px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.home-card .hc-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.home-card button {
+  width: 100%;
+  margin-top: 8px;
+}
+/* 中断している試合は最優先の用事なので目立たせる */
+.home-card.resume {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--coin);
+}
+
+.home-stats {
+  display: flex;
+  gap: 8px;
+}
+.home-stat {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 4px;
+  text-align: center;
+  background: var(--bg);
+  border: 2px solid var(--ink);
+}
+.home-stat .hs-val {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.home-stat .hs-label {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.home-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 2px solid var(--ink);
+  font-size: 14px;
+}
+.home-row .hr-names {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-row .hr-score {
+  flex: 0 0 auto;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.home-row .hr-date {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.home-new {
+  width: 100%;
 }
 
 /* 1人用の種目（ボウラード）。

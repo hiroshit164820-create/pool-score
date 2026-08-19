@@ -5,6 +5,8 @@
   function boot() {
     SETUP.init();
     UI.bindBackButton();
+    // 起動時はまだ showScreen を通っていないので、タブの状態をここで整える
+    UI.updateTabBar(UI.currentScreen() || "screenSetup");
 
     UI.$("toHistoryBtn").addEventListener("click", function () {
       HISTORY.open();

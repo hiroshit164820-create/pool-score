@@ -89,27 +89,29 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "82_resume.png"), full_page=True)
 
     # ================================================================
-    section("2 どこからでも戻れるボタン")
+    section("2 下部タブの戻るボタン")
+    # 固定ボタンは下部タブ1か所にまとめた（左端が「戻る」）
     pg.click("#toPlayersBtn2")
     pg.wait_for_timeout(400)
-    check(pg.is_visible("#globalBackBtn"), "選手一覧で戻るボタンが出る")
-    pg.click("#globalBackBtn")
+    check(pg.is_visible("#tabBack"), "選手一覧で戻るボタンが出る")
+    check(not pg.is_disabled("#tabBack"), "戻り先があるので押せる")
+    pg.click("#tabBack")
     pg.wait_for_timeout(400)
     check(pg.is_visible("#screenSetup"), "1つ前に戻れる")
 
     # 履歴からも戻れる
     pg.click("#toHistoryBtn")
     pg.wait_for_timeout(400)
-    check(pg.is_visible("#globalBackBtn"), "履歴でも戻るボタンが出る")
-    pg.click("#globalBackBtn")
+    check(pg.is_visible("#tabBack"), "履歴でも戻るボタンが出る")
+    pg.click("#tabBack")
     pg.wait_for_timeout(400)
     check(pg.is_visible("#screenSetup"), "履歴からも戻れる")
 
     # 試合中は出さない（誤って抜けないようにするため）
     pg.click("#resumeBtn")
     pg.wait_for_timeout(600)
-    check(pg.locator("#globalBackBtn").get_attribute("hidden") is not None,
-          "試合中は戻るボタンを出さない（誤操作を防ぐ）")
+    check(pg.locator("#tabBar").get_attribute("hidden") is not None,
+          "試合中はタブを出さない（誤操作を防ぐ）")
     pg.click("#quitMatchBtn")
     pg.wait_for_timeout(400)
 

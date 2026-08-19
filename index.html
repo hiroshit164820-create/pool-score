@@ -22,6 +22,17 @@
 <div class="app">
 
   <!-- ================= 試合作成 ================= -->
+  <!-- ================= ホーム（個人ダッシュボード） ================= -->
+  <section id="screenHome" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>ホーム</h1>
+        <div class="sub" id="homeSub"></div>
+      </div>
+    </div>
+    <div class="list" id="homeBody"></div>
+  </section>
+
   <section id="screenSetup" class="screen active">
     <div class="topbar">
       <h1>ビリヤードスコア記録</h1>
@@ -416,11 +427,34 @@
   </div>
 </div>
 
-<!-- どの画面からでも1つ前に戻れるボタン。
-     画面ごとの「戻る」を探さなくて済むように常に同じ位置に出す -->
-<button id="globalBackBtn" class="global-back" hidden>
-  <span aria-hidden="true">◀</span><span class="gb-label">戻る</span>
-</button>
+<!-- 画面の切り替えは下のタブでまとめて行う。
+     左端に「戻る」を置いて、固定ボタンを1か所に集約している -->
+<nav id="tabBar" class="tab-bar" hidden>
+  <button class="tab-btn" id="tabBack" data-tab="back">
+    <span class="tb-icon" aria-hidden="true">◀</span>
+    <span class="tb-label">戻る</span>
+  </button>
+  <button class="tab-btn" id="tabHome" data-tab="screenHome">
+    <span class="tb-icon" aria-hidden="true">■</span>
+    <span class="tb-label">ホーム</span>
+  </button>
+  <button class="tab-btn" id="tabSetup" data-tab="screenSetup">
+    <span class="tb-icon" aria-hidden="true">●</span>
+    <span class="tb-label">種目</span>
+  </button>
+  <button class="tab-btn" id="tabPlayers" data-tab="screenPlayers">
+    <span class="tb-icon" aria-hidden="true">▲</span>
+    <span class="tb-label">選手</span>
+  </button>
+  <button class="tab-btn" id="tabStats" data-tab="screenStats">
+    <span class="tb-icon" aria-hidden="true">◆</span>
+    <span class="tb-label">成績</span>
+  </button>
+  <button class="tab-btn" id="tabHistory" data-tab="screenHistory">
+    <span class="tb-icon" aria-hidden="true">▼</span>
+    <span class="tb-label">履歴</span>
+  </button>
+</nav>
 
 <div class="toast-wrap" id="toastWrap"></div>
 
@@ -438,6 +472,7 @@
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
+<script src="js/ui_home.js"></script>
 <script src="js/app.js"></script>
 <script>
 // オフラインでも使えるようにする。file:// で開いた場合は登録しない（動かないため）

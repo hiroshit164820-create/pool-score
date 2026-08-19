@@ -106,16 +106,26 @@ const UI = (function () {
   }
 
   /**
-   * 常時出る「戻る」ボタンの出し入れ。
+   * 下部タブの出し入れと、選択中の印。
    *
    * 試合中は出さない。記録中に画面を離れる操作を親指の届く場所に置くと、
    * 誤って抜けてしまうため（試合画面には専用の「中断」がある）。
    */
   function updateBackButton(id) {
-    const btn = document.getElementById("globalBackBtn");
-    if (!btn) return;
-    const hide = id === "screenMatch" || (id === "screenSetup" && !screenStack.length);
-    btn.hidden = hide;
+    const bar = document.getElementById("tabBar");
+    if (!bar) return;
+    bar.hidden = id === "screenMatch";
+    if (bar.hidden) return;
+
+    // いまの画面のタブを押された状態にする
+    const btns = bar.querySelectorAll(".tab-btn");
+    Array.prototype.forEach.call(btns, function (b) {
+      const t = b.getAttribute("data-tab");
+      b.setAttribute("aria-pressed", String(t === id));
+    });
+    // 戻り先が無いときは「戻る」を押せなくする（押しても何も起きないと不安になる）
+    const back = document.getElementById("tabBack");
+    if (back) back.disabled = !screenStack.length;
   }
 
   /** 1つ前の画面に戻る */
@@ -125,8 +135,24 @@ const UI = (function () {
   }
 
   function bindBackButton() {
-    const btn = document.getElementById("globalBackBtn");
-    if (btn) btn.addEventListener("click", goBack);
+    const bar = document.getElementById("tabBar");
+    if (!bar) return;
+    bar.addEventListener("click", function (e) {
+      const btn = e.target.closest ? e.target.closest(".tab-btn") : null;
+      if (!btn || btn.disabled) return;
+      const tab = btn.getAttribute("data-tab");
+      if (tab === "back") { goBack(); return; }
+      if (!tab) return;
+      // 画面ごとに開き方が違う（一覧の再描画が要るものがある）
+      if (tab === "screenPlayers" && typeof PLAYERS !== "undefined") { PLAYERS.open(); return; }
+      if (tab === "screenHistory" && typeof HISTORY !== "undefined") { HISTORY.open(); return; }
+      if (tab === "screenStats" && typeof PLAYERS !== "undefined" && PLAYERS.openStats) {
+        PLAYERS.openStats(null);
+        return;
+      }
+      if (tab === "screenHome" && typeof HOME !== "undefined") { HOME.open(); return; }
+      showScreen(tab);
+    });
   }
 
   /** 直近と同じボタンの連打を無視する（誤タップ防止） */
@@ -142,6 +168,8 @@ const UI = (function () {
 
   return {
     $: $, el: el, clear: clear,
+    updateTabBar: updateBackButton,
+    currentScreen: currentScreen,
     bindToggle: bindToggle, toggleValue: toggleValue, setToggle: setToggle,
     toast: toast, showScreen: showScreen, guard: guard,
     goBack: goBack, bindBackButton: bindBackButton,
