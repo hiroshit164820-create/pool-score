@@ -47,7 +47,7 @@ def run():
         # ---------- 初期表示 ----------
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
         # 種目はカテゴリに畳まれている。全部開いたときに9種目選べること
-        check(helpers.count_selectable_games(page) == 9, "種目が9つ選べる（通常6＋JPA3）",
+        check(helpers.count_selectable_games(page) == 10, "種目が10選べる（通常7＋JPA3）",
               helpers.count_selectable_games(page))
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)
@@ -75,10 +75,10 @@ def run():
         page.fill("#inNameB", "佐藤")
 
         # ハンデあり（4先 vs 2先）
-        page.click('#goalArea .toggle-group button[data-v="handicap"]')
-        page.wait_for_timeout(150)
-        page.fill("#goalA", "4")
-        page.fill("#goalB", "2")
+        # 3〜7先はボタン、それ以外はプルダウンから選ぶ
+        helpers.set_handicap_mode(page, True)
+        helpers.set_goal(page, 4, side="A")
+        helpers.set_goal(page, 2, side="B")
 
         # ショットクロックを使う
         page.click('#clockTypeToggle button[data-v="shot"]')
@@ -278,8 +278,8 @@ def run():
         helpers.pick_game(page, "straight")
         page.wait_for_timeout(250)
 
-        goal_default = page.input_value("#goalSame")
-        check(goal_default == "50", "14-1の既定は50点先取", goal_default)
+        goal_default = helpers.goal_value(page)
+        check(goal_default == 50, "14-1の既定は50点先取", goal_default)
 
         page.fill("#inNameA", "高橋")
         page.fill("#inNameB", "伊藤")

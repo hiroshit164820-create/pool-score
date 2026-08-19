@@ -501,6 +501,16 @@ const MATCH = (function () {
   }
 
   /**
+   * 球の番号によって点数が変わる種目か（ローテーション）。
+   * この種目は「どの球を入れたか」を記録しないと点数が出せないため、
+   * スコアのタップではなく盤面のボタンで入力する。
+   */
+  function usesBallGrid(r) {
+    return !!(r.scoring.scoreOf && r.scoring.kind === "ballScore" && !r.base.keyBall
+      && r.base.rackTotal);
+  }
+
+  /**
    * タップ1回が「球1個」か「ラック1つ」かを返す。
    *
    * engine.js の effectiveScoreKind と同じ規則で判断する。
@@ -584,18 +594,23 @@ const MATCH = (function () {
     banner.classList.toggle("side-b", bs === "B");
     banner.hidden = finishedFlag(st);
 
-    // 決着後はタップで加算できないようにする
+    // 決着後はタップで加算できないようにする。
+    // ローテーションは盤面のボタンで入力するので、スコアのタップは使わない
     const finished = !!st.winner;
-    $("panelA").disabled = finished;
-    $("panelB").disabled = finished;
+    const gridMode = usesBallGrid(r);
+    $("panelA").disabled = finished || gridMode;
+    $("panelB").disabled = finished || gridMode;
     const perBall = isPerBallInput(r);
     $("tapHint").textContent = finished
       ? "この試合は終了しています。下の「試合終了」から保存してください。"
+      : gridMode
+      ? "" // 盤面の側に案内を出すのでここは空にする
       : perBall
       ? (hasAnyHandicap()
           ? "得点になる球を入れるごとに、その人のスコアをタップしてください"
           : "球を1個入れるごとに、その人のスコアをタップしてください")
       : "ラックを取った側のスコアをタップしてください";
+    $("tapHint").hidden = gridMode && !finished;
 
     // ターン交代ボタン
     const turnBtn = $("turnBtn");
@@ -603,9 +618,105 @@ const MATCH = (function () {
     $("turnNextName").textContent = sideName(st.turn === "A" ? "B" : "A");
     turnBtn.disabled = finished;
 
+    // 盤面を使う種目は画面の詰め方を変える（スコアが押し出されないように）
+    $("screenMatch").classList.toggle("grid-mode", gridMode);
+    renderBallGrid(r, st);
     renderFlagButtons(r.base);
     renderShotClock();
     renderChessClock();
+  }
+
+  /**
+   * 盤面（球番号のボタン）を描く。
+   *
+   * いま撞いている人の得点として記録する。盤面から消えた球は押せない。
+   * 全部入ったら次のラックへ自動で進む（ローテーションはラックを跨いで
+   * 得点が続くため、ラックは盤面のリセットにすぎない）。
+   */
+  function renderBallGrid(r, st) {
+    const wrap = $("ballGrid");
+    if (!usesBallGrid(r)) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    UI.clear(wrap);
+
+    if (st.winner) {
+      wrap.appendChild(
+        UI.el("p", { class: "hint", text: "この試合は終了しています。" })
+      );
+      return;
+    }
+
+    const shooter = st.turn || st.breakSide || "A";
+    wrap.appendChild(
+      UI.el("p", {
+        class: "bg-who",
+        text: sideName(shooter) + " が入れた球を押してください",
+      })
+    );
+
+    const onTable = {};
+    (st.onTable || []).forEach(function (b) { onTable[b] = true; });
+
+    const grid = UI.el("div", { class: "bg-balls" });
+    r.base.balls.forEach(function (b) {
+      const left = !!onTable[b];
+      grid.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "ball-btn" + (left ? "" : " gone"),
+          disabled: left ? null : "disabled",
+          "data-ball": String(b),
+          title: b + "番（" + r.scoring.scoreOf(b) + "点）",
+          text: String(b),
+          onclick: UI.guard(function () { recordBall(shooter, b); }),
+        })
+      );
+    });
+    wrap.appendChild(grid);
+  }
+
+  /**
+   * 盤面から1球を記録する（ローテーション）。
+   * 球の番号がそのまま得点になる（NBA第11章第1条第3項）。
+   */
+  function recordBall(side, ball) {
+    const before = reduceMatch(match);
+    if (before.winner) {
+      UI.toast("この試合はもう終わっています。", "warn");
+      return;
+    }
+    const r = resolveGame(match.gameId);
+
+    appendEvent(match, { t: "POCKET", side: side, d: { balls: [ball], onBreak: false } });
+
+    const after = reduceMatch(match);
+    // 盤面が空になったら次のラックへ。
+    // ローテーションは得点がラックを跨いで続くので、ここは仕切り直しではない
+    if (!after.winner && (!after.onTable || !after.onTable.length)) {
+      appendEvent(match, {
+        t: "RACK_START",
+        side: null,
+        d: { rackNo: after.rackNo + 1, breakSide: side, auto: true, continuation: true },
+      });
+      UI.toast("全部入りました。次のラックを組んでください。");
+    }
+
+    save();
+    render();
+    bump(side);
+    UI.toast(sideName(side) + " " + ball + "番（+" + r.scoring.scoreOf(ball) + "点）");
+
+    const final = reduceMatch(match);
+    if (final.winner) {
+      vibrate([120, 60, 120, 60, 200]);
+      openFinish();
+    } else if (clock) {
+      if (after.rackNo !== before.rackNo) clock.resetRack();
+      startClockForCurrentTurn();
+    }
   }
 
   /** 補助フラグのボタンを種目に応じて出し分ける */

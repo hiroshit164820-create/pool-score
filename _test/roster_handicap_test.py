@@ -142,29 +142,49 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "61_roster.png"), full_page=True)
 
     # ================================================================
-    section("③ ボールハンデの設定")
+    section("③ ボールハンデはハンデありのときだけ出る")
     pg.click("#playersNewMatchBtn")
     pg.wait_for_timeout(300)
     helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(200)
-    check(pg.is_visible("#ballHandicapSection"), "9ボールにボールハンデの欄が出る")
+
+    # ハンデなしのうちはボールハンデも左右別の入力も出さない
+    check(pg.locator("#ballHandicapSection").get_attribute("hidden") is not None,
+          "ハンデなしのときはボールハンデの欄を出さない")
+    check(pg.locator("#goalArea .goal-picker").count() == 1,
+          "ハンデなしのときは勝利条件の入力は1つだけ",
+          pg.locator("#goalArea .goal-picker").count())
+
+    # ハンデありにすると両方出る
+    helpers.set_handicap_mode(pg, True)
+    check(pg.is_visible("#ballHandicapSection"), "ハンデありにするとボールハンデが出る")
+    check(pg.locator("#goalArea .goal-picker").count() == 2,
+          "ハンデありのときは左右別に選べる",
+          pg.locator("#goalArea .goal-picker").count())
 
     # 9ボールなら「7番以上」「8番以上」が選べる（キーボール9の手前2つ）
     bh_labels = pg.locator("#ballHandicapArea .bh-chips").first.all_text_contents()
     check("7番以上" in " ".join(bh_labels), "「7番以上」が選べる", bh_labels)
     check("8番以上" in " ".join(bh_labels), "「8番以上」が選べる", bh_labels)
 
+    # ハンデなしに戻すと、付けたボールハンデも外れる
+    helpers.set_handicap_mode(pg, False)
+    check(pg.locator("#ballHandicapSection").get_attribute("hidden") is not None,
+          "ハンデなしに戻すと欄が消える")
+
     # 14-1には出ない（元から球単位で数える種目のため）
     helpers.pick_game(pg, "straight")
     pg.wait_for_timeout(200)
+    helpers.set_handicap_mode(pg, True)
     check(pg.locator("#ballHandicapSection").get_attribute("hidden") is not None,
-          "14-1にはボールハンデの欄を出さない")
+          "14-1にはハンデありでもボールハンデの欄を出さない")
 
     helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(200)
     pg.fill("#inNameA", "山田")
     pg.fill("#inNameB", "佐藤")
     pg.wait_for_timeout(150)
+    helpers.set_handicap_mode(pg, True)
 
     # Bに「7番以上」のハンデを付ける
     pg.click('#ballHandicapArea .field:nth-of-type(2) .chip:text-is("7番以上")')
@@ -180,8 +200,8 @@ with sync_playwright() as p:
     check("点" in goal_label, "勝利条件の単位が「点」になる", goal_label[:80])
 
     # 保存された内容を確認する
-    pg.fill("#goalSame", "5")
-    pg.wait_for_timeout(150)
+    helpers.set_goal(pg, 5, side="A")
+    helpers.set_goal(pg, 5, side="B")
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(500)
     check(pg.is_visible("#screenMatch"), "試合が始まる")

@@ -15,6 +15,7 @@ GROUP_OF = {
     "10ball": "standard",
     "10ball_doubles": "standard",
     "8ball": "standard",
+    "rotation": "standard",
     "straight": "standard",
     "jpa_9ball": "jpa",
     "jpa_9ball_doubles": "jpa",
@@ -142,3 +143,47 @@ def add_player(page, name, skill_nine=None, skill_eight=None):
         page.wait_for_timeout(100)
     page.click("#addPlayerBtn")
     page.wait_for_timeout(250)
+
+
+def set_goal(page, value, side=None):
+    """
+    勝利条件を設定する。
+
+    3〜7先はボタン、それ以外はプルダウンから選ぶ作りなので、
+    値に応じて押し分ける。
+    side を渡すとハンデありのときの片側だけを設定する
+    （A なら1つ目、B なら2つ目の goal-picker）。
+    """
+    if side is None:
+        scope = "#goalArea .goal-picker"
+        picker = page.locator(scope).first
+    else:
+        idx = 0 if side == "A" else 1
+        picker = page.locator("#goalArea .goal-picker").nth(idx)
+
+    if 3 <= value <= 7:
+        picker.locator('.chip:text-is("%d先")' % value).click()
+    else:
+        picker.locator("select.goal-more").select_option(str(value))
+    page.wait_for_timeout(200)
+
+
+def set_handicap_mode(page, on):
+    """勝利条件のハンデあり/なしを切り替える"""
+    v = "handicap" if on else "same"
+    btn = page.locator('#goalArea .toggle-group button[data-v="%s"]' % v)
+    if btn.get_attribute("aria-pressed") != "true":
+        btn.click()
+        page.wait_for_timeout(250)
+
+
+def goal_value(page, side=None):
+    """いま選ばれている勝利条件の値を読む（押されているボタン or プルダウン）"""
+    idx = 0 if side in (None, "A") else 1
+    picker = page.locator("#goalArea .goal-picker").nth(idx)
+    pressed = picker.locator('.chip[aria-pressed="true"]')
+    if pressed.count():
+        return int((pressed.first.text_content() or "").replace("先", ""))
+    sel = picker.locator("select.goal-more")
+    v = sel.input_value()
+    return int(v) if v else None

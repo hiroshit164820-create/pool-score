@@ -73,11 +73,11 @@ with sync_playwright() as p:
     check(any("JPA" in h for h in heads), "「JPA」カテゴリがある", heads)
 
     # 初期状態では「一般」だけが開いている＝一覧が短い
-    check(pg.locator(".game-pick").count() == 4, "最初は一般の4種目だけが見えている",
+    check(pg.locator(".game-pick").count() == 5, "最初は一般の5種目だけが見えている",
           pg.locator(".game-pick").count())
 
     # 畳んだ状態でも9種目すべて選べる
-    check(helpers.count_selectable_games(pg) == 9, "全カテゴリ合わせて9種目選べる",
+    check(helpers.count_selectable_games(pg) == 10, "全カテゴリ合わせて10種目選べる",
           helpers.count_selectable_games(pg))
 
     # ダブルスは切替スイッチになっている（行数を増やさない）

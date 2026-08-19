@@ -124,6 +124,7 @@ const SETUP = (function () {
         { id: "9ball", doubles: "9ball_doubles" },
         { id: "10ball", doubles: "10ball_doubles" },
         { id: "8ball", doubles: null },
+        { id: "rotation", doubles: null },
         { id: "straight", doubles: null },
       ],
     },
@@ -336,22 +337,38 @@ const SETUP = (function () {
     if (base.safetyCallable === false) {
       notes.push("10ボールは2026年6月のルール改定でセーフティコールが廃止されました。");
     }
+    if (base.rackEndsScoring === false) {
+      // NBA第11章第4条第5項。ラックは盤面のリセット単位でしかない
+      notes.push(
+        base.label + "は球の番号がそのまま得点で、ラックをまたいで点が続きます。"
+          + "1ラックで合計" + base.rackTotal + "点です。"
+      );
+    }
     $("gameNote").textContent = notes.join(" ");
 
     // ブレイク方式の既定値
     UI.setToggle($("breakTypeToggle"), base.defaultBreakType);
-    $("breakTypeNote").textContent =
-      base.defaultBreakType === "winner"
-        ? "この種目は勝者ブレイクが一般的です。"
-        : "この種目は交互ブレイクが一般的です。";
+
+    // ローテーションのようにブレイク方式が決まっている種目では
+    // 選択肢を出さない（選べるように見せて engine が無視するのは不誠実なため）
+    const btField = $("breakTypeToggle").closest(".field");
+    if (base.breakTypeFixed) {
+      if (btField) btField.hidden = true;
+      $("breakTypeNote").textContent = "";
+    } else {
+      if (btField) btField.hidden = false;
+      $("breakTypeNote").textContent =
+        base.defaultBreakType === "winner"
+          ? "この種目は勝者ブレイクが一般的です。"
+          : "この種目は交互ブレイクが一般的です。";
+    }
 
     // 種目に合った既定値にする（ラック先取か点数先取かで桁が違う）
     const preset = (g.goalPresets && g.goalPresets[0]) || null;
     if (preset) goalValues = { A: preset.v, B: preset.v };
 
     renderPlayerFields();
-    renderGoalArea();
-    renderBallHandicap();
+    renderGoalArea(); // 中で renderBallHandicap も呼ばれる
   }
 
   /**
@@ -372,11 +389,14 @@ const SETUP = (function () {
     const g = GAMES[selectedGame];
     const base = BASE_RULES[g.base];
 
-    // 出せる種目かどうか。ラック単位で数える種目のみ
-    const usable = SCORING[g.scoring].kind === "rackCount" && !!base.keyBall;
+    // 出せる種目かどうか。ラック単位で数える種目のみ。
+    // さらに「ハンデあり」を選んでいるときだけ出す
+    // （ハンデなしの人に球ごとの設定を見せても迷わせるだけのため）
+    const usableGame = SCORING[g.scoring].kind === "rackCount" && !!base.keyBall;
+    const usable = usableGame && goalMode === "handicap";
     section.hidden = !usable;
     if (!usable) {
-      ballHandicap = { A: null, B: null };
+      if (!usableGame) ballHandicap = { A: null, B: null };
       return;
     }
 
@@ -402,7 +422,8 @@ const SETUP = (function () {
           text: "ハンデなし",
           onclick: function () {
             ballHandicap[side] = null;
-            renderBallHandicap();
+            // 単位（ラック/点）が変わるので勝利条件ごと描き直す。
+            // renderGoalArea が最後に renderBallHandicap を呼ぶ
             renderGoalArea();
           },
         })
@@ -417,7 +438,6 @@ const SETUP = (function () {
             text: n + "番以上",
             onclick: function () {
               ballHandicap[side] = n;
-              renderBallHandicap();
               renderGoalArea();
             },
           })
@@ -577,6 +597,83 @@ const SETUP = (function () {
     });
   }
 
+  /**
+   * 勝利条件の選択肢。
+   *
+   * よく使う 3〜7先はボタンで出し、それ以上はプルダウンに入れる。
+   * ボタンを増やすと台の脇で探す時間が増えるため、
+   * 実際に使う範囲だけを表に出す。
+   */
+  const QUICK_RACES = [3, 4, 5, 6, 7];
+
+  /** プルダウンに入れる値。種目の単位（ラック/点）で刻みを変える */
+  function moreGoalValues(unit) {
+    if (unit === "点") {
+      // 点数制は桁が大きいので粗く刻む。
+      // 5点刻みの小さい値も入れる（カイルンの5点先取など）
+      const out = [5];
+      for (let v = 10; v <= 100; v += 10) out.push(v);
+      for (let v = 120; v <= 200; v += 20) out.push(v);
+      return out;
+    }
+    // ラック先取。ボタンに出していない値を並べる。
+    // 1先・2先はハンデ戦で弱い側に付けることがあるため必ず入れる
+    // （ボタンは3〜7先なので、ここに無いと選べなくなる）
+    const out = [1, 2];
+    for (let v = 8; v <= 21; v++) out.push(v);
+    return out;
+  }
+
+  /**
+   * 勝利条件を1つ選ぶ部品（ボタン＋プルダウン）。
+   * @param unit    "ラック" か "点"
+   * @param value   いまの値
+   * @param onPick  選ばれたときに呼ぶ
+   */
+  function goalPicker(unit, value, onPick) {
+    const holder = UI.el("div", { class: "goal-picker" });
+
+    const chips = UI.el("div", { class: "chips" });
+    QUICK_RACES.forEach(function (v) {
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip",
+          "aria-pressed": String(value === v),
+          text: v + "先",
+          onclick: function () { onPick(v); },
+        })
+      );
+    });
+    holder.appendChild(chips);
+
+    // 3〜7先以外はプルダウンで選ぶ
+    const more = moreGoalValues(unit);
+    const sel = UI.el("select", { class: "goal-more" });
+    const isQuick = QUICK_RACES.indexOf(value) >= 0;
+    sel.appendChild(
+      UI.el("option", { value: "", text: isQuick ? "その他…" : "選択中: " + value + unit })
+    );
+    more.forEach(function (v) {
+      const opt = UI.el("option", { value: String(v), text: v + unit + "先取" });
+      if (v === value) opt.setAttribute("selected", "selected");
+      sel.appendChild(opt);
+    });
+    // 一覧に無い値（手で入れた数など）も選べるようにしておく
+    if (!isQuick && more.indexOf(value) < 0) {
+      const opt = UI.el("option", { value: String(value), text: value + unit + "先取" });
+      opt.setAttribute("selected", "selected");
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", function () {
+      const v = parseInt(sel.value, 10);
+      if (!isNaN(v)) onPick(v);
+    });
+    holder.appendChild(sel);
+
+    return holder;
+  }
+
   function renderGoalArea() {
     const g = GAMES[selectedGame];
     const wrap = $("goalArea");
@@ -585,78 +682,61 @@ const SETUP = (function () {
     // JPAはスキルレベルから持ち点が決まるため、専用のUIにする
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
+      renderBallHandicap();
       return;
     }
 
     // ボールハンデを付けると点数制に変わるため、単位表示もそれに合わせる
     const bhOn = ballHandicap.A !== null || ballHandicap.B !== null;
     const unit = bhOn ? "点" : (g.goalType === "racks" ? "ラック" : "点");
-    const presets = bhOn ? [] : (g.goalPresets || []);
 
-    // プリセット
-    if (presets.length) {
-      const chips = UI.el("div", { class: "chips" });
-      presets.forEach(function (p) {
-        chips.appendChild(
-          UI.el("button", {
-            type: "button",
-            class: "chip",
-            text: p.label,
-            onclick: function () {
-              goalValues = { A: p.v, B: p.v };
-              goalMode = "same";
-              renderGoalArea();
-            },
-          })
-        );
-      });
-      wrap.appendChild(UI.el("div", { class: "field" }, [UI.el("label", { text: "よく使う設定" }), chips]));
-    }
-
-    // ハンデの有無
+    // ハンデの有無。ここが「なし」なら左右別の入力もボールハンデも出さない
     const modeToggle = UI.el("div", { class: "toggle-group" }, [
       UI.el("button", { type: "button", "data-v": "same", "aria-pressed": String(goalMode === "same"), text: "ハンデなし" }),
       UI.el("button", { type: "button", "data-v": "handicap", "aria-pressed": String(goalMode === "handicap"), text: "ハンデあり" }),
     ]);
     UI.bindToggle(modeToggle, function (v) {
       goalMode = v;
-      if (v === "same") goalValues.B = goalValues.A;
+      if (v === "same") {
+        goalValues.B = goalValues.A;
+        // ハンデなしに戻したらボールハンデも外す（設定だけ残ると混乱するため）
+        ballHandicap = { A: null, B: null };
+      }
       renderGoalArea();
     });
     wrap.appendChild(UI.el("div", { class: "field" }, [UI.el("label", { text: "ハンデ" }), modeToggle]));
 
     if (goalMode === "same") {
-      const input = UI.el("input", {
-        type: "number", id: "goalSame", min: "1", max: "999", value: String(goalValues.A),
-      });
-      input.addEventListener("input", function () {
-        const v = parseInt(input.value, 10);
-        if (!isNaN(v)) goalValues = { A: v, B: v };
-      });
+      // ハンデなし: 両者共通の先取数を1つ選ぶだけ
       wrap.appendChild(
-        UI.el("div", { class: "field" }, [UI.el("label", { text: "何" + unit + "先取で勝ちか" }), input])
-      );
-    } else {
-      const inA = UI.el("input", { type: "number", id: "goalA", min: "1", max: "999", value: String(goalValues.A) });
-      const inB = UI.el("input", { type: "number", id: "goalB", min: "1", max: "999", value: String(goalValues.B) });
-      inA.addEventListener("input", function () {
-        const v = parseInt(inA.value, 10);
-        if (!isNaN(v)) goalValues.A = v;
-      });
-      inB.addEventListener("input", function () {
-        const v = parseInt(inB.value, 10);
-        if (!isNaN(v)) goalValues.B = v;
-      });
-      wrap.appendChild(
-        UI.el("div", { class: "row" }, [
-          UI.el("div", { class: "field" }, [UI.el("label", { text: "Aの目標（" + unit + "）" }), inA]),
-          UI.el("div", { class: "field" }, [UI.el("label", { text: "Bの目標（" + unit + "）" }), inB]),
+        UI.el("div", { class: "field" }, [
+          UI.el("label", { text: "何" + unit + "先取で勝ちか" }),
+          goalPicker(unit, goalValues.A, function (v) {
+            goalValues = { A: v, B: v };
+            renderGoalArea();
+          }),
         ])
       );
+    } else {
+      // ハンデあり: 左右別に選ぶ
+      ["A", "B"].forEach(function (side) {
+        wrap.appendChild(
+          UI.el("div", { class: "field" }, [
+            UI.el("label", { text: nameForSide(side) + " の目標（" + unit + "）" }),
+            goalPicker(unit, goalValues[side], function (v) {
+              goalValues[side] = v;
+              renderGoalArea();
+            }),
+          ])
+        );
+      });
       wrap.appendChild(
         UI.el("p", { class: "hint", text: "実力差があるときは、強い側の数字を大きくします。" })
       );
     }
+
+    // ハンデの有無に連動してボールハンデの欄も出し入れする
+    renderBallHandicap();
   }
 
   /**

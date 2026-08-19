@@ -37,17 +37,17 @@ with sync_playwright() as p:
     pg.goto(URL)
     pg.wait_for_timeout(400)
 
-    # ================= 3先 =================
-    section("よく使う勝利条件に3先")
-    labels = pg.locator("#goalArea .chips .chip").all_text_contents()
-    check("3先" in labels, "9ボールに3先がある", labels)
-    pg.click('#goalArea .chip:has-text("3先")')
-    pg.wait_for_timeout(200)
-    check(pg.input_value("#goalSame") == "3", "3先を押すと3が入る", pg.input_value("#goalSame"))
+    # ================= 勝利条件 =================
+    section("よく使う勝利条件は3〜7先のボタン")
+    labels = pg.locator("#goalArea .goal-picker .chip").all_text_contents()
+    check(labels == ["3先", "4先", "5先", "6先", "7先"],
+          "9ボールに3〜7先のボタンが並ぶ", labels)
+    helpers.set_goal(pg, 3)
+    check(helpers.goal_value(pg) == 3, "3先を押すと3になる", helpers.goal_value(pg))
 
     helpers.pick_game(pg, "10ball")
     pg.wait_for_timeout(200)
-    labels10 = pg.locator("#goalArea .chips .chip").all_text_contents()
+    labels10 = pg.locator("#goalArea .goal-picker .chip").all_text_contents()
     check("3先" in labels10, "10ボールにも3先がある", labels10)
 
     # ================= JPA =================
@@ -127,7 +127,7 @@ with sync_playwright() as p:
 
     pg.fill("#ccMinutes", "10")
     pg.fill("#ccWarn", "30")
-    pg.click('#goalArea .chip:has-text("3先")')
+    helpers.set_goal(pg, 3)
     pg.wait_for_timeout(150)
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(500)
@@ -219,7 +219,7 @@ with sync_playwright() as p:
     pg.click('#clockTypeToggle button[data-v="shot"]')
     pg.wait_for_timeout(200)
     pg.fill("#scSeconds", "60")
-    pg.click('#goalArea .chip:has-text("3先")')
+    helpers.set_goal(pg, 3)
     pg.wait_for_timeout(150)
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(500)

@@ -1529,3 +1529,110 @@ body {
   flex: 1;
   min-width: 0;
 }
+
+/* ---------- 勝利条件の選択 ---------- */
+.goal-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* 3〜7先以外を選ぶプルダウン */
+.goal-more {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  border-radius: 0;
+  box-shadow: var(--shadow-sm);
+  min-height: var(--tap);
+  padding: 8px 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  /* 矢印を自前で描く（既定の見た目はテーマに合わないため） */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) calc(50% + 2px),
+    calc(100% - 13px) calc(50% + 2px);
+  background-size: 7px 7px, 7px 7px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
+/* ---------- 盤面（ローテーション） ---------- */
+.ball-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ball-grid[hidden] {
+  display: none;
+}
+.ball-grid .bg-who {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 4px 10px;
+  text-align: center;
+}
+/* 球のボタン。5列に並べて、片手の親指で届く大きさを確保する */
+.bg-balls {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.ball-btn {
+  min-height: 56px;
+  padding: 4px;
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  border-radius: 999px; /* 球なので丸くする（この画面だけの例外） */
+  background: var(--surface);
+}
+/* 入った球は押せなくする。盤面に何が残っているか一目で分かるようにする */
+.ball-btn.gone {
+  opacity: 0.28;
+  box-shadow: none;
+  background: var(--surface-2);
+}
+.ball-btn.gone::after {
+  box-shadow: none;
+}
+
+/* ローテーションは盤面が縦を大きく使うため、
+   スコアが画面外へ押し出されないよう各部を詰める。
+   数字は小さくしても、パネル自体は必ず見えている状態を保つ */
+.screen.grid-mode .scoreboard {
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 10px 14px 4px;
+}
+.screen.grid-mode .score-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 6px 12px;
+}
+.screen.grid-mode .score-panel .val {
+  font-size: min(13vw, 8vh);
+}
+.screen.grid-mode .score-panel .name {
+  font-size: 17px;
+}
+.screen.grid-mode .break-banner {
+  padding: 5px 12px;
+  font-size: 15px;
+}
+.screen.grid-mode .break-banner .bb-text b {
+  font-size: 16px;
+}
+.screen.grid-mode .ball-btn {
+  min-height: 52px;
+  font-size: 18px;
+}
