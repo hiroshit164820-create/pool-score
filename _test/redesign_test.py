@@ -66,7 +66,8 @@ with sync_playwright() as p:
 
     # ================================================================
     section("① 競技選択がカテゴリに畳まれている")
-    check(pg.locator(".group-head").count() == 2, "カテゴリが2つある",
+    # 一般 / JPA / ハウスゲーム（公式規程の有無で分けている）
+    check(pg.locator(".group-head").count() == 3, "カテゴリが3つある",
           pg.locator(".group-head").count())
     heads = pg.locator(".group-head").all_text_contents()
     check(any("一般" in h for h in heads), "「一般」カテゴリがある", heads)
@@ -76,8 +77,8 @@ with sync_playwright() as p:
     check(pg.locator(".game-pick").count() == 6, "最初は一般の6種目だけが見えている",
           pg.locator(".game-pick").count())
 
-    # 畳んだ状態でも9種目すべて選べる
-    check(helpers.count_selectable_games(pg) == 11, "全カテゴリ合わせて11種目選べる",
+    # 畳んだ状態でも全種目選べる
+    check(helpers.count_selectable_games(pg) == 12, "全カテゴリ合わせて12種目選べる",
           helpers.count_selectable_games(pg))
 
     # ダブルスは切替スイッチになっている（行数を増やさない）

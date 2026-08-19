@@ -271,6 +271,8 @@ function initState(match, base) {
     foulStreak: { A: 0, B: 0 },
     twoFoulWarned: { A: false, B: false },
     step: { A: 1, B: 1 }, // カイルン
+    // カイルンで、このイニングに既に得点したか（連続得点を許さない設定用）
+    stepScoredThisInning: null,
     stats: { A: emptySideStats(), B: emptySideStats() },
     winner: null,
     endReason: null,
@@ -481,6 +483,14 @@ function applySafety(st, ev, ctx) {
 function applyTurnEnd(st, ev, ctx) {
   const reason = (ev.d && ev.d.reason) || "miss";
   const from = ev.side || st.turn;
+
+  // カイルンのハウス設定: ミスでステップを1に戻すか。
+  // 公式競技規程が存在しないゲームで、店ごとに扱いが違うため
+  // 試合開始時に選ばせている（rules_data.js の unverified を参照）
+  if (ctx.scoring.kind === "stepMachine" && st.step && st.step[from]) {
+    if (ctx.options.stepResetOnMiss) st.step[from] = 1;
+  }
+  st.stepScoredThisInning = null;
   if (reason === "safety" && ctx.base.safetyCallable) st.stats[from].safety++;
   st.stats[from].turns++;
   // チェスクロック使用時、このターンで使った時間
@@ -576,6 +586,10 @@ function applyStep(st, ev, ctx) {
     st.score[side] += ctx.scoring.pointPerCycle;
     st.stats[side].stepCycles++;
     st.step[side] = 1;
+    // ハウス設定: 1イニング内に続けて得点できるか。
+    // できない設定のときは、1点取った時点でそのイニングを終える
+    // （UI側で交代を促すのではなく、記録として交代まで済ませる）
+    st.stepScoredThisInning = side;
   } else {
     st.step[side] = cur + 1;
   }

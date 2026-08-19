@@ -21,7 +21,11 @@ GROUP_OF = {
     "jpa_9ball": "jpa",
     "jpa_9ball_doubles": "jpa",
     "jpa_8ball": "jpa",
+    "kailun": "house",
 }
+
+# カテゴリの並び順（ui_setup.js の GAME_GROUPS と揃える）
+GROUP_ORDER = ["standard", "jpa", "house"]
 
 # ダブルス種目と、その親（シングルス）の対応
 PARENT_OF = {
@@ -36,7 +40,7 @@ ALL_GAME_IDS = list(GROUP_OF.keys())
 
 def open_group(page, group_key):
     """カテゴリを開く。すでに開いていれば何もしない"""
-    head = page.locator('.group-head').nth(0 if group_key == "standard" else 1)
+    head = page.locator('.group-head').nth(GROUP_ORDER.index(group_key))
     if head.get_attribute("aria-expanded") != "true":
         head.click()
         page.wait_for_timeout(120)

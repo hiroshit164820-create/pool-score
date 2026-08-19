@@ -2220,6 +2220,84 @@ body {
   margin-top: 6px;
 }
 
+/* ---------- カイルン（3段階を進めるゲーム） ---------- */
+.step-pad[hidden] {
+  display: none;
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.step-head .sp-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-head .sp-target {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.step-dots {
+  display: flex;
+  gap: 4px;
+}
+.step-dot {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 2px solid var(--ink);
+}
+.step-dot.done {
+  color: #fff;
+  background: var(--side-a);
+}
+.step-dot.now {
+  color: var(--ink);
+  background: var(--coin);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.step-row {
+  display: flex;
+  gap: 8px;
+}
+.step-btn {
+  flex: 1 1 0;
+  min-height: 56px;
+  padding: 6px 4px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.step-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+.step-btn.ok {
+  background: var(--coin);
+}
+.step-btn.miss {
+  background: var(--surface);
+}
+.step-btn.penalty {
+  color: #fff;
+  background: var(--side-b);
+}
+
 /* ---------- ボウラード ---------- */
 .bowl-table {
   display: grid;

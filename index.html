@@ -53,6 +53,12 @@
       <div class="section-title">勝利条件</div>
       <div id="goalArea"></div>
 
+      <!-- 公式競技規程が無いゲームの、店ごとの決め方 -->
+      <div id="houseRuleSection" hidden>
+        <div class="section-title">この店のルール</div>
+        <div id="houseRuleArea"></div>
+      </div>
+
       <div id="ballHandicapSection">
         <div class="section-title">ボールハンデ</div>
         <div id="ballHandicapArea"></div>
@@ -275,6 +281,9 @@
 
       <!-- ボウラードの投球入力（何個入れたかを押す） -->
       <div id="bowlPad" class="bowl-pad" hidden></div>
+
+      <!-- カイルンの入力。3段階を進める／ミス／反則を押して記録する -->
+      <div id="stepPad" class="step-pad" hidden></div>
     </div>
 
     <!-- 交代と補助フラグは常に押せる位置に置く。

@@ -5,57 +5,61 @@ echo ========================================
 echo  ビリヤードスコア記録 検証
 echo ========================================
 echo.
-echo [1/13] スコア計算エンジン
+echo [1/14] スコア計算エンジン
 node _test\engine.test.js
 if errorlevel 1 goto failed
 echo.
-echo [2/13] ショットクロック
+echo [2/14] ショットクロック
 node _test\shotclock.test.js
 if errorlevel 1 goto failed
 echo.
-echo [3/13] チェスクロック
+echo [3/14] チェスクロック
 node _test\chessclock.test.js
 if errorlevel 1 goto failed
 echo.
-echo [4/13] 実ブラウザでの通し確認
+echo [4/14] 実ブラウザでの通し確認
 python _test\browser_test.py
 if errorlevel 1 goto failed
 echo.
-echo [5/13] 新機能（JPA・プレーヤー・成績・時計）
+echo [5/14] 新機能（JPA・プレーヤー・成績・時計）
 python _test\features_test.py
 if errorlevel 1 goto failed
 echo.
-echo [6/13] デザイン刷新（8bit・SL登録・延長1ラック1回・ブレイク表示・種目選択）
+echo [6/14] デザイン刷新（8bit・SL登録・延長1ラック1回・ブレイク表示・種目選択）
 python _test\redesign_test.py
 if errorlevel 1 goto failed
 echo.
-echo [7/13] 選手一覧・ボールハンデ・アプリ化
+echo [7/14] 選手一覧・ボールハンデ・アプリ化
 python _test\roster_handicap_test.py
 if errorlevel 1 goto failed
 echo.
-echo [8/13] 勝利条件UI・ローテーション
+echo [8/14] 勝利条件UI・ローテーション
 python _test\rotation_goal_test.py
 if errorlevel 1 goto failed
 echo.
-echo [9/13] 中断と再開・戻る・ボールセット・ボウラード
+echo [9/14] 中断と再開・戻る・ボールセット・ボウラード
 python _test\session_test.py
 if errorlevel 1 goto failed
 echo.
-echo [10/13] 表示の修正（選択の色・スコア表・数字の位置・点線・ルール説明）
+echo [10/14] 表示の修正（選択の色・スコア表・数字の位置・点線・ルール説明）
 python _test\slice1_test.py
 if errorlevel 1 goto failed
 echo.
-echo [11/13] 1画面に収まっているか（種目8×画面4の全数）
+echo [11/14] 1画面に収まっているか（種目8×画面4の全数）
 python _test\layout_fit_test.py
 if errorlevel 1 goto failed
 echo.
-echo [12/13] 先取点・マスワリ即記録
+echo [12/14] 先取点・マスワリ即記録
 python _test\slice2_test.py
 if errorlevel 1 goto failed
 echo.
-echo [13/13] 試合メモ
+echo [13/14] 試合メモ
 python _test
 ote_test.py
+if errorlevel 1 goto failed
+echo.
+echo [14/14] カイルン（ハウスゲーム）
+python _test\kailun_test.py
 if errorlevel 1 goto failed
 echo.
 echo ========================================

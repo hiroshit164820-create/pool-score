@@ -181,6 +181,15 @@ const SETUP = (function () {
         { id: "jpa_8ball", doubles: null },
       ],
     },
+    {
+      // 公式競技規程が無く、店ごとに決め方が違うゲーム。
+      // 「一般」に混ぜると公式種目と同じ扱いに見えてしまうので分けている
+      key: "house",
+      label: "ハウスゲーム（店ごとのルール）",
+      items: [
+        { id: "kailun", doubles: null },
+      ],
+    },
   ];
 
   /** 折りたたみの中身も含めた、選べる種目のID一覧 */
@@ -207,6 +216,13 @@ const SETUP = (function () {
   // ボールハンデ。「N番以上を入れたら1点」の N を持つ（null＝ハンデなし）
   // 出典: CUES「相手は9番、自分は7番以上を入れたら1ポイント」（04_種目ルール仕様.md）
   let ballHandicap = { A: null, B: null };
+  // カイルンのハウス設定。公式規程が無く店ごとに違う2点を選ばせる
+  // （rules_data.js の unverified に対応）
+  let houseRule = {
+    penaltyMode: null,               // selfMinus | othersPlus
+    stepResetOnMiss: true,           // ミスでステップを1に戻すか
+    allowMultiScorePerInning: true,  // 1イニング内に続けて得点できるか
+  };
   // ダブルスの個人ごとのハンデ（表示用）。
   // 得点計算はチーム単位のまま（どの球が落ちたかは人が見て入力するため）。
   // { A: [1人目, 2人目], B: [...] } の形で、値は「◯番以上」の数字か null
@@ -404,14 +420,26 @@ const SETUP = (function () {
         base.label + "では" + base.keyBall + "番を必ずフットスポットに戻すため、ブレイクエースはありません。"
       );
     }
-    if (base.safetyCallable === false) {
+    // セーフティコールの廃止は10ボールの改定なので、その種目にだけ出す。
+    // safetyCallable === false は他の種目（カイルン等）にも付くため条件を分ける
+    if (base.safetyCallable === false && g.base === "tenball") {
       notes.push("10ボールは2026年6月のルール改定でセーフティコールが廃止されました。");
     }
-    if (base.rackEndsScoring === false) {
+    // 球の番号がそのまま得点になる種目（ローテーション）。
+    // rackTotal を持つ種目に限る（カイルンは当てて進めるゲームで番号得点ではない）
+    if (base.rackEndsScoring === false && base.rackTotal) {
       // NBA第11章第4条第5項。ラックは盤面のリセット単位でしかない
       notes.push(
         base.label + "は球の番号がそのまま得点で、ラックをまたいで点が続きます。"
           + "1ラックで合計" + base.rackTotal + "点です。"
+      );
+    }
+    // カイルンは公式競技規程が無い。何を根拠にしているかを明示する
+    if (base.isCarom) {
+      notes.push(
+        base.label + "は" + base.balls.join("・") + "番に当てて進める"
+          + base.steps + "段階のゲームです。公式競技規程が無いため、"
+          + "店ごとの決め方を下で選んでください。"
       );
     }
     $("gameNote").textContent = notes.join(" ");
@@ -451,6 +479,7 @@ const SETUP = (function () {
     }
 
     renderPlayerFields();
+    renderHouseRules();
     renderGoalArea(); // 中で renderBallHandicap も呼ばれる
   }
 
@@ -984,6 +1013,99 @@ const SETUP = (function () {
     return holder;
   }
 
+  /**
+   * 公式競技規程が無いゲームの、店ごとの決め方を選ばせる。
+   *
+   * カイルンは NBA 規程に章が無いハウスゲームで、
+   * 「ミスでステップが戻るか」「1イニングに何点取れるか」「減点の付け方」が
+   * 店ごとに違う。既定を勝手に決めず、その場で選べるようにする。
+   */
+  function renderHouseRules() {
+    const section = $("houseRuleSection");
+    const wrap = $("houseRuleArea");
+    if (!section || !wrap) return;
+    UI.clear(wrap);
+
+    const g = GAMES[selectedGame];
+    const base = BASE_RULES[g.base];
+    const usable = !!(base && base.unverified && base.unverified.length);
+    section.hidden = !usable;
+    if (!usable) return;
+
+    wrap.appendChild(
+      UI.el("p", {
+        class: "hint",
+        text: "公式の競技規程が無いゲームです。よく使われる決め方を選べます。",
+      })
+    );
+
+    const defs = [
+      {
+        key: "stepResetOnMiss",
+        label: "ミスしたとき",
+        opts: [
+          { v: true, text: "最初から（1段階目に戻す）" },
+          { v: false, text: "続きから（段階を保つ）" },
+        ],
+      },
+      {
+        key: "allowMultiScorePerInning",
+        label: "1回の手番で",
+        opts: [
+          { v: true, text: "何点でも取れる" },
+          { v: false, text: "1点まで" },
+        ],
+      },
+    ];
+
+    defs.forEach(function (d) {
+      const chips = UI.el("div", { class: "chips" });
+      d.opts.forEach(function (o) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(houseRule[d.key] === o.v),
+            text: o.text,
+            onclick: function () {
+              houseRule[d.key] = o.v;
+              renderHouseRules();
+            },
+          })
+        );
+      });
+      wrap.appendChild(
+        UI.el("div", { class: "field" }, [UI.el("label", { text: d.label }), chips])
+      );
+    });
+
+    // 減点の付け方（このゲームだけにある仕組み）
+    if (base.hasPenalty) {
+      const cur = houseRule.penaltyMode || base.defaultPenaltyMode;
+      const chips = UI.el("div", { class: "chips" });
+      [
+        { v: "selfMinus", text: "自分が1点減る" },
+        { v: "othersPlus", text: "相手が1点増える" },
+      ].forEach(function (o) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(cur === o.v),
+            text: o.text,
+            onclick: function () {
+              houseRule.penaltyMode = o.v;
+              renderHouseRules();
+            },
+          })
+        );
+      });
+      wrap.appendChild(
+        UI.el("div", { class: "field" }, [UI.el("label", { text: "反則のとき" }), chips])
+      );
+    }
+  }
+
   function renderGoalArea() {
     const g = GAMES[selectedGame];
     const wrap = $("goalArea");
@@ -1349,6 +1471,10 @@ const SETUP = (function () {
         shotClock: buildShotClock(),
         chessClock: buildChessClock(),
         inputMode: g.mode,
+        // ハウス設定（公式規程が無い種目でのみ使う）
+        penaltyMode: houseRule.penaltyMode || BASE_RULES[g.base].defaultPenaltyMode,
+        stepResetOnMiss: houseRule.stepResetOnMiss,
+        allowMultiScorePerInning: houseRule.allowMultiScorePerInning,
       },
       firstSide: UI.toggleValue($("firstSideToggle")) || "A",
     });

@@ -909,19 +909,21 @@ const MATCH = (function () {
     // ローテーションは盤面のボタンで入力するので、スコアのタップは使わない
     const finished = !!st.winner;
     const gridMode = usesBallGrid(r);
-    $("panelA").disabled = finished || gridMode;
-    $("panelB").disabled = finished || gridMode;
+    // カイルンは段階の入力（stepPad）で記録するので、スコアのタップは使わない
+    const stepMode = r.scoring.kind === "stepMachine";
+    $("panelA").disabled = finished || gridMode || stepMode;
+    $("panelB").disabled = finished || gridMode || stepMode;
     const perBall = isPerBallInput(r);
     $("tapHint").textContent = finished
       ? "この試合は終了しています。下の「試合終了」から保存してください。"
-      : gridMode
-      ? "" // 盤面の側に案内を出すのでここは空にする
+      : gridMode || stepMode
+      ? "" // 盤面・段階の入力側に案内を出すのでここは空にする
       : perBall
       ? (hasAnyHandicap()
           ? "得点になる球を入れたら、その人のスコアをタップ／長押しで1点戻す"
           : "球を入れたら、その人のスコアをタップ／長押しで1点戻す")
       : "ラックを取った側のスコアをタップ／長押しで1点戻す";
-    $("tapHint").hidden = gridMode && !finished;
+    $("tapHint").hidden = (gridMode || stepMode) && !finished;
 
     // ターン交代ボタン。
     // 「いま誰の番か」と「押すと誰に渡るか」を別々に出す。
@@ -976,6 +978,7 @@ const MATCH = (function () {
     }
     renderBallGrid(r, st);
     renderBowlPad(r, st);
+    renderStepPad(r, st);
     if (typeof SHEET !== "undefined") SHEET.render(match, st);
     renderFlagButtons(r.base);
     renderShotClock();
@@ -1106,6 +1109,120 @@ const MATCH = (function () {
    * ボウラードの投球入力。
    * 「今の投球で何個入れたか」を押す。残り球数までしか押せない。
    */
+  /**
+   * カイルンの入力。
+   *
+   * 3段階を順に進めて1点になるゲームなので、
+   * 「いま何段階目か」を出したうえで、成功・ミス・反則を押して記録する。
+   * スコアのタップでは段階が表せないため専用の入力を出す。
+   */
+  function renderStepPad(r, st) {
+    const wrap = $("stepPad");
+    if (!wrap) return;
+    const isStep = r.scoring.kind === "stepMachine";
+    wrap.hidden = !isStep || !!st.winner;
+    if (wrap.hidden) return;
+    UI.clear(wrap);
+
+    const side = st.turn || st.breakSide || st.firstSide;
+    const cur = (st.step && st.step[side]) || 1;
+    const total = r.scoring.stepsToScore;
+
+    // いま何段階目か。押す前に確認できるようにする
+    const dots = UI.el("div", { class: "step-dots" });
+    for (let i = 1; i <= total; i++) {
+      dots.appendChild(
+        UI.el("span", {
+          class: "step-dot" + (i < cur ? " done" : (i === cur ? " now" : "")),
+          text: String(i),
+        })
+      );
+    }
+    wrap.appendChild(
+      UI.el("div", { class: "step-head" }, [
+        UI.el("span", { class: "sp-who", text: sideName(side) }),
+        dots,
+        UI.el("span", { class: "sp-target", text: cur + " / " + total + "段目" }),
+      ])
+    );
+
+    // 当てる球（1・3・11番）を出す。どの球を狙う段階かが分かるように
+    if (r.base.balls && r.base.balls.length) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "この段階で当てる球: " + r.base.balls[Math.min(cur, r.base.balls.length) - 1] + "番",
+        })
+      );
+    }
+
+    const row = UI.el("div", { class: "step-row" });
+    row.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "step-btn ok",
+        text: cur >= total ? "成功（1点）" : "成功（次の段階へ）",
+        onclick: UI.guard(function () { recordStep(currentStepSide(), "ok"); }),
+      })
+    );
+    row.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "step-btn miss",
+        text: "ミス（交代）",
+        onclick: UI.guard(function () { onTurnChange(); }),
+      })
+    );
+    row.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "step-btn penalty",
+        text: "反則",
+        onclick: UI.guard(function () { recordStep(currentStepSide(), "penalty"); }),
+      })
+    );
+    wrap.appendChild(row);
+  }
+
+  /** いま撞いている側。押した瞬間に読み直す（描画時の値だと交代後にずれる） */
+  function currentStepSide() {
+    const st = reduceMatch(match);
+    return st.turn || st.breakSide || st.firstSide;
+  }
+
+  /** カイルンの1手を記録する */
+  function recordStep(side, result) {
+    const before = reduceMatch(match);
+    if (before.winner) {
+      UI.toast("この試合はもう終わっています。", "warn");
+      return;
+    }
+    appendEvent(match, { t: "STEP", side: side, d: { result: result } });
+
+    const after = reduceMatch(match);
+    // 1イニング1点までの設定のときだけ、点が入った時点で交代まで記録する。
+    // 「何点でも取れる」設定では続けて撞けるので交代しない
+    const allowMulti = !match.options || match.options.allowMultiScorePerInning !== false;
+    if (result === "ok" && !allowMulti && after.stepScoredThisInning === side) {
+      appendEvent(match, { t: "TURN_END", side: side, d: { reason: "stepDone" } });
+    }
+    // 反則は手番が移る（当てられていないため）
+    if (result === "penalty") {
+      appendEvent(match, { t: "TURN_END", side: side, d: { reason: "foul" } });
+    }
+    save();
+    render();
+    bump(side);
+
+    const now = reduceMatch(match);
+    if (result === "penalty") {
+      UI.toast(sideName(side) + " の反則を記録しました。");
+    } else if (now.score[side] > before.score[side]) {
+      UI.toast(sideName(side) + " が1点取りました。");
+    }
+    if (now.winner) openFinish();
+  }
+
   function renderBowlPad(r, st) {
     const wrap = $("bowlPad");
     if (!usesBowlPad(r)) {
