@@ -163,29 +163,63 @@
     </div>
 
     <div class="scoreboard">
-      <!-- スコア欄そのものがボタン。タップで1点（1ラック）加算する -->
-      <button type="button" class="score-panel side-a" id="panelA">
-        <span class="sp-head">
-          <span class="breakmark" id="breakMarkA"></span>
-          <span class="name" id="nameA">プレーヤーA</span>
-          <span class="target" id="targetA"></span>
-        </span>
-        <span class="handicap" id="handicapA" hidden></span>
-        <span class="val" id="scoreA">0</span>
-        <span class="progress"><i id="barA" style="width:0%"></i></span>
-      </button>
+      <!-- スコア欄そのものがボタン。タップで1点（1ラック）加算する。
+           マスワリ等のボタンは button の入れ子にできないので、
+           枠（panel-wrap）の中に兄弟として並べる -->
+      <div class="panel-wrap side-a" id="panelWrapA">
+        <button type="button" class="score-panel side-a" id="panelA">
+          <span class="sp-head">
+            <span class="breakmark" id="breakMarkA"></span>
+            <span class="name" id="nameA">プレーヤーA</span>
+          </span>
+          <span class="team-members" id="teamMembersA" hidden></span>
+          <span class="handicap" id="handicapA" hidden></span>
+          <!-- 累計得点と目標。「12 / 3」の順に読ませる（目標は右） -->
+          <span class="val-row">
+            <span class="val" id="scoreA">0</span>
+            <span class="target" id="targetA"></span>
+          </span>
+          <span class="progress"><i id="barA" style="width:0%"></i></span>
+        </button>
+        <!-- ブレイク権のある側のパネル内に重ねて出す。
+             パネルの高さを奪わないよう、下端に絶対配置する -->
+        <div class="panel-flags" id="panelFlagsA" hidden></div>
+      </div>
 
-      <button type="button" class="score-panel side-b" id="panelB">
-        <span class="sp-head">
-          <span class="breakmark" id="breakMarkB"></span>
-          <span class="name" id="nameB">プレーヤーB</span>
-          <span class="target" id="targetB"></span>
-        </span>
-        <span class="handicap" id="handicapB" hidden></span>
-        <span class="val" id="scoreB">0</span>
-        <span class="progress"><i id="barB" style="width:0%"></i></span>
-      </button>
+      <!-- 操作の説明は2つのスコアの間に置く。
+           時計や盤面の下だと「何の説明か」が分からない（本人指摘） -->
+      <p class="tap-hint" id="tapHint">ラックを取った側のスコアをタップ／長押しで1点戻す</p>
 
+      <!-- スコア欄そのものがボタン。タップで1点（1ラック）加算する。
+           マスワリ等のボタンは button の入れ子にできないので、
+           枠（panel-wrap）の中に兄弟として並べる -->
+      <div class="panel-wrap side-b" id="panelWrapB">
+        <button type="button" class="score-panel side-b" id="panelB">
+          <span class="sp-head">
+            <span class="breakmark" id="breakMarkB"></span>
+            <span class="name" id="nameB">プレーヤーB</span>
+          </span>
+          <span class="team-members" id="teamMembersB" hidden></span>
+          <span class="handicap" id="handicapB" hidden></span>
+          <!-- 累計得点と目標。「12 / 3」の順に読ませる（目標は右） -->
+          <span class="val-row">
+            <span class="val" id="scoreB">0</span>
+            <span class="target" id="targetB"></span>
+          </span>
+          <span class="progress"><i id="barB" style="width:0%"></i></span>
+        </button>
+        <!-- ブレイク権のある側のパネル内に重ねて出す。
+             パネルの高さを奪わないよう、下端に絶対配置する -->
+        <div class="panel-flags" id="panelFlagsB" hidden></div>
+      </div>
+
+    </div>
+
+    <!-- ラック情報と帯。
+         スコアボード（縮む・はみ出しを隠す）の中に入れていたため、
+         名前が長いダブルスなどで潰れて読めなくなっていた。
+         縮まない外側に出して、必ず読める高さを確保する -->
+    <div class="match-info">
       <div class="meta-line">
         <span id="rackInfo">ラック 1</span>
         <span id="inningInfo" class="inning-info" hidden></span>
@@ -234,7 +268,6 @@
     </div>
 
     <div class="play-area">
-      <p class="tap-hint" id="tapHint">ラックを取った側のスコアをタップしてください</p>
 
       <!-- 球ごとに点が違う種目（ローテーション）で使う盤面。
            どの球を入れたかを押して記録する -->
@@ -248,7 +281,16 @@
          盤面（縦に長い）と一緒にスクロールさせると、
          縦の短い端末で画面の外に出て押せなくなるため分けている -->
     <div class="play-fixed">
-      <button id="turnBtn" class="turn-btn">交代 → <span id="turnNextName">相手</span></button>
+      <!-- 交代は横に並べる。縦に積むとスコアの高さを奪う -->
+      <div class="turn-row">
+        <button id="turnBtn" class="turn-btn">交代 → <span id="turnNextName">相手</span></button>
+        <!-- ダブルスのチーム内交代。
+             これが無いと、同じチームの2人目が撞くときも時計が進みっぱなしになる -->
+        <button id="memberTurnBtn" class="member-turn-btn" hidden>
+          <span class="mt-label">味方と交代</span>
+          <span class="mt-next" id="memberNextName">—</span>
+        </button>
+      </div>
       <div id="flagButtons" class="flag-buttons"></div>
     </div>
 

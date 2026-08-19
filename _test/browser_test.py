@@ -109,9 +109,13 @@ def run():
               "Aのパネルがブレイク権ありとして強調される")
         check("has-break" not in (page.get_attribute("#panelB", "class") or ""),
               "Bのパネルは強調されない")
-        check(page.is_visible("#breakBanner"), "ブレイク権のバナーが出ている")
-        check(page.text_content("#breakBannerName") == "山田", "バナーにブレイクする人の名前が出る",
-              page.text_content("#breakBannerName"))
+        # ブレイク権はパネル内の BREAK 札で示す。
+        # 帯を別に出すと場所を取ってスコアが小さくなるため出さない（本人指摘）
+        check(page.text_content("#breakMarkA") == "BREAK",
+              "ブレイク権のある側のパネルに BREAK の札が出る",
+              page.text_content("#breakMarkA"))
+        check(page.text_content("#breakMarkB") == "",
+              "反対側には出ない", page.text_content("#breakMarkB"))
         btxt = page.text_content("#breakToggleBtn") or ""
         check("山田" in btxt, "ブレイク権が名前で表示される", btxt)
 
@@ -129,17 +133,20 @@ def run():
         )
         check(panel_h >= 120, "スコア欄のタップ領域が120px以上ある", panel_h)
 
-        # 種目別ボタン（9ボールなので3つとも出る）
-        flag_labels = page.locator("#flagButtons button").all_text_contents()
-        check("マスワリ" in flag_labels, "マスワリボタンがある", flag_labels)
-        check("ブレイクエース" in flag_labels, "ブレイクエースボタンがある", flag_labels)
-        check("セーフティ" in flag_labels, "セーフティボタンがある", flag_labels)
+        # 種目別ボタン。
+        # マスワリ・ブレイクエースはブレイク権のある側のパネル内、
+        # セーフティは人ごとの回数カウントに分かれている
+        panel_flags = page.locator(".panel-flags button").all_text_contents()
+        check("マスワリ" in panel_flags, "マスワリボタンがある", panel_flags)
+        check("ブレイクエース" in panel_flags, "ブレイクエースボタンがある", panel_flags)
+        check(page.locator(".safety-btn").count() == 2,
+              "セーフティが人ごとに2つある", page.locator(".safety-btn").count())
         page.screenshot(path=os.path.join(SHOT_DIR, "03_match.png"), full_page=True)
 
         # ---------- 記録 ----------
-        # マスワリはボタンを押した時点でラック取得まで記録される（本人指示9）。
-        # 以前は「押しておいて、次にスコアをタップすると効く」予約式だった
-        page.click('#flagButtons button:has-text("マスワリ")')
+        # マスワリのボタンは、ブレイク権のある側のスコアパネルの中にある。
+        # 押した時点でラック取得まで記録される（本人指示9・その後の指示で位置を変更）
+        page.click('#panelFlagsA button:has-text("マスワリ")')
         page.wait_for_timeout(400)
         check(page.text_content("#scoreA") == "1", "マスワリを押すとAが1ラック取る")
         # 勝者ブレイクなのでブレイク権はAのまま
@@ -269,9 +276,10 @@ def run():
         page.fill("#inNameB", "鈴木")
         page.click("#startMatchBtn")
         page.wait_for_timeout(400)
-        labels10 = page.locator("#flagButtons button").all_text_contents()
+        labels10 = page.locator(".panel-flags button").all_text_contents()
         check("ブレイクエース" not in labels10, "10ボールにブレイクエースボタンが出ない", labels10)
-        check("セーフティ" not in labels10, "10ボールにセーフティボタンが出ない", labels10)
+        check(page.locator(".safety-btn").count() == 0,
+              "10ボールにセーフティは出ない（規程で廃止）", page.locator(".safety-btn").count())
         check("マスワリ" in labels10, "10ボールでもマスワリはある", labels10)
         check(not page.is_visible("#shotClockBar"), "ショットクロックOFFなら表示されない")
         page.screenshot(path=os.path.join(SHOT_DIR, "07_10ball.png"), full_page=True)
@@ -293,11 +301,12 @@ def run():
         page.wait_for_timeout(400)
 
         hint141 = page.text_content("#tapHint") or ""
-        check("球を1個" in hint141, "14-1は球単位の案内文になる", hint141)
+        check("球を入れたら" in hint141, "14-1は球単位の案内文になる", hint141)
 
         labels141 = page.locator("#flagButtons button").all_text_contents()
         check(any("ファウル" in l for l in labels141), "14-1にはファウルボタンが出る", labels141)
-        check(not any("マスワリ" in l for l in labels141), "14-1にマスワリは出ない", labels141)
+        check(page.locator(".panel-flags button").count() == 0,
+              "14-1にマスワリは出ない", page.locator(".panel-flags button").count())
 
         # 球を3個入れる → 3点
         for _ in range(3):

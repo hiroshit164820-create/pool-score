@@ -427,13 +427,18 @@ button:focus-visible {
    中身だけ大きく残って名前を押し出すため、上限を控えめにしている。
    （行の高さより文字が大きい状態にしない） */
 .score-panel .val {
-  flex: 1 1 auto;
-  min-height: 0;
+  /* overflow:hidden を付けると、数字が切れているのに
+     「収まっている」ことになってしまう（本人指摘のスクショの状態）。
+     切らずに、パネルの高さに収まる大きさまで font-size を下げる */
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  font-size: min(26vw, 17vh);
+  /* 実際の大きさは JS（fitScoreFont）がパネルの高さから決めて
+     --val-size に入れる。ここは変数が無いときの控えの値。
+     画面の高さ(vh)だけで決めると、名前やメンバー名が乗ったぶん
+     パネルに収まらず数字の上下が切れる（本人指摘） */
+  font-size: var(--val-size, min(26vw, 17vh));
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1220,12 +1225,15 @@ button.danger {
 }
 /* ブレイク権を持つ側は金色に光らせる */
 .score-panel.has-break {
-  background: linear-gradient(180deg, #fffbe6 0%, #fff6c9 100%);
-  box-shadow: var(--shadow), 0 0 0 4px var(--coin);
+  /* ブレイク権は BREAK の札で示す。
+     背景まで金色にすると、撞いている側との色差が消える（本人指摘）ため
+     地の色は変えない */
+  box-shadow: var(--shadow), 0 0 0 3px var(--coin);
 }
 .score-panel .val {
   font-family: var(--font-pixel);
-  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18);
+  /* 影は付けない。数字に影が重なって読みづらくなるため（本人指摘） */
+  text-shadow: none;
 }
 /* ブレイク表示は文字バッジにする */
 .score-panel .breakmark {
@@ -1760,18 +1768,35 @@ body {
 /* 撞いている側のパネルに印を付ける。
    点線を地と同じ黒にすると白いパネルの上で枠線と紛れるため、
    その側の色（左＝青／右＝橙）で塗り、太さも上げて離れても分かるようにする */
+/* 撞いている側は、離れていても一目で分かる差を付ける。
+   淡い色だと、ブレイク権の金色と混ざって左右の区別が付かない（本人指摘）。
+   撞いていない側を白のままにして、撞いている側だけ色を敷く */
 .score-panel.is-turn {
-  outline: 5px dashed var(--turn-mark, var(--side-a));
-  outline-offset: -8px;
+  outline: 5px solid var(--turn-mark, var(--side-a));
+  outline-offset: -5px;
   background: var(--turn-tint, #eef4ff);
+  box-shadow: var(--shadow), 0 0 0 4px var(--turn-mark, var(--side-a));
+}
+/* 撞いている側だけ、上端に太い帯を出す（色覚に頼らない手がかり） */
+.score-panel.is-turn .sp-head::before {
+  content: "● 撞く番";
+  flex: 0 0 auto;
+  margin-right: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: #fff;
+  background: var(--turn-mark, var(--side-a));
+  border: 2px solid var(--ink);
+  white-space: nowrap;
 }
 .score-panel.side-a.is-turn {
   --turn-mark: var(--side-a);
-  --turn-tint: #e8f1ff;
+  --turn-tint: #d6e6ff;
 }
 .score-panel.side-b.is-turn {
   --turn-mark: #c26a00;
-  --turn-tint: #fff2e0;
+  --turn-tint: #ffe8cc;
 }
 
 /* 予約中の補助フラグ */
@@ -1809,6 +1834,293 @@ body {
   margin-top: 4px;
   background: var(--surface);
   border-style: dashed;
+}
+
+/* ---------- スコアパネルの枠（パネル＋マスワリ等のボタン） ---------- */
+.panel-wrap[hidden] {
+  display: none;
+}
+.panel-wrap {
+  position: relative;
+  /* 左右で同じ高さにする。
+     1 1 auto にすると、マスワリのボタンが付くブレイク側だけ枠が高くなり、
+     反対側は余った高さを使えずスコアが小さいまま残る */
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* 枠の中でパネル本体が残りを全部取る（ボタンは必要な高さだけ） */
+.panel-wrap .score-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* マスワリのボタンを重ねている側は、その幅ぶん右に余白を作って
+   数字が隠れないようにする（高さは奪わない） */
+.panel-wrap.has-flags .score-panel {
+  padding-right: 108px;
+}
+.panel-wrap .panel-flags {
+  flex: 0 0 auto;
+}
+
+/* 累計得点と目標点を横に並べる。
+   目標（/3）は得点の右。左に置くと「3のうち何点か」が読み取れない（本人指摘） */
+.score-panel .val-row {
+  /* 数字の置き場。ここが残りの高さを全部取り、
+     中の数字はこの高さに収まる大きさになる。
+     align-items:baseline だと行が数字ぶんに広がらず上下が切れるため center にする */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.score-panel .val-row .val {
+  flex: 0 1 auto;
+  min-height: 0;
+  line-height: 1;
+}
+.score-panel .val-row .target {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+/* ダブルスのメンバー名。「チームA」の下に小さく2人の名前を出す */
+.score-panel .team-members {
+  flex: 0 0 auto;
+  /* 主役は「チームA」と数字。メンバー名は添えるだけなので小さく詰める */
+  font-size: 12px;
+  line-height: 1.1;
+  margin-top: -2px;
+  font-weight: 700;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 進捗バーは「/3」で残りが分かるので、狭いときは出さない。
+   数字の高さを優先する（台の脇から読めることが最優先） */
+@media (max-height: 820px) {
+  .score-panel .progress {
+    display: none;
+  }
+}
+/* セーフティの名前は省略させない。長い名前は文字を詰めて全部見せる */
+.safety-btn .sf-name {
+  font-size: 13px;
+}
+.score-panel .team-members[hidden] {
+  display: none;
+}
+
+/* マスワリ・ブレイクエース。ブレイク権のある側のパネルの下端に並べる。
+   パネル本体（押すと1点）とは別のボタンなので、誤タップしないよう
+   十分な高さを取り、見た目もはっきり分ける */
+/* ブレイク側のパネルの右側に縦に並べる。
+   下端に横並びにすると、その高さぶん数字が小さくなってしまう。
+   右の余白は名前が短いときに空いているので、そこを使う */
+.panel-flags {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 96px;
+  z-index: 2;
+}
+.panel-flags[hidden] {
+  display: none;
+}
+.panel-flags button {
+  /* 押せる大きさ（44px以上）は守る */
+  min-height: 44px;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  background: var(--coin);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.panel-flags button:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+/* ダブルスの個人ごとのハンデ。チームの設定の下にぶら下げる */
+.member-bh {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--ink);
+}
+.member-bh .bh-chips {
+  gap: 6px;
+}
+
+/* ローテーションの目標点。スマホの幅で必ず1行に収める（本人の指摘）。
+   chip の既定padding のままだと4つ並ばず2行になる */
+.goal-choices {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.goal-choices .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 2px;
+  font-size: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 縦が足りない端末では、スコアの数字に高さを回すため上下を詰める */
+@media (max-height: 820px) {
+  #screenMatch .score-panel {
+    padding: 4px 10px;
+    gap: 1px;
+  }
+  /* マスワリのボタンを重ねている側は、その幅ぶんの余白を必ず残す
+     （ここで上書きしないと数字がボタンに隠れる） */
+  #screenMatch .panel-wrap.has-flags .score-panel {
+    padding-right: 104px;
+  }
+  #screenMatch .score-panel .name {
+    font-size: 16px;
+  }
+  #screenMatch .scoreboard {
+    gap: 6px;
+    padding: 6px 14px 2px;
+  }
+}
+
+/* 交代の並び。ダブルスのときだけ2つ並ぶ */
+.turn-row {
+  display: flex;
+  gap: 8px;
+}
+.turn-row .turn-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  /* 長い名前でも2行に折り返さない。入りきらないときは文字を詰める */
+  font-size: 15px;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+.turn-row .turn-btn #turnNextName {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* ダブルスのチーム内交代。相手に回す「交代」と間違えないよう見た目を分ける */
+.member-turn-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 46px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.member-turn-btn[hidden] {
+  display: none;
+}
+.member-turn-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+.member-turn-btn .mt-label {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.member-turn-btn .mt-next {
+  font-weight: 900;
+}
+
+/* セーフティの回数カウント。人ごとに分けて数える。
+   見出しは行の中に畳んで、スコアに高さを回す */
+.safety-title {
+  display: none;
+}
+.safety-row {
+  display: flex;
+  gap: 8px;
+}
+.safety-btn::before {
+  content: "セーフ";
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.safety-btn {
+  padding: 4px 8px;
+  gap: 4px;
+}
+.safety-btn {
+  flex: 1 1 0;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.safety-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+.safety-btn .sf-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.safety-btn .sf-count {
+  flex: 0 0 auto;
+  min-width: 30px;
+  padding: 0 6px;
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.safety-btn.side-a .sf-count { background: #cfe3ff; }
+.safety-btn.side-b .sf-count { background: #ffd9cc; }
+
+/* ラック情報と帯の置き場。
+   スコアボードの外に出して、縮まない・隠れない領域にする */
+.match-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 6px;
+}
+.match-info:empty {
+  display: none;
 }
 
 /* ---------- スコアシート ---------- */
@@ -2037,6 +2349,20 @@ button,
 #screenMatch .turn-banner {
   padding: 5px 12px;
 }
+#screenMatch .match-info {
+  gap: 6px;
+}
+/* ブレイクと「いまの番」の帯は出さない。
+   パネル側に「● 撞く番」の札と BREAK の札、色と枠が出ているので
+   同じことを2か所に書くと場所だけ取ってスコアが小さくなる（本人指摘）。
+   ラック番号とブレイク入れ替えボタンのある meta-line は残す */
+#screenMatch .break-banner,
+#screenMatch .turn-banner {
+  display: none;
+}
+#screenMatch .match-info {
+  padding-bottom: 4px;
+}
 #screenMatch .play-area {
   gap: 6px;
   padding: 0 14px 6px;
@@ -2129,8 +2455,8 @@ button,
   #screenMatch.grid-mode .ball-grid {
     gap: 4px;
   }
-  /* 「◯◯が入れた球を押してください」の案内は、
-     場所が足りないときは球のボタンを優先して隠す */
+  /* ローテーションは盤面の球ボタンが縦を大きく使うので、
+     こちらだけは案内を隠してボタンを優先する */
   #screenMatch.grid-mode .tap-hint {
     display: none;
   }
@@ -2143,8 +2469,7 @@ button,
     display: none;
   }
 }
-#screenMatch .break-banner,
-#screenMatch .turn-banner,
+#screenMatch .match-info,
 #screenMatch .shotclock,
 #screenMatch .chessclock,
 #screenMatch .sheet-area,
@@ -2192,8 +2517,11 @@ button,
     gap: 4px;
     padding-bottom: 6px;
   }
+  /* 説明文はスコアの間に移したので、狭くても出したまま小さくする
+     （盤面のボタンとは場所を取り合わない） */
   #screenMatch .tap-hint {
-    display: none; /* 場所が足りないときは説明よりボタンを優先する */
+    font-size: 12px;
+    padding: 2px 6px;
   }
 }
 /* スコアシートを出しているときは、パネルが潰れて

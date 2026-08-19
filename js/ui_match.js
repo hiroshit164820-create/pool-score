@@ -15,13 +15,16 @@ const MATCH = (function () {
   let chess = null; // チェスクロック
   let wakeLock = null;
   // 次のラック勝者と一緒に記録する補助フラグ
-  let flags = { masuwari: false, breakAce: false, safety: false };
+  let flags = { masuwari: false, breakAce: false };
+  // ダブルスで、いまチームの何人目が撞いているか（{A:0|1, B:0|1}）。
+  // 得点計算には使わない。時計のリセットと「次は誰か」の表示のためだけに持つ
+  let memberTurn = { A: 0, B: 0 };
 
   /* ---------- 起動・終了 ---------- */
 
   function open(m) {
     match = m;
-    flags = { masuwari: false, breakAce: false, safety: false };
+    flags = { masuwari: false, breakAce: false };
     setupShotClock();
     setupChessClock();
     bindOnce();
@@ -53,9 +56,17 @@ const MATCH = (function () {
     if (bound) return;
     bound = true;
 
-    // スコア欄そのものがボタン。タップで1点（1ラック）加算する
-    $("panelA").addEventListener("click", UI.guard(function () { recordRackWin("A"); }));
-    $("panelB").addEventListener("click", UI.guard(function () { recordRackWin("B"); }));
+    // 画面の向きや高さが変わったら数字の大きさを取り直す
+    // （横向きにすると使える高さが変わり、そのままだと数字が切れる）
+    window.addEventListener("resize", function () {
+      if (match) fitScoreFont();
+    });
+
+    // スコア欄そのものがボタン。タップで1点（1ラック）加算し、
+    // 長押しで1点戻す（本人の指示。加算と同じ場所で減算までできるようにする）
+    ["A", "B"].forEach(function (sd) {
+      bindPanelPress($("panel" + sd), sd);
+    });
     $("undoBtn").addEventListener("click", UI.guard(onUndo));
     $("reviseBtn").addEventListener("click", UI.guard(openRevise));
     $("finishBtn").addEventListener("click", UI.guard(openFinish));
@@ -81,6 +92,7 @@ const MATCH = (function () {
     }));
 
     $("turnBtn").addEventListener("click", UI.guard(onTurnChange));
+    $("memberTurnBtn").addEventListener("click", UI.guard(onMemberTurnChange));
     $("ccPauseBtn").addEventListener("click", UI.guard(function () {
       if (!chess) return;
       chess.togglePause();
@@ -200,6 +212,82 @@ const MATCH = (function () {
   }
 
   /** ターン交代（チェスクロックの切替と、イニング計算の土台になる） */
+  /**
+   * ダブルスのチーム内交代。
+   *
+   * 相手には回さず、同じチームの相方に代わる。
+   * 交代したのに時計が動き続けると、いつまでも前の人の時間で測られるため
+   * ショットクロックを撞き直しの状態に戻す（本人指摘）。
+   */
+  /**
+   * スコア欄の押し分け。
+   *
+   * 短く押す = 1点加算 / 長く押す（500ms）= 1点戻す。
+   * 減算を別のボタンにすると、台の脇で押し間違えるうえに場所も取るため
+   * 同じ場所に集約する。長押しの瞬間に振動で知らせて、
+   * 指を離す前に「戻る側だ」と分かるようにする。
+   */
+  const LONG_PRESS_MS = 500;
+  function bindPanelPress(node, side) {
+    if (!node) return;
+    let timer = null;
+    let fired = false;
+
+    function clear() {
+      if (timer) { clearTimeout(timer); timer = null; }
+    }
+    function start() {
+      if (node.disabled) return;
+      fired = false;
+      clear();
+      timer = setTimeout(function () {
+        fired = true;
+        vibrate([60, 40, 60]);
+        decrementSide(side);
+      }, LONG_PRESS_MS);
+    }
+    function end(e) {
+      clear();
+      // fired はここで落とさない。
+      // このあとに来る click を無視するために残す必要がある
+      if (fired && e) { e.preventDefault(); }
+    }
+
+    node.addEventListener("pointerdown", start);
+    node.addEventListener("pointerup", end);
+    node.addEventListener("pointerleave", function () { clear(); fired = false; });
+    node.addEventListener("pointercancel", function () { clear(); fired = false; });
+    // click は「長押しでなかったとき」だけ加算する。
+    // 長押しで減算した直後の click は捨てる（でないと減らして足すので変わらない）
+    node.addEventListener("click", UI.guard(function () {
+      if (fired) { fired = false; return; }
+      recordRackWin(side);
+    }));
+    // 長押しでテキスト選択メニューが出ないようにする
+    node.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
+
+  function onMemberTurnChange() {
+    const st = reduceMatch(match);
+    if (st.winner) return;
+    const side = st.turn || st.breakSide || st.firstSide;
+    const members = membersOf(side);
+    if (members.length < 2) return;
+
+    memberTurn[side] = memberTurn[side] === 0 ? 1 : 0;
+    // 時計を撞き直しに戻す（相手には回さないので TURN_END は出さない）
+    if (clock) startClockForCurrentTurn();
+    render();
+    vibrate(30);
+    UI.toast(members[memberTurn[side]] + " に交代しました。");
+  }
+
+  /** その側のメンバー名（ダブルスのみ。シングルスは空） */
+  function membersOf(side) {
+    const sd = match && match.sides[side === "A" ? 0 : 1];
+    return (sd && sd.members) || [];
+  }
+
   function onTurnChange() {
     const st = reduceMatch(match);
     if (st.winner) return;
@@ -213,6 +301,10 @@ const MATCH = (function () {
     const d = { reason: "miss" };
     if (usedSec !== null) d.usedSec = usedSec;
     appendEvent(match, { t: "TURN_END", side: from, d: d });
+
+    // 相手に回ったら、そのチームは1人目から撞き始める
+    const to = from === "A" ? "B" : "A";
+    memberTurn[to] = 0;
 
     save();
     render();
@@ -356,7 +448,6 @@ const MATCH = (function () {
         // 予約されているぶんに加え、押して即記録したぶんも立てる
         masuwari: (flags.masuwari || instant === "masuwari") && r.base.hasMasuwari,
         breakAce: (flags.breakAce || instant === "breakAce") && r.base.hasBreakAce,
-        safety: flags.safety && r.base.safetyCallable,
       },
     });
 
@@ -375,7 +466,7 @@ const MATCH = (function () {
       });
     }
 
-    flags = { masuwari: false, breakAce: false, safety: false };
+    flags = { masuwari: false, breakAce: false };
     save();
     render();
     bump(side);
@@ -517,6 +608,51 @@ const MATCH = (function () {
     );
   }
 
+  /**
+   * その側の得点を1つ戻す（長押しで呼ばれる）。
+   *
+   * 「直前の記録」ではなく「その側の直近の得点」を消すので、
+   * 相手が先に点を入れていても、押した側の点だけが減る。
+   */
+  function decrementSide(side) {
+    const st = reduceMatch(match);
+    if (st.winner) {
+      UI.toast("この試合はもう終わっています。", "warn");
+      return;
+    }
+
+    // その側の得点になっている記録を新しい順に探す
+    const evs = match.events || [];
+    let target = null;
+    for (let i = evs.length - 1; i >= 0; i--) {
+      const e = evs[i];
+      if (e.voided || e.t === "VOID") continue;
+      const isScore = (e.t === "RACK_WIN" && ((e.d && e.d.winner) || e.side) === side)
+        || (e.t === "POCKET" && e.side === side);
+      if (isScore) { target = e; break; }
+    }
+    if (!target) {
+      UI.toast(sideName(side) + " に戻せる得点がありません。", "warn");
+      return;
+    }
+
+    voidEvent(match, target.seq, "長押しで1点戻す", new Date());
+    // ラック取得を消したときは、それに続いて自動で始まったラックも戻す
+    if (target.t === "RACK_WIN") {
+      for (let i = evs.length - 1; i >= 0; i--) {
+        const e = evs[i];
+        if (e.voided || e.t === "VOID") continue;
+        if (e.t === "RACK_START" && e.d && e.d.auto && e.seq > target.seq) {
+          voidEvent(match, e.seq, "得点を戻したことに伴う自動取り消し", new Date());
+        }
+      }
+    }
+    save();
+    render();
+    vibrate([40, 40, 40]);
+    UI.toast(sideName(side) + " の得点を1つ戻しました。");
+  }
+
   function onUndo() {
     const ev = undoLast(match, new Date());
     if (!ev) {
@@ -554,6 +690,58 @@ const MATCH = (function () {
   }
 
   /* ---------- 描画 ---------- */
+
+  /**
+   * スコアの数字を、パネルに収まる大きさに合わせる。
+   *
+   * CSSの vh だけでは決められない。名前・メンバー名・ハンデ・進捗バーが
+   * 乗るぶんだけ数字に使える高さが変わり、はみ出すと上下が切れるため
+   * （実機のスクショで数字が半分になっていたのがこれ）。
+   * 実際に測ってから決める。
+   */
+  function fitScoreFont() {
+    // 左右で別々に決めると、マスワリのボタンが付く側だけ数字が小さくなり
+    // 「同じスコアなのに大きさが違う」状態になる。
+    // 両方を測ってから、小さい方に揃える
+    const sizes = {};
+    ["A", "B"].forEach(function (side) {
+      const panel = $("panel" + side);
+      const row = panel && panel.querySelector(".val-row");
+      const val = $("score" + side);
+      const box = panel && panel.getBoundingClientRect();
+      // 高さが取れないとき（画面が閉じている等）は計算しない
+      if (!panel || !row || !val || !box || box.height < 20) return;
+
+      // パネルの内側で、数字以外が使っている高さを引く
+      const cs = getComputedStyle(panel);
+      const padding = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      let used = 0;
+      Array.prototype.forEach.call(panel.children, function (k) {
+        if (k === row || k.hidden) return;
+        used += k.getBoundingClientRect().height;
+      });
+      const gap = parseFloat(cs.rowGap || cs.gap) || 0;
+      const slots = Math.max(0, panel.children.length - 1);
+      const avail = box.height - padding - used - gap * slots;
+
+      // 幅の制約も見る（3桁になっても収まるように）
+      const byWidth = box.width * 0.42;
+      // 0.9 は行の高さぶんの余裕。これを超えると上下が切れる。
+      // 下限は台の脇から読める大きさ（32px）。
+      // それも入らないほど狭いときは、パネル側の作りを見直すべきで
+      // ここで無理に縮めても読めない
+      sizes[side] = Math.max(40, Math.min(avail * 0.9, byWidth, 96));
+    });
+
+    // 両側が見えているときは小さい方に揃える（片方だけ大きいと不揃いに見える）
+    const vals = Object.keys(sizes).map(function (k) { return sizes[k]; });
+    if (!vals.length) return;
+    const unified = Math.min.apply(null, vals);
+    Object.keys(sizes).forEach(function (side) {
+      const panel = $("panel" + side);
+      if (panel) panel.style.setProperty("--val-size", Math.floor(unified) + "px");
+    });
+  }
 
   function sideName(side) {
     if (!match) return side;
@@ -631,7 +819,31 @@ const MATCH = (function () {
 
     const cur = displayScore(st);
     ["A", "B"].forEach(function (side) {
-      $("name" + side).textContent = sideName(side);
+      // ダブルスは「チームA」を主役にして、下に2人の名前を小さく出す。
+      // 名前を連結しただけだと、どちらのチームなのかが読み取りにくい（本人の指示）
+      const sd = match.sides[side === "A" ? 0 : 1] || {};
+      const members = sd.members || [];
+      const isTeam = members.length >= 2;
+      $("name" + side).textContent = isTeam
+        ? (sd.teamLabel || (side === "A" ? "チームA" : "チームB"))
+        : sideName(side);
+      const memNode = $("teamMembers" + side);
+      if (memNode) {
+        if (isTeam) {
+          // いま撞いている人が分かるように印を付ける。
+          // ダブルスは2人のうちどちらが撞いているかが記録の前提になる
+          const curSide = st.turn || st.breakSide || st.firstSide;
+          const idx = memberTurn[side];
+          memNode.textContent = members
+            .map(function (nm, i) {
+              return (side === curSide && i === idx) ? "▶ " + nm : nm;
+            })
+            .join("　");
+          memNode.hidden = false;
+        } else {
+          memNode.hidden = true;
+        }
+      }
       $("score" + side).textContent = String(cur[side]);
       $("target" + side).textContent = "/ " + match.goal.targets[side];
 
@@ -652,6 +864,16 @@ const MATCH = (function () {
         hNode.hidden = false;
       } else {
         hNode.hidden = true;
+      }
+
+      // ダブルスで個人ごとにハンデを決めているときは、誰がどの球かを出す。
+      // 「岸川 5番以上／タイラ 9番のみ」のように、台の脇で確認できるようにする
+      const mh = match.goal.memberHandicap && match.goal.memberHandicap[side];
+      if (mh && mh.length && mh.some(function (m) { return m.from; })) {
+        hNode.textContent = mh.map(function (m) {
+          return m.name + " " + (m.from ? m.from + "番〜" : r.base.keyBall + "番のみ");
+        }).join(" ／ ");
+        hNode.hidden = false;
       }
       const pct = Math.min(100, Math.round((cur[side] / match.goal.targets[side]) * 100));
       $("bar" + side).style.width = pct + "%";
@@ -696,9 +918,9 @@ const MATCH = (function () {
       ? "" // 盤面の側に案内を出すのでここは空にする
       : perBall
       ? (hasAnyHandicap()
-          ? "得点になる球を入れるごとに、その人のスコアをタップしてください"
-          : "球を1個入れるごとに、その人のスコアをタップしてください")
-      : "ラックを取った側のスコアをタップしてください";
+          ? "得点になる球を入れたら、その人のスコアをタップ／長押しで1点戻す"
+          : "球を入れたら、その人のスコアをタップ／長押しで1点戻す")
+      : "ラックを取った側のスコアをタップ／長押しで1点戻す";
     $("tapHint").hidden = gridMode && !finished;
 
     // ターン交代ボタン。
@@ -709,6 +931,18 @@ const MATCH = (function () {
     const curTurn = st.turn || st.breakSide || st.firstSide;
     $("turnNextName").textContent = sideName(curTurn === "A" ? "B" : "A");
     turnBtn.disabled = finished;
+
+    // ダブルスのチーム内交代。撞いている側に2人いるときだけ出す
+    const mBtn = $("memberTurnBtn");
+    const mems = membersOf(curTurn);
+    if (mBtn) {
+      const show = !finished && mems.length >= 2;
+      mBtn.hidden = !show;
+      if (show) {
+        const nextIdx = memberTurn[curTurn] === 0 ? 1 : 0;
+        $("memberNextName").textContent = mems[nextIdx];
+      }
+    }
 
     const turnBanner = $("turnBanner");
     // イニングを数える種目（JPA・14-1）では特に重要なので必ず出す。
@@ -730,14 +964,14 @@ const MATCH = (function () {
     const solo = !!g.solo;
     $("screenMatch").classList.toggle("solo-mode", solo);
     if (solo) {
-      $("panelB").hidden = true;
+      $("panelWrapB").hidden = true;
       $("breakBanner").hidden = true;
       $("turnBanner").hidden = true;
       $("turnBtn").hidden = true;
       $("breakToggleBtn").hidden = true;
       $("tapHint").hidden = true;
     } else {
-      $("panelB").hidden = false;
+      $("panelWrapB").hidden = false;
       $("breakToggleBtn").hidden = false;
     }
     renderBallGrid(r, st);
@@ -746,6 +980,11 @@ const MATCH = (function () {
     renderFlagButtons(r.base);
     renderShotClock();
     renderChessClock();
+    // 帯やボタンの出し入れで使える高さが変わるので、最後に数字を合わせる。
+    // このときまだ配置が確定していないことがある（高さが0で返る）ので、
+    // 描画が終わったフレームで測る
+    fitScoreFont();
+    requestAnimationFrame(fitScoreFont);
   }
 
   /**
@@ -953,6 +1192,16 @@ const MATCH = (function () {
     const wrap = $("flagButtons");
     UI.clear(wrap);
 
+    // パネル内のボタンも毎回消してから作り直す。
+    // ここで消さないと、前の種目のボタンが残る
+    // （14-1にマスワリが出ていた不具合）
+    ["A", "B"].forEach(function (sd) {
+      const host = $("panelFlags" + sd);
+      const w = $("panelWrap" + sd);
+      if (host) { UI.clear(host); host.hidden = true; }
+      if (w) w.classList.remove("has-flags");
+    });
+
     const r = resolveGame(match.gameId);
     // 減点がある種目（14-1）は、ファウルをその場で押せるようにする
     if (r.scoring.foulPenalty) {
@@ -980,72 +1229,59 @@ const MATCH = (function () {
         hint: "ブレイクして撞き切った", instant: true },
       { key: "breakAce", label: "ブレイクエース", show: base.hasBreakAce,
         hint: "ブレイクで直接入れた", instant: true },
-      { key: "safety", label: "セーフティ", show: base.safetyCallable, hint: "" },
     ];
 
-    const shown = defs.filter(function (d) { return d.show; });
     const st = reduceMatch(match);
     const breaker = st.breakSide || st.firstSide;
 
-    shown.forEach(function (d) {
-      // マスワリとブレイクエースは「ブレイクした側がそのラックを取り切った」形。
-      // 押した時点でラック取得まで確定するので、予約にせずその場で記録する（本人の指示）。
-      if (d.instant) {
-        wrap.appendChild(
+    // ---- マスワリ・ブレイクエースはブレイク権のある側のパネル内に出す ----
+    // どちらの記録になるのかを、置き場所そのもので示す（本人の指示）
+    ["A", "B"].forEach(function (sd) {
+      const host = $("panelFlags" + sd);
+      if (!host) return;
+      const instants = defs.filter(function (d) { return d.show && d.instant; });
+      // ブレイク権のある側だけに出す。両方に出すと押し間違える
+      const wrap = $("panelWrap" + sd);
+      if (sd !== breaker || !instants.length || st.winner) {
+        host.hidden = true;
+        if (wrap) wrap.classList.remove("has-flags");
+        return;
+      }
+      host.hidden = false;
+      if (wrap) wrap.classList.add("has-flags");
+      instants.forEach(function (d) {
+        host.appendChild(
           UI.el("button", {
             type: "button",
             class: "flag-instant",
             title: d.hint,
             text: d.label,
             onclick: UI.guard(function () {
-              recordRackWin(breaker, { instantFlag: d.key });
+              recordRackWin(sd, { instantFlag: d.key });
             }),
           })
         );
-        return;
-      }
-
-      // セーフティはラックの取得と関係しないので、これまでどおり予約式のまま
-      const on = !!flags[d.key];
-      wrap.appendChild(
-        UI.el("button", {
-          type: "button",
-          "aria-pressed": String(on),
-          title: d.hint,
-          text: (on ? "✓ " : "") + d.label,
-          onclick: function () {
-            flags[d.key] = !flags[d.key];
-            renderFlagButtons(base);
-            if (flags[d.key]) {
-              UI.toast(d.label + "：このあとラックを取った側に記録します。");
-            }
-          },
-        })
-      );
+      });
     });
 
-    // マスワリ・ブレイクエースを押すと誰の得点になるのかを明示する。
-    // 「押したら勝手に点が入った」と見えないようにするため
-    if (shown.some(function (d) { return d.instant; })) {
-      wrap.appendChild(
-        UI.el("p", {
-          class: "hint",
-          text: "マスワリ・ブレイクエースを押すと、ブレイクした "
-            + sideName(breaker) + " がこのラックを取ったものとして記録します。",
-        })
-      );
-    }
-
-    // 予約中のものがあれば、その場に文章で出しておく
-    const on = shown.filter(function (d) { return !d.instant && flags[d.key]; });
-    if (on.length) {
-      wrap.appendChild(
-        UI.el("p", {
-          class: "hint flag-pending",
-          text: on.map(function (d) { return d.label; }).join("・")
-            + " を付けて記録します。スコアをタップしてください。",
-        })
-      );
+    // ---- セーフティは人ごとの回数カウントにする（本人の指示） ----
+    if (base.safetyCallable) {
+      wrap.appendChild(UI.el("div", { class: "safety-title", text: "セーフティ" }));
+      const row = UI.el("div", { class: "safety-row" });
+      ["A", "B"].forEach(function (sd) {
+        const n = (st.stats[sd] && st.stats[sd].safety) || 0;
+        row.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "safety-btn side-" + sd.toLowerCase(),
+            onclick: UI.guard(function () { recordSafety(sd); }),
+          }, [
+            UI.el("span", { class: "sf-name", text: sideName(sd) }),
+            UI.el("span", { class: "sf-count", text: String(n) }),
+          ])
+        );
+      });
+      wrap.appendChild(row);
     }
 
     if (!wrap.children.length) {
@@ -1053,6 +1289,27 @@ const MATCH = (function () {
         UI.el("p", { class: "hint", text: "この種目では追加で記録する項目はありません。" })
       );
     }
+  }
+
+  /**
+   * セーフティを1回記録する。
+   *
+   * ラックの取得とは関係しないので、スコアは動かさない。
+   * 誰が打ったかを分けて数えるため、side を明示して記録する。
+   */
+  function recordSafety(side) {
+    const st = reduceMatch(match);
+    if (st.winner) {
+      UI.toast("この試合はもう終わっています。", "warn");
+      return;
+    }
+    const r = resolveGame(match.gameId);
+    if (!r.base.safetyCallable) return;
+
+    appendEvent(match, { t: "SAFETY", side: side, d: { safety: true } });
+    save();
+    render();
+    UI.toast(sideName(side) + " のセーフティを記録しました。");
   }
 
   /* ---------- 訂正 ---------- */
@@ -1072,6 +1329,7 @@ const MATCH = (function () {
       }
       case "POCKET": return nm + " が " + (e.d.balls || []).join(",") + "番をポケット";
       case "TURN_END": return nm + " のターン終了";
+      case "SAFETY": return nm + " のセーフティ";
       case "FOUL": return nm + " のファウル";
       case "TIMEOUT": return nm + " のタイムアウト";
       case "SHOT_CLOCK":

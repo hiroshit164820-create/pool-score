@@ -224,13 +224,18 @@ with sync_playwright() as p:
 
     # ================================================================
     section("⑥ ブレイク権がはっきり分かる")
-    check(pg.is_visible("#breakBanner"), "ブレイク権のバナーが出ている")
-    bname = pg.text_content("#breakBannerName") or ""
-    check(bname in ("山田", "佐藤"), "バナーに名前が出る", bname)
+    # ブレイク権はパネル内の BREAK 札で示す。
+    # 帯を別に出すと場所を取ってスコアが小さくなるため出さない（本人指摘）
+    marks = [pg.text_content("#breakMarkA") or "", pg.text_content("#breakMarkB") or ""]
+    check(marks.count("BREAK") == 1, "片側だけに BREAK の札が出る", marks)
 
-    # バナーの文字が十分大きい（台の脇から読むため）
-    fs = pg.evaluate("() => parseFloat(getComputedStyle(document.querySelector('#breakBannerName')).fontSize)")
-    check(fs >= 16, "バナーの名前が16px以上", fs)
+    # ブレイク入れ替えのボタンには名前が出る（誰から誰へか分かるように）
+    btxt = pg.text_content("#breakToggleBtn") or ""
+    check("山田" in btxt or "佐藤" in btxt, "ブレイクする人の名前が出る", btxt)
+
+    # 台の脇から読める大きさか
+    fs = pg.evaluate("() => parseFloat(getComputedStyle(document.querySelector('#breakToggleName')).fontSize)")
+    check(fs >= 14, "ブレイクする人の名前が14px以上", fs)
 
     # パネル側の強調
     cls_a = pg.get_attribute("#panelA", "class") or ""

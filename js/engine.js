@@ -73,8 +73,12 @@ function createMatch(cfg) {
     rulesetVersion: "2026-06",
 
     sides: [
-      { sideId: "A", name: sideA.name || "プレーヤーA", playerIds: sideA.playerIds || [] },
-      { sideId: "B", name: sideB.name || "プレーヤーB", playerIds: sideB.playerIds || [] },
+      // teamLabel / members はダブルスの表示用（「チームA（2人の名前）」）。
+      // 無い種目では undefined のままで構わない
+      { sideId: "A", name: sideA.name || "プレーヤーA", playerIds: sideA.playerIds || [],
+        teamLabel: sideA.teamLabel || null, members: sideA.members || null },
+      { sideId: "B", name: sideB.name || "プレーヤーB", playerIds: sideB.playerIds || [],
+        teamLabel: sideB.teamLabel || null, members: sideB.members || null },
     ],
 
     goal: cfg.goal,
@@ -338,6 +342,9 @@ function applyEvent(st, ev, ctx) {
     case "TURN_END":
       applyTurnEnd(st, ev, ctx);
       break;
+    case "SAFETY":
+      applySafety(st, ev, ctx);
+      break;
     case "FOUL":
       applyFoul(st, ev, ctx);
       break;
@@ -457,6 +464,18 @@ function applyRackWin(st, ev, ctx) {
   st.racks[side]++;
   if (ctx.rackBrokenBy === side) st.stats[side].breakWins++;
   ctx.lastRackWinner = side;
+}
+
+/**
+ * セーフティを1回数える。
+ *
+ * ラックの取得・交代とは独立した記録なので、回数だけを足す。
+ * 誰が打ったかを分けたいので side を必須にしている。
+ */
+function applySafety(st, ev, ctx) {
+  const side = ev.side;
+  if (!side || !ctx.base.safetyCallable) return;
+  st.stats[side].safety++;
 }
 
 function applyTurnEnd(st, ev, ctx) {

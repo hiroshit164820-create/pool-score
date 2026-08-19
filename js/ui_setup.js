@@ -207,6 +207,10 @@ const SETUP = (function () {
   // ボールハンデ。「N番以上を入れたら1点」の N を持つ（null＝ハンデなし）
   // 出典: CUES「相手は9番、自分は7番以上を入れたら1ポイント」（04_種目ルール仕様.md）
   let ballHandicap = { A: null, B: null };
+  // ダブルスの個人ごとのハンデ（表示用）。
+  // 得点計算はチーム単位のまま（どの球が落ちたかは人が見て入力するため）。
+  // { A: [1人目, 2人目], B: [...] } の形で、値は「◯番以上」の数字か null
+  let memberHandicap = { A: [null, null], B: [null, null] };
 
   function init() {
     renderGames();
@@ -475,7 +479,10 @@ const SETUP = (function () {
     const usable = usableGame && goalMode === "handicap";
     section.hidden = !usable;
     if (!usable) {
-      if (!usableGame) ballHandicap = { A: null, B: null };
+      if (!usableGame) {
+        ballHandicap = { A: null, B: null };
+        memberHandicap = { A: [null, null], B: [null, null] };
+      }
       return;
     }
 
@@ -527,6 +534,52 @@ const SETUP = (function () {
       wrap.appendChild(
         UI.el("div", { class: "field" }, [UI.el("label", { text: label + " のハンデ" }), chips])
       );
+
+      // ダブルスは「誰がどのハンデ球を持っているか」を人ごとに決められるようにする。
+      // 得点計算はチーム単位のまま（どの球が落ちたかは人が見て入力するため、
+      // アプリが「いまどちらが撞いているか」を知らなくても成り立つ）
+      if (g.playersPerSide === 2) {
+        const names = [
+          readName("inName" + side, ""),
+          readName("inName" + side + "2", ""),
+        ];
+        names.forEach(function (nm, i) {
+          if (!nm) return;
+          const mchips = UI.el("div", { class: "chips bh-chips" });
+          mchips.appendChild(
+            UI.el("button", {
+              type: "button",
+              class: "chip small-chip",
+              "aria-pressed": String(memberHandicap[side][i] === null),
+              text: "なし",
+              onclick: function () {
+                memberHandicap[side][i] = null;
+                renderGoalArea();
+              },
+            })
+          );
+          options.forEach(function (n) {
+            mchips.appendChild(
+              UI.el("button", {
+                type: "button",
+                class: "chip small-chip",
+                "aria-pressed": String(memberHandicap[side][i] === n),
+                text: n + "番以上",
+                onclick: function () {
+                  memberHandicap[side][i] = n;
+                  renderGoalArea();
+                },
+              })
+            );
+          });
+          wrap.appendChild(
+            UI.el("div", { class: "field member-bh" }, [
+              UI.el("label", { text: "　" + nm + " が持つ球" }),
+              mchips,
+            ])
+          );
+        });
+      }
     });
 
     // いまの設定を文章で確認できるようにする
@@ -1163,7 +1216,14 @@ const SETUP = (function () {
           return p ? p.id : null;
         })
         .filter(Boolean);
-      return { name: label, playerIds: ids };
+      // ダブルスは「チームA（2人の名前）」と出したいので、
+      // チーム名とメンバーを分けて持つ（表示側で組み立てる）
+      return {
+        name: label,
+        teamLabel: side === "A" ? "チームA" : "チームB",
+        members: names,
+        playerIds: ids,
+      };
     }
     // 1人用の種目でも、記録の形をそろえるため2側ぶん作る（B側は使わない）
     if (g.solo) return [one("A", "プレーヤー"), { name: "—", playerIds: [] }];
@@ -1229,6 +1289,26 @@ const SETUP = (function () {
     return out;
   }
 
+  /**
+   * ダブルスの個人ごとのハンデを、試合の記録用にまとめる。
+   *
+   * 表示のためだけの情報なので、得点計算には渡さない。
+   * { A: [{name, from}, ...], B: [...] } の形にする。
+   */
+  function buildMemberHandicap(g) {
+    if (g.playersPerSide !== 2) return null;
+    const out = { A: [], B: [] };
+    ["A", "B"].forEach(function (side) {
+      [readName("inName" + side, ""), readName("inName" + side + "2", "")]
+        .forEach(function (nm, i) {
+          if (!nm) return;
+          out[side].push({ name: nm, from: memberHandicap[side][i] });
+        });
+    });
+    if (!out.A.length && !out.B.length) return null;
+    return out;
+  }
+
   function buildGoal(g) {
     const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
     const bh = buildBallHandicap(g);
@@ -1246,6 +1326,8 @@ const SETUP = (function () {
       // JPAはチームポイントの算出に敗者のスキルレベルが要るため必ず持たせる
       meta: isJpa ? { skillLevel: { A: skillLevels.A, B: skillLevels.B } } : {},
       ballHandicap: bh,
+      // ダブルスの個人ごとのハンデ（表示用。得点計算には使わない）
+      memberHandicap: buildMemberHandicap(g),
       raceType: "raceTo",
     };
   }

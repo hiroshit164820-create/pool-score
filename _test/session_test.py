@@ -209,7 +209,9 @@ with sync_playwright() as p:
     # スコア欄にもボウリング式の合計が出る（落球数の合計ではない）
     check(pg.text_content("#scoreA") == "24", "スコア欄にボーナス込みの合計が出る",
           pg.text_content("#scoreA"))
-    check(pg.locator("#panelB").get_attribute("hidden") is not None,
+    # 相手側はパネルの枠（panelWrapB）ごと隠す。
+    # マスワリのボタンをパネル内に置いたため、枠が付いた
+    check(not pg.locator("#panelB").is_visible(),
           "1人用なので相手のスコア欄は出さない")
     check(pg.locator("#turnBtn").get_attribute("hidden") is not None,
           "1人用なので交代ボタンも出さない")

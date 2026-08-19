@@ -120,12 +120,14 @@ with sync_playwright() as p:
     before = pg.text_content("#scoreA") + "-" + pg.text_content("#scoreB")
     check(before == "0-0", "開始時は0-0", before)
 
-    note = pg.text_content("#flagButtons") or ""
-    check("がこのラックを取ったもの" in note, "誰の得点になるか書いてある", note.strip()[:60])
-    check("スコアをタップしてください" not in note, "予約式の案内は出さない", note.strip()[:60])
-
+    # マスワリはブレイク権のある側のパネル内に出る（置き場所で誰の記録かを示す）
     breaker = pg.evaluate(BREAKER)
-    pg.click('#flagButtons button:text-is("マスワリ")')
+    check(pg.locator("#panelFlags" + breaker + " button").count() >= 1,
+          "ブレイク側のパネル内にマスワリのボタンがある")
+    other = "B" if breaker == "A" else "A"
+    check(pg.locator("#panelFlags" + other).get_attribute("hidden") is not None,
+          "ブレイク権の無い側には出さない")
+    pg.click('#panelFlags' + breaker + ' button:text-is("マスワリ")')
     pg.wait_for_timeout(500)
     after = pg.text_content("#score" + breaker)
     check(after == "1", "押した時点でブレイク側のスコアが増える", after)
@@ -144,7 +146,7 @@ with sync_playwright() as p:
     # ================================================================
     section("指示9: ブレイクエースも同じ")
     breaker = pg.evaluate(BREAKER)
-    pg.click('#flagButtons button:text-is("ブレイクエース")')
+    pg.click('#panelFlags' + breaker + ' button:text-is("ブレイクエース")')
     pg.wait_for_timeout(500)
     check(pg.text_content("#score" + breaker) == "1", "押した時点でスコアが増える",
           pg.text_content("#score" + breaker))
@@ -161,7 +163,8 @@ with sync_playwright() as p:
     for _ in range(4):
         if pg.is_visible("#finishModal"):
             break
-        pg.click('#flagButtons button:text-is("マスワリ")')
+        brk = pg.evaluate(BREAKER)
+        pg.click('#panelFlags' + brk + ' button:text-is("マスワリ")')
         pg.wait_for_timeout(450)
     sides = [w["side"] for w in pg.evaluate(RACK_WINS)]
     check(sides == ["A", "B", "A", "B"], "交互ブレイクでは記録される側が入れ替わる", sides)
@@ -170,17 +173,22 @@ with sync_playwright() as p:
           pg.text_content("#scoreA") + "-" + pg.text_content("#scoreB"))
 
     # ================================================================
-    section("指示9: セーフティは予約式のまま（ラック取得ではないため）")
-    safety = pg.locator('#flagButtons button:text-is("セーフティ")')
+    section("セーフティは人ごとの回数カウント（ラック取得ではないため）")
+    safety = pg.locator('.safety-btn')
     if safety.count():
         sa = pg.text_content("#scoreA")
         sb = pg.text_content("#scoreB")
-        safety.click()
+        check(safety.count() == 2, "セーフティは左右2つに分かれている", safety.count())
+        before = pg.locator('.safety-btn').nth(0).locator('.sf-count').text_content()
+        safety.nth(0).click()
         pg.wait_for_timeout(400)
+        after = pg.locator('.safety-btn').nth(0).locator('.sf-count').text_content()
+        check(int(after) == int(before) + 1, "押すとその人の回数が増える", (before, after))
+        other_n = pg.locator('.safety-btn').nth(1).locator('.sf-count').text_content()
+        check(int(other_n) == 0, "相手の回数は増えない", other_n)
         check(pg.text_content("#scoreA") == sa and pg.text_content("#scoreB") == sb,
               "セーフティを押してもスコアは増えない",
               pg.text_content("#scoreA") + "-" + pg.text_content("#scoreB"))
-        check(pg.locator(".flag-pending").count() == 1, "予約中だと分かる表示が出る")
 
     # ================================================================
     section("成績のマスワリ率が壊れていない")
@@ -191,7 +199,8 @@ with sync_playwright() as p:
     for _ in range(3):
         if pg.is_visible("#finishModal"):
             break
-        pg.click('#flagButtons button:text-is("マスワリ")')
+        brk = pg.evaluate(BREAKER)
+        pg.click('#panelFlags' + brk + ' button:text-is("マスワリ")')
         pg.wait_for_timeout(450)
     if pg.is_visible("#finishModal"):
         pg.click("#confirmFinishBtn")
