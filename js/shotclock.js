@@ -9,6 +9,11 @@
  *   第3項    エクステンション（回数・時間は大会ごと）。
  *            宣言式(declare)とオートエクステンション(auto)がある
  *
+ * エクステンションの回数の数え方は大会によって2通りある。
+ *   scope:"rack"  ラックごとに回数が戻る（既定。1ラックにつき countPerRack 回）
+ *   scope:"match" 試合を通しての総数（countPerSide 回）
+ * 既定は「1ラックにつき1回」。ラックが変わったら resetRack() を呼ぶ。
+ *
  * 残り時間は Date.now() との差分で計算する（setIntervalの累積誤差や
  * バックグラウンド化によるタイマー間引きの影響を受けないため）。
  */
@@ -19,11 +24,25 @@ function createShotClock(config, callbacks) {
       enabled: false,
       seconds: 45,
       warnAtSec: 15,
-      extension: { countPerSide: 2, seconds: 45, mode: "declare" },
+      extension: { scope: "rack", countPerRack: 1, countPerSide: 2, seconds: 45, mode: "declare" },
       violationIsFoul: true,
     },
     config || {}
   );
+  // extension は入れ子なので Object.assign では既定値が丸ごと置き換わる。
+  // 呼び出し側が一部だけ渡してきた場合に既定値が消えないよう、ここで補う。
+  const extIn = cfg.extension || {};
+  cfg.extension = Object.assign(
+    { countPerRack: 1, countPerSide: 2, seconds: 45, mode: "declare" },
+    extIn
+  );
+  // scope が明示されていない場合の解釈。
+  // countPerSide だけを渡してきた呼び出しは「試合を通しての総数」を意図しているため
+  // match として扱う（このフィールドの元々の意味を変えない）。
+  if (!extIn.scope) {
+    cfg.extension.scope =
+      extIn.countPerSide !== undefined && extIn.countPerRack === undefined ? "match" : "rack";
+  }
   const cb = callbacks || {};
 
   let running = false;
@@ -33,7 +52,8 @@ function createShotClock(config, callbacks) {
   let side = null;
   let inExtension = false;
   let violated = false;
-  const usedExtensions = { A: 0, B: 0 };
+  const usedExtensions = { A: 0, B: 0 }; // 試合を通しての累計（記録・成績用）
+  const usedThisRack = { A: 0, B: 0 }; // 現在のラックでの使用回数
   let timerId = null;
   let lastWarned = false;
 
@@ -137,10 +157,28 @@ function createShotClock(config, callbacks) {
     else pause();
   }
 
+  /** このスコープでの上限回数 */
+  function extLimit() {
+    return cfg.extension.scope === "match"
+      ? cfg.extension.countPerSide
+      : cfg.extension.countPerRack;
+  }
+
+  /** このスコープでの使用済み回数 */
+  function extUsed(s) {
+    return cfg.extension.scope === "match" ? usedExtensions[s] : usedThisRack[s];
+  }
+
   function canExtend(forSide) {
     const s = forSide || side;
     if (!s) return false;
-    return usedExtensions[s] < cfg.extension.countPerSide;
+    return extUsed(s) < extLimit();
+  }
+
+  /** ラックが変わったときに呼ぶ。scope:"rack" のとき回数が戻る */
+  function resetRack() {
+    usedThisRack.A = 0;
+    usedThisRack.B = 0;
   }
 
   /**
@@ -150,6 +188,7 @@ function createShotClock(config, callbacks) {
   function startExtension(isAuto) {
     if (!running || !canExtend(side)) return false;
     usedExtensions[side]++;
+    usedThisRack[side]++;
     inExtension = true;
     lastWarned = false;
     deadline = now() + cfg.extension.seconds * 1000;
@@ -172,9 +211,12 @@ function createShotClock(config, callbacks) {
       totalSec: inExtension ? cfg.extension.seconds : cfg.seconds,
       warnAtSec: cfg.warnAtSec,
       usedExtensions: { A: usedExtensions.A, B: usedExtensions.B },
+      usedThisRack: { A: usedThisRack.A, B: usedThisRack.B },
+      extensionScope: cfg.extension.scope,
+      // 残り回数は「いま効いている数え方」で出す。画面もこの値をそのまま出す
       extensionsLeft: {
-        A: cfg.extension.countPerSide - usedExtensions.A,
-        B: cfg.extension.countPerSide - usedExtensions.B,
+        A: Math.max(0, extLimit() - extUsed("A")),
+        B: Math.max(0, extLimit() - extUsed("B")),
       },
       canExtend: canExtend(side),
       violationIsFoul: cfg.violationIsFoul,
@@ -196,6 +238,7 @@ function createShotClock(config, callbacks) {
       return startExtension(false);
     },
     canExtend: canExtend,
+    resetRack: resetRack,
     state: state,
     remainSec: remainSec,
     destroy: destroy,

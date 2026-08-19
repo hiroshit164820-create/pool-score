@@ -254,7 +254,12 @@ const MATCH = (function () {
     else if (!s.running) info.push("停止中");
     else if (s.paused) info.push("一時停止");
     else if (s.inExtension) info.push("延長中");
-    if (s.side && !s.violated) info.push("延長" + s.extensionsLeft[s.side] + "回");
+    if (s.side && !s.violated) {
+      info.push(
+        "延長あと" + s.extensionsLeft[s.side] + "回" +
+          (s.extensionScope === "rack" ? "（このラック）" : "")
+      );
+    }
     $("scInfo").textContent = info.join(" ・ ");
 
     $("scPauseBtn").textContent = s.paused ? "再開" : "一時停止";
@@ -355,6 +360,8 @@ const MATCH = (function () {
       vibrate([120, 60, 120, 60, 200]);
       openFinish();
     } else if (clock) {
+      // ラックが変わったのでエクステンション回数を戻す（既定は1ラック1回）
+      clock.resetRack();
       startClockForCurrentTurn();
     }
   }
@@ -389,6 +396,7 @@ const MATCH = (function () {
       vibrate([120, 60, 120, 60, 200]);
       openFinish();
     } else if (clock) {
+      if (after.rackNo !== before.rackNo) clock.resetRack();
       startClockForCurrentTurn();
     }
   }
@@ -453,6 +461,11 @@ const MATCH = (function () {
     return side === "A" ? match.sides[0].name : match.sides[1].name;
   }
 
+  /** 決着済みかどうか（ブレイク表示の出し分けに使う） */
+  function finishedFlag(st) {
+    return !!st.winner;
+  }
+
   function render() {
     if (!match) return;
     const g = GAMES[match.gameId];
@@ -476,11 +489,22 @@ const MATCH = (function () {
       $("target" + side).textContent = "/ " + match.goal.targets[side];
       const pct = Math.min(100, Math.round((cur[side] / match.goal.targets[side]) * 100));
       $("bar" + side).style.width = pct + "%";
-      $("breakMark" + side).textContent = st.breakSide === side ? "●" : "";
+      // ブレイク権はパネル自体にも印を付ける（下のバナーと二重に出す）
+      const hasBreak = st.breakSide === side;
+      $("breakMark" + side).textContent = hasBreak ? "BREAK" : "";
+      $("panel" + side).classList.toggle("has-break", hasBreak);
     });
 
     $("rackInfo").textContent = "ラック " + Math.max(1, st.rackNo);
-    $("breakToggleBtn").textContent = "ブレイク: " + sideName(st.breakSide || st.firstSide);
+
+    // ブレイク権の表示。台の脇から見て一目で分かるよう、名前を大きく出す
+    const bs = st.breakSide || st.firstSide;
+    $("breakToggleName").textContent = sideName(bs);
+    $("breakBannerName").textContent = sideName(bs);
+    const banner = $("breakBanner");
+    banner.classList.toggle("side-a", bs === "A");
+    banner.classList.toggle("side-b", bs === "B");
+    banner.hidden = finishedFlag(st);
 
     // 決着後はタップで加算できないようにする
     const finished = !!st.winner;

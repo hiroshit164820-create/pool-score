@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#22b573">
+<meta name="theme-color" content="#c84c0c">
 <title>ビリヤードスコア記録</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -30,7 +30,8 @@
 
     <div class="setup-body">
       <div class="section-title">競技種目</div>
-      <div id="gameChips" class="chips"></div>
+      <div id="gameRecent" class="recent-games"></div>
+      <div id="gameGroups" class="game-groups"></div>
       <p id="gameNote" class="hint"></p>
 
       <div class="section-title">プレーヤー</div>
@@ -77,10 +78,17 @@
             <input type="number" id="scWarn" value="15" min="0" max="60" step="5">
           </div>
         </div>
+        <div class="field">
+          <label>延長の数え方</label>
+          <div id="scScopeToggle" class="toggle-group">
+            <button type="button" data-v="rack" aria-pressed="true">ラックごと<span class="btn-sub">ラックが変わると戻る</span></button>
+            <button type="button" data-v="match" aria-pressed="false">試合を通して<span class="btn-sub">使い切ったら終わり</span></button>
+          </div>
+        </div>
         <div class="row">
           <div class="field">
             <label>延長の回数（1人あたり）</label>
-            <input type="number" id="scExtCount" value="2" min="0" max="9" step="1">
+            <input type="number" id="scExtCount" value="1" min="0" max="9" step="1">
           </div>
           <div class="field">
             <label>延長の時間（秒）</label>
@@ -155,7 +163,16 @@
 
       <div class="meta-line">
         <span id="rackInfo">ラック 1</span>
-        <button id="breakToggleBtn" class="break-toggle ghost">ブレイク: —</button>
+        <button id="breakToggleBtn" class="break-toggle">
+          <span class="bt-label">ブレイク</span>
+          <span class="bt-name" id="breakToggleName">—</span>
+          <span class="bt-swap">入れ替え</span>
+        </button>
+      </div>
+      <!-- いま誰がブレイクかを、台の脇から見て一目で分かるように大きく出す -->
+      <div class="break-banner" id="breakBanner">
+        <span class="bb-icon" aria-hidden="true"></span>
+        <span class="bb-text"><b id="breakBannerName">—</b> のブレイク</span>
       </div>
     </div>
 
@@ -225,6 +242,7 @@
           <button id="addPlayerBtn" class="primary" style="flex:0 0 auto">登録</button>
         </div>
         <p class="hint">登録すると、試合を作るときに名前を選べるようになります。</p>
+        <div id="newPlayerSkill"></div>
       </div>
       <div id="playerList"></div>
     </div>

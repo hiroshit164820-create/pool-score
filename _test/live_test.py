@@ -8,6 +8,9 @@ import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import helpers
+
 URL = "https://hiroshit164820-create.github.io/pool-score/"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS = os.path.join(ROOT, "_test", "shots")
@@ -41,9 +44,9 @@ with sync_playwright() as p:
 
     check(pg.title() == "ビリヤードスコア記録", "タイトルが出る", pg.title())
     check(pg.is_visible("#startMatchBtn"), "試合作成画面が表示される")
-    check(pg.locator("#gameChips .chip").count() == 9, "種目が9つ並んでいる",
-          pg.locator("#gameChips .chip").count())
-    labels = pg.locator("#gameChips .chip").all_text_contents()
+    check(helpers.count_selectable_games(pg) == 9, "種目が9つ選べる",
+          helpers.count_selectable_games(pg))
+    labels = helpers.all_game_labels(pg)
     check("14-1" in labels, "14-1が公開版に入っている", labels)
     check(any("JPA" in x for x in labels), "JPA種目が公開版に入っている", labels)
     clocks = pg.locator("#clockTypeToggle button").all_text_contents()

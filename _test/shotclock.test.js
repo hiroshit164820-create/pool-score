@@ -227,6 +227,90 @@ section("stop: タイマーが確実に解放される");
 }
 
 /* ============================================================ */
+section("エクステンションの回数: 既定は1ラックにつき1回");
+{
+  const C = makeClock();
+  const sc = C.create(
+    { enabled: true, seconds: 45, warnAtSec: 15, extension: { seconds: 30, mode: "declare" } },
+    {}
+  );
+  eq(sc.state().extensionScope, "rack", "既定のスコープはラック");
+  sc.start("A");
+  eq(sc.state().extensionsLeft.A, 1, "ラック開始時は1回使える");
+  eq(sc.extend(), true, "1回目は使える");
+  eq(sc.state().extensionsLeft.A, 0, "使うと残り0回");
+  eq(sc.extend(), false, "同じラックで2回目は使えない");
+
+  sc.resetRack();
+  sc.start("A");
+  eq(sc.state().extensionsLeft.A, 1, "次のラックでは1回に戻る");
+  eq(sc.extend(), true, "次のラックでまた使える");
+  eq(sc.state().usedExtensions.A, 2, "試合を通しての累計は積み上がる");
+}
+
+/* ============================================================ */
+section("エクステンションの回数: ラック単位でも左右は独立");
+{
+  const C = makeClock();
+  const sc = C.create(
+    { enabled: true, seconds: 45, warnAtSec: 15, extension: { countPerRack: 1, seconds: 30, mode: "declare" } },
+    {}
+  );
+  sc.start("A");
+  sc.extend();
+  eq(sc.state().extensionsLeft, { A: 0, B: 1 }, "Aだけ消費される");
+  sc.start("B");
+  eq(sc.extend(), true, "同じラックでもBは使える");
+  eq(sc.state().extensionsLeft, { A: 0, B: 0 }, "両者とも使い切り");
+  sc.resetRack();
+  eq(sc.state().extensionsLeft, { A: 1, B: 1 }, "ラックが変わると両者とも戻る");
+}
+
+/* ============================================================ */
+section("エクステンションの回数: scope:match は試合を通しての総数");
+{
+  const C = makeClock();
+  const sc = C.create(
+    { enabled: true, seconds: 45, warnAtSec: 15,
+      extension: { scope: "match", countPerSide: 2, seconds: 30, mode: "declare" } },
+    {}
+  );
+  sc.start("A");
+  eq(sc.extend(), true, "1回目");
+  sc.resetRack();
+  sc.start("A");
+  eq(sc.state().extensionsLeft.A, 1, "ラックが変わっても回数は戻らない");
+  eq(sc.extend(), true, "2回目");
+  sc.resetRack();
+  sc.start("A");
+  eq(sc.extend(), false, "試合を通して2回で打ち止め");
+}
+
+/* ============================================================ */
+section("オートエクステンションもラック単位で戻る");
+{
+  const C = makeClock();
+  const fired = [];
+  const sc = C.create(
+    { enabled: true, seconds: 10, warnAtSec: 5, extension: { countPerRack: 1, seconds: 10, mode: "auto" } },
+    { onExtension: function (side, n, auto) { fired.push([side, n, auto]); },
+      onViolation: function (side) { fired.push(["violation", side]); } }
+  );
+  sc.start("A");
+  C.advance(10000, 10);
+  eq(fired.length, 1, "自動延長が1回発動した");
+  eq(fired[0][2], true, "自動発動として通知される");
+  eq(sc.state().inExtension, true, "延長中");
+  C.advance(10000, 10);
+  eq(fired[1][0], "violation", "1ラック1回なので2度目は時間切れになる");
+
+  sc.resetRack();
+  sc.start("B");
+  C.advance(10000, 10);
+  eq(fired[2][2], true, "次のラックでは自動延長がまた効く");
+}
+
+/* ============================================================ */
 console.log("\n========================================");
 console.log("成功: " + pass + " / 失敗: " + fail);
 if (failures.length) {

@@ -17,8 +17,8 @@ const GAMES = {
     goalType: "racks",
     goalPresets: [
       { label: "3先", v: 3 },
-      { label: "5先（ゴサキ）", v: 5 },
-      { label: "7先（ナナサキ）", v: 7 },
+      { label: "5先", v: 5 },
+      { label: "7先", v: 7 },
     ],
   },
 

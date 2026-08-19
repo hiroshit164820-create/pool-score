@@ -7,6 +7,9 @@ import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import helpers
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 URL = "file:///" + ROOT.replace("\\", "/") + "/index.html"
 SHOTS = os.path.join(ROOT, "_test", "shots")
@@ -42,19 +45,19 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     check(pg.input_value("#goalSame") == "3", "3先を押すと3が入る", pg.input_value("#goalSame"))
 
-    pg.click('#gameChips .chip[data-game="10ball"]')
+    helpers.pick_game(pg, "10ball")
     pg.wait_for_timeout(200)
     labels10 = pg.locator("#goalArea .chips .chip").all_text_contents()
     check("3先" in labels10, "10ボールにも3先がある", labels10)
 
     # ================= JPA =================
     section("JPAルール")
-    games = pg.locator("#gameChips .chip").all_text_contents()
+    games = helpers.all_game_labels(pg)
     check(any("JPA" in g for g in games), "JPA種目が選べる", games)
     check("JPA 9ボール" in games, "JPA 9ボールがある")
     check("JPA 8ボール" in games, "JPA 8ボールがある")
 
-    pg.click('#gameChips .chip[data-game="jpa_9ball"]')
+    helpers.pick_game(pg, "jpa_9ball")
     pg.wait_for_timeout(300)
     goal_text = pg.text_content("#goalArea") or ""
     check("スキルレベル" in goal_text, "スキルレベルを選ぶUIになる")
@@ -70,7 +73,7 @@ with sync_playwright() as p:
     check("55" in res and "38" in res, "SL7→55点 / SL5→38点（公式表どおり）", res)
 
     # JPA 8ボールは対戦表から先取ゲーム数
-    pg.click('#gameChips .chip[data-game="jpa_8ball"]')
+    helpers.pick_game(pg, "jpa_8ball")
     pg.wait_for_timeout(300)
     sl8 = pg.locator("#goalArea .field").nth(0).locator(".chip").all_text_contents()
     check(sl8 == ["SL2", "SL3", "SL4", "SL5", "SL6", "SL7"], "8ボールはSL2〜7", sl8)
@@ -106,7 +109,7 @@ with sync_playwright() as p:
     section("試合作成で登録名を選べる")
     pg.click("#playersNewMatchBtn")
     pg.wait_for_timeout(300)
-    pg.click('#gameChips .chip[data-game="9ball"]')
+    helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(250)
     pickers = pg.locator("#playerFields .picker .chip").all_text_contents()
     check("山田" in pickers, "登録した名前が選択肢に出る", pickers)

@@ -111,18 +111,82 @@ const STORE = (function () {
     return readJSON(KEY_PLAYERS, []);
   }
 
-  function upsertPlayer(name) {
+  /**
+   * プレーヤーを登録する（同名があればそれを返す）。
+   * skill は JPA のスキルレベル。{ nine: 1..9, eight: 2..7 } の形で持つ。
+   * 種目ごとに別の表を使うため、9ボールと8ボールで別々に保持する。
+   */
+  function upsertPlayer(name, skill) {
     const trimmed = (name || "").trim();
     if (!trimmed) return null;
     const players = listPlayers();
     const found = players.find(function (p) {
       return p.name === trimmed;
     });
-    if (found) return found;
-    const p = { id: "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: trimmed };
+    if (found) {
+      // 既存の人にスキルレベルだけ後から付けられるようにする。
+      // 渡されなかった種目の値は消さない
+      if (skill) {
+        found.skill = Object.assign({}, found.skill, pickSkill(skill));
+        writeJSON(KEY_PLAYERS, players);
+      }
+      return found;
+    }
+    const p = {
+      id: "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name: trimmed,
+      skill: pickSkill(skill),
+    };
     players.push(p);
     writeJSON(KEY_PLAYERS, players);
     return p;
+  }
+
+  /** スキルレベルを範囲内の整数だけに絞る（範囲外・未指定は持たせない） */
+  function pickSkill(skill) {
+    const out = {};
+    if (!skill) return out;
+    const nine = parseInt(skill.nine, 10);
+    const eight = parseInt(skill.eight, 10);
+    if (!isNaN(nine) && nine >= 1 && nine <= 9) out.nine = nine;
+    if (!isNaN(eight) && eight >= 2 && eight <= 7) out.eight = eight;
+    return out;
+  }
+
+  /**
+   * プレーヤーのスキルレベルを更新する。
+   * 値に null を渡した種目は「未設定」に戻す（キーごと消す）。
+   * 渡さなかった種目の値はそのまま残す。
+   */
+  function setPlayerSkill(id, skill) {
+    const players = listPlayers();
+    const p = players.find(function (x) { return x.id === id; });
+    if (!p) return false;
+    const next = Object.assign({}, p.skill);
+    ["nine", "eight"].forEach(function (k) {
+      if (!skill || !(k in skill)) return;
+      if (skill[k] === null) delete next[k];
+      else {
+        const only = pickSkill_one(k, skill[k]);
+        if (only !== null) next[k] = only;
+      }
+    });
+    p.skill = next;
+    return writeJSON(KEY_PLAYERS, players);
+  }
+
+  /** 1種目ぶんのスキルレベルを検証する。範囲外は null */
+  function pickSkill_one(kind, value) {
+    const v = parseInt(value, 10);
+    if (isNaN(v)) return null;
+    if (kind === "nine") return v >= 1 && v <= 9 ? v : null;
+    if (kind === "eight") return v >= 2 && v <= 7 ? v : null;
+    return null;
+  }
+
+  /** プレーヤーをIDで引く */
+  function findPlayerById(id) {
+    return listPlayers().find(function (p) { return p.id === id; }) || null;
   }
 
   /** 登録済みプレーヤーを名前で引く */
@@ -293,6 +357,8 @@ const STORE = (function () {
     listPlayers: listPlayers,
     upsertPlayer: upsertPlayer,
     findPlayerByName: findPlayerByName,
+    findPlayerById: findPlayerById,
+    setPlayerSkill: setPlayerSkill,
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,
     playerStats: playerStats,

@@ -59,13 +59,21 @@ const UI = (function () {
   }
 
   let toastTimer = null;
+  /**
+   * 画面下に短い通知を出す。
+   *
+   * 表示するのは常に最新の1件だけにする。
+   * 連続で操作すると通知が積み上がって、その下にある時計や
+   * 操作ボタンが隠れてしまうため（台の脇で使う道具なので致命的）。
+   */
   function toast(message, kind) {
     const wrap = $("toastWrap");
+    clear(wrap);
     const t = el("div", { class: "toast" + (kind ? " " + kind : ""), text: message });
     wrap.appendChild(t);
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
-      while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+      clear(wrap);
     }, 2600);
   }
 
@@ -100,12 +108,47 @@ const UI = (function () {
 const SETUP = (function () {
   const $ = UI.$;
 
-  // Phase 1.0 で出す種目（実装済みのものだけ並べる）
-  // 画面に出す種目。data/games_data.js に定義があるものだけ並べる
-  const AVAILABLE = [
-    "9ball", "9ball_doubles", "10ball", "10ball_doubles", "8ball", "straight",
-    "jpa_9ball", "jpa_9ball_doubles", "jpa_8ball",
+  /**
+   * 画面に出す種目。data/games_data.js に定義があるものだけ並べる。
+   *
+   * 9種目を平らに並べると選ぶのに時間がかかるため、
+   *   ①よく使う種目（実際に選んだ履歴から自動）
+   *   ②カテゴリごとの折りたたみ
+   * の2段構えにする。ダブルスは親種目の中に畳んで、一覧の行数を減らす。
+   */
+  const GAME_GROUPS = [
+    {
+      key: "standard",
+      label: "一般",
+      items: [
+        { id: "9ball", doubles: "9ball_doubles" },
+        { id: "10ball", doubles: "10ball_doubles" },
+        { id: "8ball", doubles: null },
+        { id: "straight", doubles: null },
+      ],
+    },
+    {
+      key: "jpa",
+      label: "JPA（スキルレベル制）",
+      items: [
+        { id: "jpa_9ball", doubles: "jpa_9ball_doubles" },
+        { id: "jpa_8ball", doubles: null },
+      ],
+    },
   ];
+
+  /** 折りたたみの中身も含めた、選べる種目のID一覧 */
+  const AVAILABLE = GAME_GROUPS.reduce(function (acc, grp) {
+    grp.items.forEach(function (it) {
+      acc.push(it.id);
+      if (it.doubles) acc.push(it.doubles);
+    });
+    return acc;
+  }, []);
+
+  // ダブルスをONにしているか（親種目ごとに覚える必要はなく、選択中の種目だけで足りる）
+  let doublesOn = false;
+  let openGroup = "standard";
 
   let selectedGame = "9ball";
   let goalMode = "same"; // same | handicap
@@ -114,7 +157,7 @@ const SETUP = (function () {
   let skillLevels = { A: 5, B: 5 };
 
   function init() {
-    renderGameChips();
+    renderGames();
     UI.bindToggle($("breakTypeToggle"), function () {});
     UI.bindToggle($("firstSideToggle"), function () {});
     UI.bindToggle($("clockTypeToggle"), function (v) {
@@ -127,31 +170,156 @@ const SETUP = (function () {
     selectGame("9ball");
   }
 
-  function renderGameChips() {
-    const wrap = $("gameChips");
+  /** よく使う種目（選んだ回数の多い順に最大3件） */
+  function recentGameIds() {
+    const counts = (STORE.getSettings() || {}).gameCounts || {};
+    return Object.keys(counts)
+      .filter(function (id) { return AVAILABLE.indexOf(id) >= 0; })
+      .sort(function (a, b) { return counts[b] - counts[a]; })
+      .slice(0, 3);
+  }
+
+  /** 種目を選んだ回数を1つ増やす（次回から「よく使う」に出るようにする） */
+  function bumpGameCount(id) {
+    const st = STORE.getSettings() || {};
+    st.gameCounts = st.gameCounts || {};
+    st.gameCounts[id] = (st.gameCounts[id] || 0) + 1;
+    STORE.saveSettings(st);
+  }
+
+  /** 選択中の種目が属する親種目（ダブルスなら親を返す） */
+  function parentOf(gameId) {
+    let found = null;
+    GAME_GROUPS.forEach(function (grp) {
+      grp.items.forEach(function (it) {
+        if (it.id === gameId || it.doubles === gameId) found = it;
+      });
+    });
+    return found;
+  }
+
+  function groupOf(gameId) {
+    let key = "standard";
+    GAME_GROUPS.forEach(function (grp) {
+      grp.items.forEach(function (it) {
+        if (it.id === gameId || it.doubles === gameId) key = grp.key;
+      });
+    });
+    return key;
+  }
+
+  function renderGames() {
+    renderRecentGames();
+    renderGameGroups();
+  }
+
+  /** よく使う種目。1タップで選べる近道 */
+  function renderRecentGames() {
+    const wrap = $("gameRecent");
+    if (!wrap) return;
     UI.clear(wrap);
-    AVAILABLE.forEach(function (id) {
+    const ids = recentGameIds();
+    if (!ids.length) return; // 初回は履歴が無いので何も出さない
+
+    wrap.appendChild(UI.el("div", { class: "recent-label", text: "よく使う種目" }));
+    const chips = UI.el("div", { class: "chips" });
+    ids.forEach(function (id) {
       const g = GAMES[id];
-      wrap.appendChild(
+      if (!g) return;
+      chips.appendChild(
         UI.el("button", {
           type: "button",
-          class: "chip",
+          class: "chip recent-chip",
           "data-game": id,
           "aria-pressed": String(id === selectedGame),
           text: g.label,
-          onclick: function () {
-            selectGame(id);
-          },
+          onclick: function () { selectGame(id); },
         })
       );
+    });
+    wrap.appendChild(chips);
+  }
+
+  /**
+   * カテゴリごとの種目選択。
+   * 選んだカテゴリだけを開き、ダブルスは切替スイッチにして行数を減らす。
+   */
+  function renderGameGroups() {
+    const wrap = $("gameGroups");
+    if (!wrap) return;
+    UI.clear(wrap);
+
+    GAME_GROUPS.forEach(function (grp) {
+      const isOpen = openGroup === grp.key;
+      const head = UI.el("button", {
+        type: "button",
+        class: "group-head",
+        "aria-expanded": String(isOpen),
+        onclick: function () {
+          openGroup = isOpen ? null : grp.key;
+          renderGameGroups();
+        },
+      }, [
+        UI.el("span", { class: "gh-label", text: grp.label }),
+        UI.el("span", { class: "gh-mark", text: isOpen ? "−" : "＋" }),
+      ]);
+      wrap.appendChild(head);
+
+      if (!isOpen) return;
+
+      const body = UI.el("div", { class: "group-body" });
+      grp.items.forEach(function (it) {
+        const g = GAMES[it.id];
+        if (!g) return;
+        // この行が選択中か（シングル・ダブルスのどちらでも）
+        const active = selectedGame === it.id || selectedGame === it.doubles;
+        const row = UI.el("div", { class: "game-row" + (active ? " active" : "") });
+
+        row.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "game-pick",
+            "data-game": it.id,
+            "aria-pressed": String(active),
+            onclick: function () {
+              // ダブルスがONで、その種目にダブルスがあるならそちらを選ぶ
+              const target = doublesOn && it.doubles ? it.doubles : it.id;
+              selectGame(target);
+            },
+          }, [
+            UI.el("span", { class: "gp-name", text: g.label }),
+          ])
+        );
+
+        // ダブルス切替。対応する種目にだけ出す
+        if (it.doubles) {
+          const on = selectedGame === it.doubles;
+          row.appendChild(
+            UI.el("button", {
+              type: "button",
+              class: "doubles-toggle",
+              "aria-pressed": String(on),
+              title: "ダブルスに切り替える",
+              text: "ダブルス",
+              onclick: function () {
+                doublesOn = !on;
+                selectGame(doublesOn ? it.doubles : it.id);
+              },
+            })
+          );
+        }
+        body.appendChild(row);
+      });
+      wrap.appendChild(body);
     });
   }
 
   function selectGame(id) {
     selectedGame = id;
-    Array.prototype.forEach.call($("gameChips").querySelectorAll(".chip"), function (c) {
-      c.setAttribute("aria-pressed", String(c.getAttribute("data-game") === id));
-    });
+    const gSel = GAMES[id];
+    doublesOn = !!(gSel && gSel.playersPerSide === 2);
+    openGroup = groupOf(id);
+    renderGames();
     const g = GAMES[id];
     const base = BASE_RULES[g.base];
 
@@ -182,25 +350,83 @@ const SETUP = (function () {
     renderGoalArea();
   }
 
-  /** 登録済みプレーヤーを選ぶボタン列。押すと名前欄に入る */
-  function playerPicker(targetId) {
+  /**
+   * 登録済みプレーヤーを呼び出すボタン列。押すと名前欄に入る。
+   *
+   * JPA種目のときは、その人に登録されたスキルレベルも一緒に反映する。
+   * 手で選び直せるよう、反映後もスキルレベルの選択欄は触れるままにする。
+   */
+  function playerPicker(targetId, side) {
     const players = STORE.listPlayers();
     if (!players.length) return null;
+
+    const wrap = UI.el("div", { class: "picker-wrap" });
+    wrap.appendChild(UI.el("div", { class: "picker-label", text: "登録した人から選ぶ" }));
+
     const chips = UI.el("div", { class: "chips picker" });
     players.forEach(function (p) {
+      const sk = p.skill || {};
+      const slTag = jpaKind() === "eight" ? sk.eight : sk.nine;
       chips.appendChild(
         UI.el("button", {
           type: "button",
-          class: "chip small-chip",
-          text: p.name,
+          class: "chip small-chip picker-chip",
           onclick: function () {
             const node = $(targetId);
             if (node) node.value = p.name;
+            applyPlayerSkill(p, side);
           },
-        })
+        }, [
+          UI.el("span", { class: "pc-name", text: p.name }),
+          // JPA種目のときだけ、その人のスキルレベルを添えて選びやすくする
+          jpaKind() && slTag ? UI.el("span", { class: "pc-sl", text: "SL" + slTag }) : null,
+        ])
       );
     });
-    return chips;
+    wrap.appendChild(chips);
+    return wrap;
+  }
+
+  /** いま選んでいる種目が使うJPAスキルレベルの種類。JPA以外なら null */
+  function jpaKind() {
+    const g = GAMES[selectedGame];
+    if (!g) return null;
+    if (g.goal === "jpaSL8") return "eight";
+    if (g.goal === "jpaSL") return "nine";
+    return null;
+  }
+
+  /**
+   * 選んだプレーヤーのスキルレベルを勝利条件に反映する。
+   * ダブルスは2人の合計を使うため、片方だけ選んだ時点では上書きしない。
+   */
+  function applyPlayerSkill(player, side) {
+    const kind = jpaKind();
+    if (!kind || !side) return;
+    const g = GAMES[selectedGame];
+    const sk = (player && player.skill) || {};
+    const v = sk[kind];
+    if (!v) return;
+
+    if (g.playersPerSide === 2) {
+      // ダブルスは合計。両方の欄に登録済みの人が入っているときだけ自動計算する
+      const n1 = readName("inName" + side, "");
+      const n2 = readName("inName" + side + "2", "");
+      const p1 = STORE.findPlayerByName(n1);
+      const p2 = STORE.findPlayerByName(n2);
+      const v1 = p1 && p1.skill ? p1.skill[kind] : null;
+      const v2 = p2 && p2.skill ? p2.skill[kind] : null;
+      if (!v1 || !v2) return;
+      const sum = v1 + v2;
+      // 合計が表の範囲を超える場合は反映しない（誤った勝利条件を出さない）
+      const max = kind === "eight" ? 7 : 9;
+      if (sum < 2 || sum > max * 2) return;
+      skillLevels[side] = sum;
+    } else {
+      skillLevels[side] = v;
+    }
+    renderGoalArea();
+    UI.toast(player.name + " のスキルレベル（SL" + v + "）を反映しました。");
   }
 
   function renderPlayerFields() {
@@ -216,7 +442,7 @@ const SETUP = (function () {
           UI.el("label", { text: pair[1] + " の名前" }),
           UI.el("input", { type: "text", id: "inName" + side, placeholder: pair[1] }),
         ]);
-        const picker = playerPicker("inName" + side);
+        const picker = playerPicker("inName" + side, side);
         if (picker) field.appendChild(picker);
         wrap.appendChild(field);
       } else {
@@ -227,12 +453,12 @@ const SETUP = (function () {
             UI.el("input", { type: "text", id: "inName" + side + "2", placeholder: "2人目" }),
           ]),
         ]);
-        const p1 = playerPicker("inName" + side);
+        const p1 = playerPicker("inName" + side, side);
         if (p1) {
-          field.appendChild(UI.el("p", { class: "hint", text: "1人目に入れる:" }));
+          field.appendChild(UI.el("p", { class: "hint", text: "1人目に入れる" }));
           field.appendChild(p1);
-          const p2 = playerPicker("inName" + side + "2");
-          field.appendChild(UI.el("p", { class: "hint", text: "2人目に入れる:" }));
+          const p2 = playerPicker("inName" + side + "2", side);
+          field.appendChild(UI.el("p", { class: "hint", text: "2人目に入れる" }));
           field.appendChild(p2);
         }
         wrap.appendChild(field);
@@ -410,11 +636,15 @@ const SETUP = (function () {
 
   function buildSides() {
     const g = GAMES[selectedGame];
+    const kind = jpaKind();
     function one(side, fallback) {
       const n1 = readName("inName" + side, "");
       if (g.playersPerSide === 1) {
         const name = n1 || fallback;
-        const p = STORE.upsertPlayer(name);
+        // JPAシングルスは、この試合で使ったスキルレベルをその人に覚えさせる。
+        // 次回この人を選んだときに自動で入る
+        const skill = kind ? (function () { const o = {}; o[kind] = skillLevels[side]; return o; })() : null;
+        const p = STORE.upsertPlayer(name, skill);
         return { name: name, playerIds: p ? [p.id] : [] };
       }
       const n2 = readName("inName" + side + "2", "");
@@ -449,7 +679,10 @@ const SETUP = (function () {
       seconds: num("scSeconds", 45),
       warnAtSec: num("scWarn", 15),
       extension: {
-        countPerSide: num("scExtCount", 2),
+        // 既定は「1ラックにつき1回」。scope を "match" にすると試合を通しての総数になる
+        scope: UI.toggleValue($("scScopeToggle")) || "rack",
+        countPerRack: num("scExtCount", 1),
+        countPerSide: num("scExtCount", 1),
         seconds: num("scExtSec", 45),
         mode: UI.toggleValue($("scModeToggle")) || "declare",
       },
@@ -501,6 +734,8 @@ const SETUP = (function () {
       },
       firstSide: UI.toggleValue($("firstSideToggle")) || "A",
     });
+
+    bumpGameCount(selectedGame);
 
     if (!STORE.saveMatch(match)) {
       UI.toast("保存できませんでした。ブラウザの空き容量を確認してください。", "danger");

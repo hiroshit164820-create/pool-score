@@ -14,6 +14,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import helpers
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 URL = "file:///" + ROOT.replace("\\", "/") + "/index.html"
 SHOT_DIR = os.path.join(ROOT, "_test", "shots")
@@ -43,12 +46,14 @@ def run():
 
         # ---------- 初期表示 ----------
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
-        check(page.locator("#gameChips .chip").count() == 9, "種目が9つ出ている（通常6＋JPA3）")
+        # 種目はカテゴリに畳まれている。全部開いたときに9種目選べること
+        check(helpers.count_selectable_games(page) == 9, "種目が9つ選べる（通常6＋JPA3）",
+              helpers.count_selectable_games(page))
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)
 
         # ---------- 種目ごとのボタン出し分け ----------
-        page.click('#gameChips .chip[data-game="10ball"]')
+        helpers.pick_game(page, "10ball")
         page.wait_for_timeout(150)
         note = page.text_content("#gameNote") or ""
         check("ブレイクエース" in note, "10ボールでブレイクエースなしの注意が出る", note)
@@ -58,7 +63,7 @@ def run():
             "10ボールの既定はオルタネート",
         )
 
-        page.click('#gameChips .chip[data-game="9ball"]')
+        helpers.pick_game(page, "9ball")
         page.wait_for_timeout(150)
         check(
             page.get_attribute('#breakTypeToggle button[data-v="winner"]', "aria-pressed") == "true",
@@ -96,9 +101,17 @@ def run():
         check("ハンデ戦" in sub, "ハンデ戦と表示される", sub)
         check("ウィナーズ" in sub, "ブレイク方式が表示される", sub)
 
-        # ブレイク権の表示
-        check(page.text_content("#breakMarkA") == "●", "Aにブレイク権マークが出ている")
-        check(page.text_content("#breakMarkB") == "", "Bにはマークが出ていない")
+        # ブレイク権の表示。3か所（パネルのバッジ・パネルの強調・バナー）で示す
+        check(page.text_content("#breakMarkA") == "BREAK", "Aにブレイク権バッジが出ている",
+              page.text_content("#breakMarkA"))
+        check(page.text_content("#breakMarkB") == "", "Bにはバッジが出ていない")
+        check("has-break" in (page.get_attribute("#panelA", "class") or ""),
+              "Aのパネルがブレイク権ありとして強調される")
+        check("has-break" not in (page.get_attribute("#panelB", "class") or ""),
+              "Bのパネルは強調されない")
+        check(page.is_visible("#breakBanner"), "ブレイク権のバナーが出ている")
+        check(page.text_content("#breakBannerName") == "山田", "バナーにブレイクする人の名前が出る",
+              page.text_content("#breakBannerName"))
         btxt = page.text_content("#breakToggleBtn") or ""
         check("山田" in btxt, "ブレイク権が名前で表示される", btxt)
 
@@ -131,27 +144,27 @@ def run():
         page.wait_for_timeout(300)
         check(page.text_content("#scoreA") == "1", "Aが1ラック取った")
         # 勝者ブレイクなのでブレイク権はAのまま
-        check(page.text_content("#breakMarkA") == "●", "勝者ブレイク: Aがブレイク継続")
+        check(page.text_content("#breakMarkA") == "BREAK", "勝者ブレイク: Aがブレイク継続")
 
         # Bが1ラック取る → ブレイク権がBに移る
         page.click("#panelB")
         page.wait_for_timeout(300)
         check(page.text_content("#scoreB") == "1", "Bが1ラック取った")
-        check(page.text_content("#breakMarkB") == "●", "勝者ブレイク: ブレイク権がBに移る")
+        check(page.text_content("#breakMarkB") == "BREAK", "勝者ブレイク: ブレイク権がBに移る")
 
         # ---------- 取り消し ----------
         page.click("#undoBtn")
         page.wait_for_timeout(300)
         check(page.text_content("#scoreB") == "0", "取り消しでBのスコアが戻る")
-        check(page.text_content("#breakMarkA") == "●", "取り消しでブレイク権も戻る")
+        check(page.text_content("#breakMarkA") == "BREAK", "取り消しでブレイク権も戻る")
 
         # ---------- ブレイク権の手動切替 ----------
         page.click("#breakToggleBtn")
         page.wait_for_timeout(300)
-        check(page.text_content("#breakMarkB") == "●", "ブレイク権を手で切り替えられる")
+        check(page.text_content("#breakMarkB") == "BREAK", "ブレイク権を手で切り替えられる")
         page.click("#breakToggleBtn")
         page.wait_for_timeout(300)
-        check(page.text_content("#breakMarkA") == "●", "もう一度押すと戻る")
+        check(page.text_content("#breakMarkA") == "BREAK", "もう一度押すと戻る")
 
         # ---------- 訂正画面 ----------
         page.click("#reviseBtn")
@@ -239,12 +252,12 @@ def run():
         check(page.locator(".match-card").count() == 1, "確認でキャンセルすると削除されない")
         page.click("#newMatchBtn")
         page.wait_for_timeout(300)
-        page.click('#gameChips .chip[data-game="9ball_doubles"]')
+        helpers.pick_game(page, "9ball_doubles")
         page.wait_for_timeout(250)
         check(page.is_visible("#inNameA2"), "ダブルスでは2人目の入力欄が出る")
 
         # ---------- 10ボールでボタンが減ることの確認 ----------
-        page.click('#gameChips .chip[data-game="10ball"]')
+        helpers.pick_game(page, "10ball")
         page.wait_for_timeout(200)
         page.fill("#inNameA", "田中")
         page.fill("#inNameB", "鈴木")
@@ -262,7 +275,7 @@ def run():
         page.wait_for_timeout(300)
         page.click("#newMatchBtn")
         page.wait_for_timeout(300)
-        page.click('#gameChips .chip[data-game="straight"]')
+        helpers.pick_game(page, "straight")
         page.wait_for_timeout(250)
 
         goal_default = page.input_value("#goalSame")

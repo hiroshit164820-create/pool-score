@@ -25,9 +25,13 @@ const PLAYERS = (function () {
 
   function open() {
     bindOnce();
+    renderNewSkill();
     render();
     UI.showScreen("screenPlayers");
   }
+
+  // 新規登録フォームで選択中のスキルレベル
+  let newSkill = { nine: null, eight: null };
 
   function addPlayer() {
     const input = $("newPlayerName");
@@ -40,10 +44,60 @@ const PLAYERS = (function () {
       UI.toast("「" + name + "」はすでに登録されています。", "warn");
       return;
     }
-    STORE.upsertPlayer(name);
+    STORE.upsertPlayer(name, { nine: newSkill.nine, eight: newSkill.eight });
     input.value = "";
+    newSkill = { nine: null, eight: null };
+    renderNewSkill();
     render();
     UI.toast("「" + name + "」を登録しました。");
+  }
+
+  /** JPAスキルレベルの選択欄。未選択のままでも登録できる（任意項目） */
+  function skillChips(kind, current, onPick) {
+    const range = kind === "eight" ? [2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const chips = UI.el("div", { class: "chips sl-chips" });
+    chips.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "chip small-chip",
+        "aria-pressed": String(!current),
+        text: "未設定",
+        onclick: function () { onPick(null); },
+      })
+    );
+    range.forEach(function (sl) {
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip small-chip",
+          "aria-pressed": String(current === sl),
+          text: String(sl),
+          onclick: function () { onPick(sl); },
+        })
+      );
+    });
+    return chips;
+  }
+
+  /** 新規登録フォームのスキルレベル欄を描き直す */
+  function renderNewSkill() {
+    const wrap = $("newPlayerSkill");
+    if (!wrap) return;
+    UI.clear(wrap);
+    wrap.appendChild(
+      UI.el("p", { class: "hint", text: "JPAのスキルレベル（任意・あとから変えられます）" })
+    );
+    [["nine", "9ボール"], ["eight", "8ボール"]].forEach(function (pair) {
+      wrap.appendChild(
+        UI.el("div", { class: "field sl-field" }, [
+          UI.el("label", { text: pair[1] }),
+          skillChips(pair[0], newSkill[pair[0]], function (v) {
+            newSkill[pair[0]] = v;
+            renderNewSkill();
+          }),
+        ])
+      );
+    });
   }
 
   function render() {
@@ -84,12 +138,56 @@ const PLAYERS = (function () {
         );
       }
 
+      // JPAスキルレベル（設定済みなら表示、押すと編集欄が開く）
+      const sk = p.skill || {};
+      const slText = [];
+      if (sk.nine) slText.push("9ボール SL" + sk.nine);
+      if (sk.eight) slText.push("8ボール SL" + sk.eight);
+      card.appendChild(
+        UI.el("p", {
+          class: "hint sl-line",
+          text: slText.length ? "JPA " + slText.join("／") : "JPAスキルレベル未設定",
+        })
+      );
+
+      const slEdit = UI.el("div", { class: "sl-edit", hidden: "hidden" });
+      function renderSlEdit() {
+        UI.clear(slEdit);
+        const cur = STORE.findPlayerById(p.id) || p;
+        [["nine", "9ボール"], ["eight", "8ボール"]].forEach(function (pair) {
+          slEdit.appendChild(
+            UI.el("div", { class: "field sl-field" }, [
+              UI.el("label", { text: pair[1] + " のスキルレベル" }),
+              skillChips(pair[0], (cur.skill || {})[pair[0]] || null, function (v) {
+                // v が null なら未設定に戻す
+                const next = {};
+                next[pair[0]] = v;
+                STORE.setPlayerSkill(p.id, next);
+                render();
+              }),
+            ])
+          );
+        });
+      }
+      card.appendChild(slEdit);
+
       const foot = UI.el("div", { style: "margin-top:8px;display:flex;gap:8px;flex-wrap:wrap" });
       foot.appendChild(
         UI.el("button", {
           class: "small primary",
           text: "成績を見る",
           onclick: function () { openStats(p); },
+        })
+      );
+      foot.appendChild(
+        UI.el("button", {
+          class: "small ghost",
+          text: "スキルレベル",
+          onclick: function () {
+            const opening = slEdit.hidden;
+            if (opening) renderSlEdit();
+            slEdit.hidden = !opening;
+          },
         })
       );
       foot.appendChild(

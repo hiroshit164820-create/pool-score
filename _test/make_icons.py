@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-"""アプリのアイコンを生成する（9番ボール風）
+"""アプリのアイコンを生成する（8bitドット絵の9番ボール）
 
 依存を増やさないよう、PNGは Playwright のスクリーンショットで作る。
 再生成が必要になったら: python _test/make_icons.py
+
+意匠について:
+    既存ゲームの画像・ロゴ・スプライトは一切使っていない。
+    16x16のドットを1マスずつ矩形で置いて描いた独自の図案。
 """
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -10,26 +14,81 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 9番ボール（黄色のストライプ）。アプリの配色に合わせる
+# style.css の配色トークンと揃える
+SKY = "#5c94fc"
+INK = "#1a1408"
+COIN = "#fbd000"
+WHITE = "#ffffff"
+SHADE = "#c79000"   # 球の陰
+GROUND = "#3aa63a"  # 地面の緑
+
+# 16x16のドット絵。1文字=1マス
+#   .=空  #=黒(輪郭と数字)  W=白  Y=黄(ストライプ)  S=陰
+# 9番ボール（上下に黄色い帯／中央の白帯に「9」）を正面から見た図。
+# 数字は4x5マスで描く。これ以上小さくすると192pxで潰れる。
+PIXELS = [
+    ".....######.....",
+    "...##YYYYYY##...",
+    "..#YYYYYYYYYY#..",
+    ".#YYYYYYYYYYYY#.",
+    "#YYYYYYYYYYYYYS#",
+    "#WWWWWWWWWWWWWS#",
+    "#WWWW######WWWS#",
+    "#WWWW#WWWW#WWWS#",
+    "#WWWW######WWWS#",
+    "#WWWWWWWW##WWWS#",
+    "#WWWWW#####WWWS#",
+    "#YYYYYYYYYYYYSS#",
+    ".#YYYYYYYYYYYS#.",
+    "..#YYYYYYYYYS#..",
+    "...##YYYYYYS##..",
+    ".....######.....",
+]
+
+COLOR = {"#": INK, "W": WHITE, "Y": COIN, "S": SHADE, "G": GROUND}
+
+
 def svg(size, maskable):
-    # maskable はセーフゾーン確保のため図柄を小さめに描く
-    r = 34 if maskable else 46
-    cx = 50
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 100 100">
-  <rect width="100" height="100" fill="#22b573"/>
-  <circle cx="{cx}" cy="50" r="{r}" fill="#ffffff" stroke="#2b2118" stroke-width="3"/>
-  <path d="M {cx-r} 50 a {r} {r} 0 0 1 {r*2} 0 z" fill="#f5a524" opacity="0"/>
-  <!-- 上下の黄色い帯（ストライプ球） -->
-  <clipPath id="c"><circle cx="{cx}" cy="50" r="{r-1.5}"/></clipPath>
-  <g clip-path="url(#c)">
-    <rect x="0" y="{50-r}" width="100" height="{r*0.42}" fill="#f5a524"/>
-    <rect x="0" y="{50+r*0.58}" width="100" height="{r*0.42}" fill="#f5a524"/>
-  </g>
-  <circle cx="{cx}" cy="50" r="{r*0.44}" fill="#ffffff" stroke="#2b2118" stroke-width="2.5"/>
-  <text x="{cx}" y="50" font-family="'M PLUS Rounded 1c','Yu Gothic',sans-serif"
-        font-size="{r*0.62}" font-weight="900" fill="#2b2118"
-        text-anchor="middle" dominant-baseline="central">9</text>
-</svg>'''
+    """16x16のドットを矩形で並べたSVGを返す。
+
+    maskable は端が丸く切り取られてもよいよう、図柄を中央に小さめに置く
+    （セーフゾーン = 中央80%）。
+    """
+    grid = 16
+    # 図柄の占める割合。maskable は安全域に収める
+    scale = 0.60 if maskable else 0.80
+    cell = 100.0 * scale / grid
+    off = (100.0 - cell * grid) / 2.0
+
+    rects = []
+    # 背景。空色にして、下部に地面の帯を入れる（世界観を出す）
+    rects.append('<rect width="100" height="100" fill="%s"/>' % SKY)
+    if not maskable:
+        # 地面は角まで届かせる。maskable では切られるので描かない
+        rects.append('<rect x="0" y="87" width="100" height="13" fill="%s"/>' % GROUND)
+        rects.append('<rect x="0" y="87" width="100" height="3" fill="%s"/>' % INK)
+
+    for y, row in enumerate(PIXELS):
+        for x, ch in enumerate(row):
+            if ch == ".":
+                continue
+            fill = COLOR.get(ch)
+            if not fill:
+                continue
+            px = off + x * cell
+            py = off + y * cell
+            # 隣接マスの継ぎ目が出ないよう、わずかに大きく描く
+            rects.append(
+                '<rect x="%.3f" y="%.3f" width="%.3f" height="%.3f" fill="%s"/>'
+                % (px, py, cell + 0.06, cell + 0.06, fill)
+            )
+
+    body = "\n  ".join(rects)
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
+        'viewBox="0 0 100 100" shape-rendering="crispEdges">\n  %s\n</svg>'
+        % (size, size, body)
+    )
 
 
 ICONS = [

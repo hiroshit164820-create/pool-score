@@ -2,44 +2,63 @@
  * style.css — ビリヤードスコア記録
  *
  * デザイン方針:
- *   明るくポップ。太い枠線＋ハードオフセット影（ぼかさない平らな影）で、
- *   ポスターを貼ったような輪郭のはっきりした画面にする。
+ *   1980年代の横スクロールアクションゲームの様式。
+ *   空色の地に緑の地面、レンガとハテナブロックを思わせるボタン、
+ *   ドット絵のアイコン、金貨のようなスコア。
  *
- * 運用上の制約（見た目より優先する）:
+ *   意匠はすべてこのファイル内で図形から起こした独自のもので、
+ *   既存ゲームの画像・ロゴ・書体・効果音は一切使っていない。
+ *
+ * 運用上の制約（見た目より優先する。デザインを変えても必ず維持すること）:
  *   台の脇で立ったまま、片手で操作する道具。
  *   - タップ領域は最小56px（立ったまま押すため通常の44/48pxより大きく取る）
- *   - 本文16px以上、コントラスト比4.5:1以上
- *   - 書体は M PLUS Rounded 1c（丸ゴシック＝ポップさと日本語可読性の両立）
- *     読み込めない環境では BIZ UDGothic 等のUD書体に落とす
+ *   - 本文16px以上、コントラスト比4.5:1以上（大きな数字は3:1以上）
+ *   - 書体は本文に丸ゴシックを使う。ピクセル書体は「見出しと数字だけ」に留める。
+ *     日本語の本文をピクセル書体にすると小さい画面で判読できなくなるため。
  */
 
-/* 丸ゴシック。ポップな印象は書体で決まるため太いウエイトを確保する */
-@import url("https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&display=swap");
+/* 本文＝丸ゴシック（日本語の可読性）／見出しと数字＝ピクセル書体（世界観）
+   DotGothic16 は日本語を含むドット書体。読み込めない場合は丸ゴシックに落ちる */
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&family=DotGothic16&display=swap");
 
 :root {
-  /* 紙 —— わずかにクリーム寄りの明るい地。純白より目が疲れにくい */
-  --bg: #fdf6e8;
+  /* 空 —— 昼の空色。画面の地になる */
+  --sky: #5c94fc;
+  --sky-far: #8fb7ff;
+  --bg: #5c94fc;
   --surface: #ffffff;
   --surface-2: #fff3d6;
-  --ink: #2b2118; /* 文字と枠線と影に使う濃い茶黒 */
-  --text: #2b2118;
-  --text-dim: #7a6a58;
-  --line: #2b2118; /* 枠線はインクと同色。太く引くのが本テーマの要 */
+  --ink: #1a1408; /* 文字と枠線と影に使う黒 */
+  --text: #1a1408;
+  --text-dim: #6b5c48;
+  --line: #1a1408;
 
-  /* アクセント —— ビリヤードのボール由来の原色 */
-  --accent: #22b573; /* 緑（クロス） */
-  --accent-2: #17a063;
-  --side-a: #2f8fe0; /* 2番ボールの青 */
-  --side-b: #f5a524; /* 1番ボールの黄 */
-  --danger: #e5484d;
-  --warn: #f5a524;
+  /* 地面と土管 —— 画面の下半分を締める */
+  --ground: #3aa63a;
+  --ground-dark: #1f7a1f;
+  --brick: #c84c0c;
+  --brick-dark: #8c3200;
+  --block: #fbd000; /* ハテナブロックの金色 */
+  --block-dark: #c79000;
+  --coin: #fbd000;
 
-  --radius: 14px;
+  /* アクセント */
+  --accent: #3aa63a; /* 決定・肯定は緑 */
+  --accent-2: #1f7a1f;
+  --side-a: #0b63d6; /* 左側＝青 */
+  --side-b: #d43b12; /* 右側＝赤 */
+  --danger: #d02020;
+  --warn: #e08a00;
+
+  --radius: 0px; /* ドット絵の世界なので角は丸めない */
   --tap: 56px;
-  --bw: 3px; /* 標準の枠線の太さ */
-  --bw-thick: 4px; /* スコアボード等の太い枠線 */
-  --shadow: 4px 4px 0 var(--ink); /* ハードオフセット影（ぼかさない） */
+  --bw: 3px;
+  --bw-thick: 4px;
+  --shadow: 4px 4px 0 var(--ink);
   --shadow-sm: 3px 3px 0 var(--ink);
+
+  /* ピクセル書体のスタック。見出し・数字にだけ使う */
+  --font-pixel: "DotGothic16", "M PLUS Rounded 1c", "BIZ UDGothic", monospace;
 }
 
 * {
@@ -611,10 +630,15 @@ button:focus-visible {
 }
 
 /* ---------- トースト ---------- */
+/* 通知は画面上部に出す。
+   下部には「交代」「取り消し」「訂正」「試合終了」が並んでおり、
+   そこに重ねると台の脇で操作している最中にボタンを塞いでしまう。 */
 .toast-wrap {
   position: fixed;
   left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  /* ヘッダの下端よりさらに下げると選手名に重なるため、
+     ヘッダに半分かかる位置に置いて本文側を空ける */
+  top: calc(8px + env(safe-area-inset-top));
   transform: translateX(-50%);
   z-index: 50;
   width: min(92%, 560px);
@@ -627,7 +651,6 @@ button:focus-visible {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 12px 14px;
-  margin-top: 8px;
   font-size: 15px;
   font-weight: 800;
   line-height: 1.6;
@@ -851,4 +874,443 @@ button:focus-visible {
   font-size: 16px;
   font-weight: 900;
   text-align: center;
+}
+
+/* ================================================================
+   8bitプラットフォーマー層
+   ここから下は世界観のための追加。上の可読性の制約は上書きしない
+   ================================================================ */
+
+/* ---------- 空と地面 ---------- */
+body {
+  background: var(--sky);
+}
+
+.app {
+  background: transparent;
+  position: relative;
+}
+
+/* 雲。丸を重ねた形を radial-gradient で描く（画像を使わない） */
+.app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    /* 雲1（左上） */
+    radial-gradient(circle at 14% 12%, #fff 0 22px, transparent 23px),
+    radial-gradient(circle at 20% 12%, #fff 0 29px, transparent 30px),
+    radial-gradient(circle at 26% 13%, #fff 0 20px, transparent 21px),
+    /* 雲2（右・中ほど） */
+    radial-gradient(circle at 72% 46%, #fff 0 17px, transparent 18px),
+    radial-gradient(circle at 78% 46%, #fff 0 23px, transparent 24px),
+    radial-gradient(circle at 83% 47%, #fff 0 15px, transparent 16px),
+    /* 雲3（左下寄り） */
+    radial-gradient(circle at 16% 76%, #fff 0 16px, transparent 17px),
+    radial-gradient(circle at 21% 76%, #fff 0 21px, transparent 22px),
+    radial-gradient(circle at 26% 77%, #fff 0 14px, transparent 15px),
+    var(--sky);
+  background-repeat: no-repeat;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 地面。画面下端に土のブロック帯を敷く */
+.app::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 64px;
+  z-index: -1;
+  background:
+    repeating-linear-gradient(90deg,
+      transparent 0 30px, rgba(0, 0, 0, 0.28) 30px 33px),
+    repeating-linear-gradient(0deg,
+      transparent 0 30px, rgba(0, 0, 0, 0.28) 30px 33px),
+    linear-gradient(180deg, var(--ground) 0 14px, var(--ground-dark) 14px 100%);
+  border-top: 4px solid var(--ink);
+  pointer-events: none;
+}
+
+/* ---------- ヘッダ = レンガの帯 ---------- */
+.topbar {
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 15px, rgba(0, 0, 0, 0.3) 15px 18px),
+    repeating-linear-gradient(90deg,
+      transparent 0 34px, rgba(0, 0, 0, 0.3) 34px 37px),
+    var(--brick);
+}
+.topbar h1 {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  text-shadow: 2px 2px 0 var(--ink);
+}
+.topbar .sub {
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- ボタン = ブロック ---------- */
+button {
+  position: relative;
+  image-rendering: pixelated;
+}
+button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
+button:disabled::after {
+  box-shadow: none;
+}
+
+/* 決定ボタン = ハテナブロックの金色。黒文字で4.5:1を確保する */
+button.primary {
+  background: var(--block);
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  letter-spacing: 0.04em;
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---------- 見出し = ステージの看板 ---------- */
+.section-title {
+  font-family: var(--font-pixel);
+  background: var(--block);
+  border-radius: 0;
+  letter-spacing: 0.06em;
+  background-image:
+    radial-gradient(circle at 6px 6px, var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at calc(100% - 6px) 6px, var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at 6px calc(100% - 6px), var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at calc(100% - 6px) calc(100% - 6px), var(--block-dark) 0 2px, transparent 3px);
+}
+
+/* ---------- チップ = 小ブロック ---------- */
+.chip {
+  border-radius: 0;
+}
+.chip[aria-pressed="true"] {
+  background: var(--block);
+  color: var(--ink);
+}
+
+.toggle-group {
+  border-radius: 0;
+}
+.toggle-group button[aria-pressed="true"] {
+  background: var(--block);
+  color: var(--ink);
+}
+
+/* ---------- 種目選択（カテゴリ折りたたみ） ---------- */
+.recent-games {
+  margin-bottom: 14px;
+}
+.recent-label,
+.picker-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid var(--ink);
+  display: inline-block;
+  padding: 2px 10px;
+}
+.recent-chip[aria-pressed="true"] {
+  background: var(--coin);
+}
+
+.game-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  background: var(--brick);
+  color: #fff;
+  font-family: var(--font-pixel);
+  letter-spacing: 0.04em;
+  border-radius: 0;
+  margin-top: 10px;
+  text-shadow: 2px 2px 0 var(--ink);
+}
+.group-head .gh-mark {
+  font-size: 22px;
+  line-height: 1;
+}
+.group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: var(--bw) solid var(--ink);
+  border-top: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.game-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.game-pick {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border-radius: 0;
+  background: var(--surface);
+}
+.game-row.active .game-pick,
+.game-pick[aria-pressed="true"] {
+  background: var(--block);
+  color: var(--ink);
+}
+.game-pick .gp-name {
+  font-size: 16px;
+  font-weight: 800;
+}
+.doubles-toggle {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 0;
+  background: var(--surface);
+  white-space: nowrap;
+}
+.doubles-toggle[aria-pressed="true"] {
+  background: var(--side-a);
+  color: #fff;
+}
+
+/* ---------- プレーヤー呼び出し ---------- */
+.picker-wrap {
+  margin-top: 10px;
+}
+.picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.picker-chip .pc-sl {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 0 6px;
+}
+
+.sl-field {
+  margin-bottom: 12px;
+}
+.sl-chips {
+  gap: 6px;
+}
+.sl-chips .chip {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 6px 10px;
+  justify-content: center;
+}
+.sl-line {
+  color: var(--ink);
+  font-weight: 800;
+}
+.sl-edit {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 2px solid var(--ink);
+}
+
+/* ---------- スコアパネル = 得点ブロック ---------- */
+.score-panel {
+  border-radius: 0;
+  background: #fff;
+}
+/* ブレイク権を持つ側は金色に光らせる */
+.score-panel.has-break {
+  background: linear-gradient(180deg, #fffbe6 0%, #fff6c9 100%);
+  box-shadow: var(--shadow), 0 0 0 4px var(--coin);
+}
+.score-panel .val {
+  font-family: var(--font-pixel);
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18);
+}
+/* ブレイク表示は文字バッジにする */
+.score-panel .breakmark {
+  width: auto;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 3px 5px;
+}
+.score-panel .breakmark:empty {
+  display: none;
+}
+.score-panel .progress {
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.12);
+}
+.score-panel .progress > i {
+  background-image: repeating-linear-gradient(90deg,
+    rgba(255, 255, 255, 0.5) 0 4px, transparent 4px 10px);
+}
+
+/* ---------- ブレイク権のバナー ---------- */
+.break-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px;
+  padding: 8px 14px;
+  border: var(--bw-thick) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  background: var(--coin);
+  font-family: var(--font-pixel);
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+.break-banner[hidden] {
+  display: none;
+}
+.break-banner .bb-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.break-banner .bb-text b {
+  font-weight: 400;
+  font-size: 19px;
+}
+.break-banner .bb-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.break-banner.side-a {
+  background: #cfe3ff;
+}
+.break-banner.side-b {
+  background: #ffd9cc;
+}
+
+.break-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 0;
+  background: var(--surface);
+}
+.break-toggle .bt-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.break-toggle .bt-name {
+  font-weight: 900;
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.break-toggle .bt-swap {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 1px 6px;
+}
+
+/* ---------- 時計 ---------- */
+.shotclock,
+.chessclock {
+  border-radius: 0;
+}
+.shotclock .time,
+.chessclock .cc-time {
+  font-family: var(--font-pixel);
+}
+
+/* ---------- カード・入力 ---------- */
+.match-card,
+input[type="text"],
+input[type="number"],
+select,
+.modal {
+  border-radius: 0;
+}
+.list .match-card {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* 空を背景にした画面では、本文が読めるよう下地を敷く。
+   地面の帯にボタンが隠れないよう最下部に余白も確保する */
+.setup-body,
+.list {
+  /* 空の色を少し残しつつ、本文が読める程度の下地を敷く。
+     ここを透かしすぎると文字のコントラストが落ちるので下げない */
+  background: rgba(255, 255, 255, 0.78);
+  padding-bottom: 78px;
+}
+
+/* ---------- 動きを減らす設定を尊重する ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .score-panel.bump {
+    animation: none;
+  }
+}
+
+/* 空を背に置かれる小さな文字は、下地を敷かないと読めない */
+.tap-hint {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--ink);
+  padding: 4px 10px;
+  align-self: center;
+}
+
+/* ショットクロックの状態表示。省略されると延長の残り回数が読めないので
+   数字を優先して折り返す */
+.shotclock .sc-info {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.shotclock .sc-btns {
+  flex: 0 0 auto;
 }

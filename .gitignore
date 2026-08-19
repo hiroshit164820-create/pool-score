@@ -5,3 +5,7 @@ _test/shots/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Python が作るキャッシュ（helpers.py を import するようになったため出る）
+__pycache__/
+*.pyc
