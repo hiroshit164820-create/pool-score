@@ -107,13 +107,20 @@ with sync_playwright() as p:
     pg.click("#toPlayersBtn2")
     pg.wait_for_timeout(300)
     check(pg.is_visible("#screenPlayers"), "プレーヤー画面が開く")
-    check(pg.locator("#newPlayerSkill").count() == 1, "スキルレベルの入力欄がある")
+    # 登録フォームを開く。名前を入れるまではスキルレベル欄が出ない
+    helpers.open_add_player(pg)
+    check(pg.locator("#newPlayerSkill .sl-field").count() == 0,
+          "名前が空のうちはスキルレベル欄が出ない",
+          pg.locator("#newPlayerSkill .sl-field").count())
 
+    pg.fill("#newPlayerName", "田中")
+    pg.wait_for_timeout(200)
     sl_fields = pg.locator("#newPlayerSkill .sl-field").count()
-    check(sl_fields == 2, "9ボールと8ボールの2つを設定できる", sl_fields)
+    check(sl_fields == 2, "名前を入れると9ボールと8ボールの欄が出る", sl_fields)
+    prompt = pg.text_content(".sl-prompt") or ""
+    check("田中" in prompt, "誰のスキルレベルかが分かる", prompt)
 
     # 9ボール SL6 / 8ボール SL4 で「田中」を登録する
-    pg.fill("#newPlayerName", "田中")
     pg.click('#newPlayerSkill .sl-field:has(label:text-is("9ボール")) .chip:text-is("6")')
     pg.wait_for_timeout(120)
     pg.click('#newPlayerSkill .sl-field:has(label:text-is("8ボール")) .chip:text-is("4")')

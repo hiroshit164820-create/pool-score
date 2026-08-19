@@ -322,7 +322,7 @@ const MATCH = (function () {
 
     // 球1個=1点の種目（14-1）は、タップ1回を「1個ポケットした」として記録する。
     // ラック単位の種目とは記録するイベントが違う。
-    if (r.scoring.kind === "ballScore" && !r.base.keyBall) {
+    if (isPerBallInput(r)) {
       recordOneBall(side, r);
       return;
     }
@@ -372,8 +372,11 @@ const MATCH = (function () {
    */
   function recordOneBall(side, r) {
     const before = reduceMatch(match);
-    // 盤面に残っている球のうち、若い番号を1つ消費する（番号は得点に影響しない）
-    const ball = before.onTable.length ? before.onTable[0] : 1;
+    const ball = pickBallToPocket(side, before);
+    if (ball === null) {
+      UI.toast("この人が得点できる球が盤面に残っていません。", "warn");
+      return;
+    }
     appendEvent(match, { t: "POCKET", side: side, d: { balls: [ball], onBreak: false } });
 
     const after = reduceMatch(match);
@@ -386,6 +389,19 @@ const MATCH = (function () {
         d: { rackNo: after.rackNo + 1, breakSide: side, auto: true, continuation: true },
       });
       UI.toast("14個入りました。ラックを組み直してください。");
+    } else if (r.base.keyBall && ball === r.base.keyBall && !after.winner) {
+      // キーボール（9番など）が入った＝そのラックは終わり。
+      // ボールハンデで球単位に数えている場合、ここで区切らないと
+      // 盤面が空のままになり次のラックに進めない。
+      // ブレイク権は種目の方式に従って決める
+      const bt = (match.options && match.options.breakType) || r.base.defaultBreakType;
+      const nextBreak = nextBreakSide(bt, before.breakSide || before.firstSide, side);
+      appendEvent(match, {
+        t: "RACK_START",
+        side: null,
+        d: { rackNo: after.rackNo + 1, breakSide: nextBreak, auto: true },
+      });
+      UI.toast(r.base.keyBall + "番が入りました。次のラックです。");
     }
 
     save();
@@ -399,6 +415,29 @@ const MATCH = (function () {
       if (after.rackNo !== before.rackNo) clock.resetRack();
       startClockForCurrentTurn();
     }
+  }
+
+  /**
+   * タップ1回で「どの球を入れたことにするか」を決める。
+   *
+   * 番号を1つずつ選ばせると台の脇での操作が重くなるため、こちらで選ぶ。
+   * ボールハンデがある場合は、その人にとって得点になる球のうち
+   * 一番若い番号を消費する。ハンデが無ければ盤面の最若番。
+   *
+   * 得点になる球が残っていなければ null を返す（呼び出し側で知らせる）。
+   */
+  function pickBallToPocket(side, st) {
+    const onTable = st.onTable || [];
+    if (!onTable.length) return null;
+
+    const bh = match.goal.ballHandicap && match.goal.ballHandicap[side];
+    if (bh && bh.scoringBalls && bh.scoringBalls.length) {
+      const allowed = {};
+      bh.scoringBalls.forEach(function (b) { allowed[b] = true; });
+      const hit = onTable.filter(function (b) { return allowed[b]; });
+      return hit.length ? hit[0] : null;
+    }
+    return onTable[0];
   }
 
   /** ファウルを記録する（14-1は減点があるため専用ボタンを出す） */
@@ -461,6 +500,25 @@ const MATCH = (function () {
     return side === "A" ? match.sides[0].name : match.sides[1].name;
   }
 
+  /**
+   * タップ1回が「球1個」か「ラック1つ」かを返す。
+   *
+   * engine.js の effectiveScoreKind と同じ規則で判断する。
+   * ボールハンデを付けると goal.type が "score" になり、
+   * ラック集計の種目でもボール単位の加点に切り替わるため、
+   * ここで種目のフラグだけを見ていると記録の粒度がずれる。
+   */
+  function isPerBallInput(r) {
+    return effectiveScoreKind(r.scoring, match.goal) === "ballScore";
+  }
+
+  /** どちらかにボールハンデが設定されているか */
+  function hasAnyHandicap() {
+    const bh = match && match.goal && match.goal.ballHandicap;
+    if (!bh) return false;
+    return !!(bh.A || bh.B);
+  }
+
   /** 決着済みかどうか（ブレイク表示の出し分けに使う） */
   function finishedFlag(st) {
     return !!st.winner;
@@ -480,6 +538,7 @@ const MATCH = (function () {
     const btShort = { winner: "ウィナーズ", alternate: "オルタネート", continuation: "連続" }[bt] || bt;
     const parts = [match.goal.targets.A + " 対 " + match.goal.targets.B + unit, btShort];
     if (match.goal.targets.A !== match.goal.targets.B) parts.push("ハンデ戦");
+    if (hasAnyHandicap()) parts.push("ボールハンデ");
     $("matchSubtitle").textContent = parts.join(" ・ ");
 
     const cur = match.goal.type === "racks" ? st.racks : st.score;
@@ -487,6 +546,25 @@ const MATCH = (function () {
       $("name" + side).textContent = sideName(side);
       $("score" + side).textContent = String(cur[side]);
       $("target" + side).textContent = "/ " + match.goal.targets[side];
+
+      // ボールハンデ。試合中ずっと見えていないと、
+      // どの球が得点になるのか分からなくなる
+      const bh = match.goal.ballHandicap && match.goal.ballHandicap[side];
+      const hNode = $("handicap" + side);
+      if (bh && bh.from) {
+        hNode.textContent = bh.from + "番以上で1点";
+        hNode.hidden = false;
+      } else if (bh && bh.scoringBalls && bh.scoringBalls.length) {
+        // from を持たない古い記録でも表示できるようにする
+        hNode.textContent = bh.scoringBalls.join("・") + "番で1点";
+        hNode.hidden = false;
+      } else if (hasAnyHandicap()) {
+        // 片方だけハンデがある場合、もう片方にも基準を出して対比させる
+        hNode.textContent = r.base.keyBall + "番のみ1点";
+        hNode.hidden = false;
+      } else {
+        hNode.hidden = true;
+      }
       const pct = Math.min(100, Math.round((cur[side] / match.goal.targets[side]) * 100));
       $("bar" + side).style.width = pct + "%";
       // ブレイク権はパネル自体にも印を付ける（下のバナーと二重に出す）
@@ -510,11 +588,13 @@ const MATCH = (function () {
     const finished = !!st.winner;
     $("panelA").disabled = finished;
     $("panelB").disabled = finished;
-    const perBall = r.scoring.kind === "ballScore" && !r.base.keyBall;
+    const perBall = isPerBallInput(r);
     $("tapHint").textContent = finished
       ? "この試合は終了しています。下の「試合終了」から保存してください。"
       : perBall
-      ? "球を1個入れるごとに、その人のスコアをタップしてください"
+      ? (hasAnyHandicap()
+          ? "得点になる球を入れるごとに、その人のスコアをタップしてください"
+          : "球を1個入れるごとに、その人のスコアをタップしてください")
       : "ラックを取った側のスコアをタップしてください";
 
     // ターン交代ボタン

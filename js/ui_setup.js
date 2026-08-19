@@ -155,6 +155,9 @@ const SETUP = (function () {
   let goalValues = { A: 5, B: 5 };
   // JPA用。スキルレベルから持ち点を自動算出する
   let skillLevels = { A: 5, B: 5 };
+  // ボールハンデ。「N番以上を入れたら1点」の N を持つ（null＝ハンデなし）
+  // 出典: CUES「相手は9番、自分は7番以上を入れたら1ポイント」（04_種目ルール仕様.md）
+  let ballHandicap = { A: null, B: null };
 
   function init() {
     renderGames();
@@ -348,6 +351,114 @@ const SETUP = (function () {
 
     renderPlayerFields();
     renderGoalArea();
+    renderBallHandicap();
+  }
+
+  /**
+   * ボールハンデの選択欄。
+   *
+   * 「N番以上を入れたら1点」という形で選ぶ。内部では該当する球すべてを
+   * scoringBalls に展開して engine に渡す（engine 側は球の集合で解釈する）。
+   *
+   * キーボールがある種目（9/10/8ボール）でのみ意味を持つ。
+   * 14-1・ローテーションは元から球ごとに得点する種目なので出さない。
+   */
+  function renderBallHandicap() {
+    const section = $("ballHandicapSection");
+    const wrap = $("ballHandicapArea");
+    if (!section || !wrap) return;
+    UI.clear(wrap);
+
+    const g = GAMES[selectedGame];
+    const base = BASE_RULES[g.base];
+
+    // 出せる種目かどうか。ラック単位で数える種目のみ
+    const usable = SCORING[g.scoring].kind === "rackCount" && !!base.keyBall;
+    section.hidden = !usable;
+    if (!usable) {
+      ballHandicap = { A: null, B: null };
+      return;
+    }
+
+    wrap.appendChild(
+      UI.el("p", {
+        class: "hint",
+        text: "実力差があるとき、弱い側が「番号の若い球でも得点になる」ようにする決め方です。",
+      })
+    );
+
+    // 選べる下限。キーボールと、その手前の2つまでを出す（実際に使われる範囲）
+    const key = base.keyBall;
+    const options = [key - 2, key - 1].filter(function (n) { return n >= 1; });
+
+    ["A", "B"].forEach(function (side) {
+      const chips = UI.el("div", { class: "chips bh-chips" });
+
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip",
+          "aria-pressed": String(ballHandicap[side] === null),
+          text: "ハンデなし",
+          onclick: function () {
+            ballHandicap[side] = null;
+            renderBallHandicap();
+            renderGoalArea();
+          },
+        })
+      );
+
+      options.forEach(function (n) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(ballHandicap[side] === n),
+            text: n + "番以上",
+            onclick: function () {
+              ballHandicap[side] = n;
+              renderBallHandicap();
+              renderGoalArea();
+            },
+          })
+        );
+      });
+
+      const label = nameForSide(side);
+      wrap.appendChild(
+        UI.el("div", { class: "field" }, [UI.el("label", { text: label + " のハンデ" }), chips])
+      );
+    });
+
+    // いまの設定を文章で確認できるようにする
+    const summary = ["A", "B"].map(function (side) {
+      const n = ballHandicap[side];
+      return nameForSide(side) + "は" + (n === null ? key + "番のみ" : n + "番以上");
+    });
+    wrap.appendChild(
+      UI.el("p", { class: "hint bh-summary", text: summary.join("　／　") + " で1点" })
+    );
+
+    // ハンデを付けると数え方が「ラック先取」から「点数先取」に変わる。
+    // 勝利条件の意味が変わるので、その場ではっきり伝える
+    if (ballHandicap.A !== null || ballHandicap.B !== null) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint warn",
+          text: "ハンデを付けると、勝利条件は「ラック先取」ではなく「点数先取」になります。"
+            + "得点になる球を1個入れるごとに1点です。",
+        })
+      );
+    }
+  }
+
+  /** 設定画面での側の呼び名。名前が入っていればそれを使う */
+  function nameForSide(side) {
+    const g = GAMES[selectedGame];
+    const v = readName("inName" + side, "");
+    if (v) return v;
+    if (g.playersPerSide === 2) return side === "A" ? "チームA" : "チームB";
+    return side === "A" ? "プレーヤーA" : "プレーヤーB";
   }
 
   /**
@@ -477,8 +588,10 @@ const SETUP = (function () {
       return;
     }
 
-    const unit = g.goalType === "racks" ? "ラック" : "点";
-    const presets = g.goalPresets || [];
+    // ボールハンデを付けると点数制に変わるため、単位表示もそれに合わせる
+    const bhOn = ballHandicap.A !== null || ballHandicap.B !== null;
+    const unit = bhOn ? "点" : (g.goalType === "racks" ? "ラック" : "点");
+    const presets = bhOn ? [] : (g.goalPresets || []);
 
     // プリセット
     if (presets.length) {
@@ -702,15 +815,41 @@ const SETUP = (function () {
   }
 
   /** 勝利条件（ハンデ含む）を組み立てる */
+  /**
+   * 「N番以上が得点」を engine が解釈する形（得点になる球の一覧）に展開する。
+   * ハンデなしの側は null を返し、種目既定の数え方のままにする。
+   */
+  function buildBallHandicap(g) {
+    const base = BASE_RULES[g.base];
+    const out = { A: null, B: null };
+    ["A", "B"].forEach(function (side) {
+      const from = ballHandicap[side];
+      if (from === null || from === undefined) return;
+      out[side] = {
+        from: from, // 表示用。「7番以上」と出すために持っておく
+        scoringBalls: base.balls.filter(function (b) { return b >= from; }),
+      };
+    });
+    return out;
+  }
+
   function buildGoal(g) {
     const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
+    const bh = buildBallHandicap(g);
+    const hasBh = !!(bh.A || bh.B);
+
+    // ボールハンデは「球1個ごとに1点」で数える必要があるため、
+    // ラック先取の種目でも点数制に切り替える（engine.js の effectiveScoreKind が
+    // goal.type === "score" を見てボール単位の加点に切り替える）。
+    const baseType = g.goalType === "racks" || g.goalType === "games" ? "racks" : "score";
+
     return {
-      type: g.goalType === "racks" || g.goalType === "games" ? "racks" : "score",
+      type: hasBh ? "score" : baseType,
       targets: { A: goalValues.A, B: goalValues.B },
       source: isJpa ? g.goal : "free",
       // JPAはチームポイントの算出に敗者のスキルレベルが要るため必ず持たせる
       meta: isJpa ? { skillLevel: { A: skillLevels.A, B: skillLevels.B } } : {},
-      ballHandicap: { A: null, B: null },
+      ballHandicap: bh,
       raceType: "raceTo",
     };
   }
@@ -736,6 +875,11 @@ const SETUP = (function () {
     });
 
     bumpGameCount(selectedGame);
+
+    // この試合で使った人を記録する（選手一覧の「最近」の並び替えに使う）
+    match.sides.forEach(function (sd) {
+      (sd.playerIds || []).forEach(function (id) { STORE.touchPlayer(id); });
+    });
 
     if (!STORE.saveMatch(match)) {
       UI.toast("保存できませんでした。ブラウザの空き容量を確認してください。", "danger");

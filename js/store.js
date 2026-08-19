@@ -189,6 +189,19 @@ const STORE = (function () {
     return listPlayers().find(function (p) { return p.id === id; }) || null;
   }
 
+  /**
+   * この人を試合で使ったことを記録する（一覧の「最近」の並び替えに使う）。
+   * 試合を開始したときに呼ぶ。
+   */
+  function touchPlayer(id, at) {
+    const players = listPlayers();
+    const p = players.find(function (x) { return x.id === id; });
+    if (!p) return false;
+    p.lastUsedAt = (at || new Date()).toISOString();
+    p.useCount = (p.useCount || 0) + 1;
+    return writeJSON(KEY_PLAYERS, players);
+  }
+
   /** 登録済みプレーヤーを名前で引く */
   function findPlayerByName(name) {
     const t = (name || "").trim();
@@ -358,6 +371,7 @@ const STORE = (function () {
     upsertPlayer: upsertPlayer,
     findPlayerByName: findPlayerByName,
     findPlayerById: findPlayerById,
+    touchPlayer: touchPlayer,
     setPlayerSkill: setPlayerSkill,
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,

@@ -9,6 +9,11 @@ const PLAYERS = (function () {
   const $ = UI.$;
   let bound = false;
   let statsTarget = null; // 表示中のプレーヤー
+  let sortMode = "name"; // name | recent | wins
+  // スキルレベルの編集欄を開いている人のID（再描画しても開いたままにする）
+  let openSkillFor = null;
+  // 「名前を変更・削除」を開いている人のID
+  let openEditFor = null;
 
   function bindOnce() {
     if (bound) return;
@@ -17,7 +22,30 @@ const PLAYERS = (function () {
     $("newPlayerName").addEventListener("keydown", function (e) {
       if (e.key === "Enter") addPlayer();
     });
+    // 名前を入れるまでスキルレベル欄は出さない。
+    // 空欄のまま選択肢が並んでいると、何を設定しているのか分からなくなるため
+    $("newPlayerName").addEventListener("input", renderNewSkill);
     $("backFromPlayersBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
+
+    // 登録フォームの開閉。ふだんは畳んでおき、一覧を主役にする
+    $("toggleAddPlayerBtn").addEventListener("click", function () {
+      const body = $("addPlayerBody");
+      const opening = body.hidden;
+      body.hidden = !opening;
+      $("toggleAddPlayerBtn").setAttribute("aria-expanded", String(opening));
+      if (opening) {
+        renderNewSkill();
+        const nameInput = $("newPlayerName");
+        if (nameInput) nameInput.focus();
+      }
+    });
+
+    // 絞り込みと並び替え
+    $("playerSearch").addEventListener("input", render);
+    UI.bindToggle($("playerSortToggle"), function (v) {
+      sortMode = v;
+      render();
+    });
     $("playersNewMatchBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
     $("playersToStatsBtn").addEventListener("click", function () { openStats(null); });
     $("backFromStatsBtn").addEventListener("click", function () { open(); });
@@ -48,6 +76,9 @@ const PLAYERS = (function () {
     input.value = "";
     newSkill = { nine: null, eight: null };
     renderNewSkill();
+    // 登録したら畳む。続けて登録したいときはもう一度開く
+    $("addPlayerBody").hidden = true;
+    $("toggleAddPlayerBtn").setAttribute("aria-expanded", "false");
     render();
     UI.toast("「" + name + "」を登録しました。");
   }
@@ -79,13 +110,31 @@ const PLAYERS = (function () {
     return chips;
   }
 
-  /** 新規登録フォームのスキルレベル欄を描き直す */
+  /**
+   * 新規登録フォームのスキルレベル欄を描き直す。
+   *
+   * 名前が入力されるまでは出さない。
+   * 誰のスキルレベルを設定しているのか分からない状態で
+   * 選択肢だけが並んでいると迷うため。
+   */
   function renderNewSkill() {
     const wrap = $("newPlayerSkill");
     if (!wrap) return;
     UI.clear(wrap);
+
+    const name = (($("newPlayerName") || {}).value || "").trim();
+    if (!name) {
+      wrap.appendChild(
+        UI.el("p", { class: "hint", text: "名前を入れると、JPAのスキルレベルも設定できます。" })
+      );
+      return;
+    }
+
     wrap.appendChild(
-      UI.el("p", { class: "hint", text: "JPAのスキルレベル（任意・あとから変えられます）" })
+      UI.el("p", {
+        class: "hint sl-prompt",
+        text: name + " のJPAスキルレベル（任意・あとから変えられます）",
+      })
     );
     [["nine", "9ボール"], ["eight", "8ボール"]].forEach(function (pair) {
       wrap.appendChild(
@@ -100,24 +149,89 @@ const PLAYERS = (function () {
     });
   }
 
+  /** 一覧の並び替え。指定された順に並べたコピーを返す */
+  function sortPlayers(players, mode) {
+    const withStats = players.map(function (p) {
+      return { p: p, st: STORE.playerStats(p.id) };
+    });
+
+    if (mode === "recent") {
+      // 最近使った順。使ったことがない人は後ろにまとめる
+      withStats.sort(function (a, b) {
+        const ta = a.p.lastUsedAt || "";
+        const tb = b.p.lastUsedAt || "";
+        if (ta && tb) return tb.localeCompare(ta);
+        if (ta) return -1;
+        if (tb) return 1;
+        return a.p.name.localeCompare(b.p.name, "ja");
+      });
+    } else if (mode === "wins") {
+      // 勝率順。記録のない人は後ろにまとめる
+      withStats.sort(function (a, b) {
+        if (!a.st.matches && !b.st.matches) return a.p.name.localeCompare(b.p.name, "ja");
+        if (!a.st.matches) return 1;
+        if (!b.st.matches) return -1;
+        if (b.st.winRate !== a.st.winRate) return b.st.winRate - a.st.winRate;
+        return b.st.matches - a.st.matches; // 勝率が同じなら試合数が多い方を上に
+      });
+    } else {
+      withStats.sort(function (a, b) {
+        return a.p.name.localeCompare(b.p.name, "ja");
+      });
+    }
+    return withStats;
+  }
+
   function render() {
     const list = $("playerList");
     UI.clear(list);
-    const players = STORE.listPlayers();
+    const all = STORE.listPlayers();
 
-    if (!players.length) {
+    // 見出しの人数表示
+    const countNode = $("playersCount");
+    if (countNode) {
+      countNode.textContent = all.length ? all.length + "人 登録済み" : "";
+    }
+
+    // 検索と並び替えは、人数が少ないうちは出さない（画面を狭めないため）
+    const tools = $("playerTools");
+    if (tools) tools.hidden = all.length < 4;
+
+    if (!all.length) {
       list.appendChild(
         UI.el("div", { class: "empty" }, [
           UI.el("p", { text: "まだ誰も登録されていません。" }),
-          UI.el("p", { text: "上の欄から名前を登録してください。" }),
+          UI.el("p", { text: "上の「選手を登録する」から名前を登録してください。" }),
+          UI.el("button", {
+            class: "primary",
+            style: "margin-top:12px",
+            text: "選手を登録する",
+            onclick: function () { $("toggleAddPlayerBtn").click(); },
+          }),
         ])
       );
       return;
     }
 
-    players.forEach(function (p) {
-      const st = STORE.playerStats(p.id);
-      const card = UI.el("div", { class: "match-card" });
+    // 絞り込み
+    const q = (($("playerSearch") || {}).value || "").trim().toLowerCase();
+    const filtered = q
+      ? all.filter(function (p) { return p.name.toLowerCase().indexOf(q) >= 0; })
+      : all;
+
+    if (!filtered.length) {
+      list.appendChild(
+        UI.el("div", { class: "empty" }, [
+          UI.el("p", { text: "「" + q + "」に一致する選手がいません。" }),
+        ])
+      );
+      return;
+    }
+
+    sortPlayers(filtered, sortMode).forEach(function (row) {
+      const p = row.p;
+      const st = row.st;
+      const card = UI.el("div", { class: "match-card player-card" });
 
       card.appendChild(
         UI.el("div", { class: "mc-main" }, [
@@ -150,7 +264,10 @@ const PLAYERS = (function () {
         })
       );
 
-      const slEdit = UI.el("div", { class: "sl-edit", hidden: "hidden" });
+      // 開いている人は再描画後も開いたままにする
+      // （スキルレベルを押すと render() が走るため、閉じると連続で設定できない）
+      const slEdit = UI.el("div", { class: "sl-edit" });
+      if (openSkillFor !== p.id) slEdit.hidden = true;
       function renderSlEdit() {
         UI.clear(slEdit);
         const cur = STORE.findPlayerById(p.id) || p;
@@ -169,59 +286,86 @@ const PLAYERS = (function () {
           );
         });
       }
+      if (openSkillFor === p.id) renderSlEdit();
       card.appendChild(slEdit);
 
-      const foot = UI.el("div", { style: "margin-top:8px;display:flex;gap:8px;flex-wrap:wrap" });
+      // よく使う2つだけを常に出す。
+      // 「名前を変更」「削除」はめったに使わないので畳んで、
+      // 1人あたりの高さを抑える（一覧は縦に伸びやすいため）
+      const foot = UI.el("div", { class: "pc-actions" });
       foot.appendChild(
         UI.el("button", {
           class: "small primary",
-          text: "成績を見る",
+          text: "成績",
           onclick: function () { openStats(p); },
         })
       );
       foot.appendChild(
         UI.el("button", {
           class: "small ghost",
+          "aria-pressed": String(openSkillFor === p.id),
           text: "スキルレベル",
           onclick: function () {
-            const opening = slEdit.hidden;
-            if (opening) renderSlEdit();
-            slEdit.hidden = !opening;
-          },
-        })
-      );
-      foot.appendChild(
-        UI.el("button", {
-          class: "small ghost",
-          text: "名前を変更",
-          onclick: function () {
-            const nv = window.prompt("新しい名前を入力してください。", p.name);
-            if (nv && nv.trim() && nv.trim() !== p.name) {
-              STORE.renamePlayer(p.id, nv);
-              render();
-              UI.toast("名前を変更しました。");
-            }
-          },
-        })
-      );
-      foot.appendChild(
-        UI.el("button", {
-          class: "small ghost",
-          text: "削除",
-          onclick: function () {
-            if (!window.confirm([
-              "「" + p.name + "」を登録から外します。",
-              "",
-              "これまでの試合の記録は残りますが、この人の成績は見られなくなります。",
-              "よろしいですか？",
-            ].join(String.fromCharCode(10)))) return;
-            STORE.deletePlayer(p.id);
+            openSkillFor = openSkillFor === p.id ? null : p.id;
+            openEditFor = null;
             render();
-            UI.toast("削除しました。");
+          },
+        })
+      );
+      foot.appendChild(
+        UI.el("button", {
+          class: "small ghost pc-more",
+          "aria-pressed": String(openEditFor === p.id),
+          "aria-label": "その他の操作",
+          title: "名前の変更・削除",
+          text: "⋯",
+          onclick: function () {
+            openEditFor = openEditFor === p.id ? null : p.id;
+            openSkillFor = null;
+            render();
           },
         })
       );
       card.appendChild(foot);
+
+      // 「⋯」を押したときだけ出す操作
+      if (openEditFor === p.id) {
+        const more = UI.el("div", { class: "pc-more-body" });
+        more.appendChild(
+          UI.el("button", {
+            class: "small ghost",
+            text: "名前を変更",
+            onclick: function () {
+              const nv = window.prompt("新しい名前を入力してください。", p.name);
+              if (nv && nv.trim() && nv.trim() !== p.name) {
+                STORE.renamePlayer(p.id, nv);
+                render();
+                UI.toast("名前を変更しました。");
+              }
+            },
+          })
+        );
+        more.appendChild(
+          UI.el("button", {
+            class: "small danger",
+            text: "削除",
+            onclick: function () {
+              if (!window.confirm([
+                "「" + p.name + "」を登録から外します。",
+                "",
+                "これまでの試合の記録は残りますが、この人の成績は見られなくなります。",
+                "よろしいですか？",
+              ].join(String.fromCharCode(10)))) return;
+              STORE.deletePlayer(p.id);
+              openEditFor = null;
+              render();
+              UI.toast("削除しました。");
+            },
+          })
+        );
+        card.appendChild(more);
+      }
+
       list.appendChild(card);
     });
   }

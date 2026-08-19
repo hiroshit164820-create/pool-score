@@ -112,3 +112,33 @@ def count_selectable_games(page):
     for _ in each_group_open(page):
         total += page.locator(".game-pick").count() + page.locator(".doubles-toggle").count()
     return total
+
+
+def open_add_player(page):
+    """
+    選手登録フォームを開く。
+
+    一覧を主役にするため、ふだんは畳んである。
+    登録すると自動で閉じるので、続けて登録するときは毎回呼ぶ。
+    """
+    body = page.locator("#addPlayerBody")
+    if body.get_attribute("hidden") is not None:
+        page.click("#toggleAddPlayerBtn")
+        page.wait_for_timeout(150)
+
+
+def add_player(page, name, skill_nine=None, skill_eight=None):
+    """選手を1人登録する（スキルレベルは任意）"""
+    open_add_player(page)
+    page.fill("#newPlayerName", name)
+    page.wait_for_timeout(120)
+    if skill_nine is not None:
+        page.click('#newPlayerSkill .sl-field:has(label:text-is("9ボール")) .chip:text-is("%d")'
+                   % skill_nine)
+        page.wait_for_timeout(100)
+    if skill_eight is not None:
+        page.click('#newPlayerSkill .sl-field:has(label:text-is("8ボール")) .chip:text-is("%d")'
+                   % skill_eight)
+        page.wait_for_timeout(100)
+    page.click("#addPlayerBtn")
+    page.wait_for_timeout(250)

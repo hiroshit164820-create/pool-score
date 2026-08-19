@@ -1314,3 +1314,218 @@ select,
 .shotclock .sc-btns {
   flex: 0 0 auto;
 }
+
+/* ================================================================
+   アプリ層（PWAとして手に馴染ませるための調整）
+   ホーム画面から開いたときにネイティブアプリと見分けがつかない
+   ところまで持っていくための指定をここにまとめる
+   ================================================================ */
+
+/* ---------- 選択・長押しメニューを抑える ---------- */
+/* ネイティブアプリでは文字を長押ししても選択メニューは出ない。
+   ただし入力欄と記録の文言はコピーできる必要があるので除外する */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+.ev-desc,
+.mc-main,
+.stat-val {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOSでゴムのように跳ねる挙動を止める（ページ全体が動くと安っぽく見える） */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+/* 縦スクロールする領域だけは慣性スクロールを効かせる */
+.setup-body,
+.list,
+.ev-list {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ---------- 画面遷移 ---------- */
+/* 切り替わったことが分かる程度の短いフェード。
+   長いアニメーションは操作の邪魔になるので 140ms に留める */
+.screen.active {
+  animation: screen-in 140ms ease-out;
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- セーフエリア ---------- */
+/* ホーム画面から起動すると上下にノッチとホームバーが入る。
+   ヘッダと下部バーはその内側に収める */
+.topbar {
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+.bottom-bar {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+/* ---------- 選手一覧 ---------- */
+/* 登録フォームの開閉見出し */
+.add-player-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--block);
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  letter-spacing: 0.04em;
+  border-radius: 0;
+  margin-bottom: 12px;
+}
+.add-player-head .aph-plus {
+  font-size: 22px;
+  line-height: 1;
+}
+.add-player-head[aria-expanded="true"] .aph-plus {
+  /* 開いているときは「−」に見えるよう回す（文字を差し替えずに済ませる） */
+  transform: rotate(45deg);
+  display: inline-block;
+}
+.add-player-body {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.add-player-body[hidden] {
+  display: none;
+}
+
+/* 名前を入れたときに出るスキルレベルの案内 */
+.sl-prompt {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+/* 絞り込みと並び替え */
+.player-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.player-tools[hidden] {
+  display: none;
+}
+.player-tools input[type="search"] {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  border-radius: 0;
+  box-shadow: var(--shadow-sm);
+  min-height: var(--tap);
+  padding: 8px 12px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.player-tools .toggle-group button {
+  font-size: 14px;
+  padding: 8px 4px;
+}
+
+/* 選手カード */
+.player-card .mc-main {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+/* ---------- ボールハンデ ---------- */
+.bh-chips .chip[aria-pressed="true"] {
+  background: var(--side-a);
+  color: #fff;
+}
+.bh-summary {
+  color: var(--ink);
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--ink);
+  padding: 6px 10px;
+  margin-top: 10px;
+}
+#ballHandicapSection[hidden] {
+  display: none;
+}
+
+/* 試合中のハンデ表示。スコアの真上に置いて、
+   どの球が得点になるのかを常に見えるようにする */
+.score-panel .handicap {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 2px 8px;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.score-panel .handicap[hidden] {
+  display: none;
+}
+
+/* ---------- 動きを減らす設定を尊重する ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .screen.active {
+    animation: none;
+  }
+}
+
+/* 選手カードの操作。よく使う2つを1行に収め、
+   めったに使わない操作は「⋯」の中に畳む */
+.pc-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: stretch;
+}
+.pc-actions > button {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.pc-actions .pc-more {
+  flex: 0 0 auto;
+  min-width: 52px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+}
+.pc-more-body {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2px dashed var(--ink);
+}
+.pc-more-body > button {
+  flex: 1;
+  min-width: 0;
+}

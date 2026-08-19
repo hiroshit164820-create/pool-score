@@ -168,9 +168,14 @@ function nextBreakSide(breakType, prevBreakSide, rackWinner) {
 /**
  * 球→点数の変換関数を返す。
  * ボールハンデが設定されていれば種目既定の scoreOf を差し替える。
+ *
+ * @param base 基礎種目。相手だけにハンデが付いた場合の既定を決めるのに使う
  */
-function makeScorer(scoring, goal, side) {
-  const bh = goal && goal.ballHandicap && goal.ballHandicap[side];
+function makeScorer(scoring, goal, side, base) {
+  const bhAll = (goal && goal.ballHandicap) || {};
+  const bh = bhAll[side];
+
+  // この側にハンデがある: 指定された球だけが1点
   if (bh && bh.scoringBalls && bh.scoringBalls.length) {
     const allowed = {};
     bh.scoringBalls.forEach(function (b) {
@@ -180,6 +185,21 @@ function makeScorer(scoring, goal, side) {
       return allowed[ball] ? 1 : 0;
     };
   }
+
+  // 相手だけにハンデがある場合。
+  // この側はハンデ無しなので「種目本来の勝ち球（キーボール）だけが1点」になる。
+  // ここを既定の「何でも1点」に落とすと、ハンデを付けていない側が
+  // 1番を入れただけで得点してしまう（ラック集計型の種目には scoreOf が無いため）。
+  const otherSide = side === "A" ? "B" : "A";
+  const opponentHasBh =
+    bhAll[otherSide] && bhAll[otherSide].scoringBalls && bhAll[otherSide].scoringBalls.length;
+  if (opponentHasBh && !scoring.scoreOf && base && base.keyBall) {
+    const key = base.keyBall;
+    return function (ball) {
+      return ball === key ? 1 : 0;
+    };
+  }
+
   if (!scoring.scoreOf) {
     return function () {
       return 1;
@@ -268,8 +288,8 @@ function reduceMatch(match) {
     goal: match.goal,
     options: match.options || {},
     scorer: {
-      A: makeScorer(r.scoring, match.goal, "A"),
-      B: makeScorer(r.scoring, match.goal, "B"),
+      A: makeScorer(r.scoring, match.goal, "A", r.base),
+      B: makeScorer(r.scoring, match.goal, "B", r.base),
     },
     // 実効スコアリング種別。ボールハンデ等で goal.type が score のときは
     // ラック集計型の種目でもボール単位で加点する（計画書§3.3の意図）。

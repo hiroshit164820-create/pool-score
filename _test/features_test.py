@@ -92,16 +92,12 @@ with sync_playwright() as p:
     check(pg.is_visible("#screenPlayers"), "プレーヤー画面が開く")
 
     for name in ["山田", "佐藤", "鈴木"]:
-        pg.fill("#newPlayerName", name)
-        pg.click("#addPlayerBtn")
-        pg.wait_for_timeout(250)
+        helpers.add_player(pg, name)
     check(pg.locator("#playerList .match-card").count() == 3, "3人登録された",
           pg.locator("#playerList .match-card").count())
 
     # 重複登録は弾かれる
-    pg.fill("#newPlayerName", "山田")
-    pg.click("#addPlayerBtn")
-    pg.wait_for_timeout(250)
+    helpers.add_player(pg, "山田")
     check(pg.locator("#playerList .match-card").count() == 3, "同じ名前は重複登録されない")
     pg.screenshot(path=os.path.join(SHOTS, "41_players.png"), full_page=True)
 

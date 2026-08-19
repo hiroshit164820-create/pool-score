@@ -691,6 +691,65 @@ section("エンジンに種目名の分岐がないこと（設計ゲート）")
 }
 
 /* ============================================================ */
+section("ボールハンデ: 片側だけに付けた場合、無ハンデ側はキーボールのみ得点");
+{
+  // 実戦で一番多い形。「Bにだけハンデを与える」場合に
+  // Aが1番を入れただけで点が入ってしまわないことを確かめる
+  const m = app.createMatch({
+    gameId: "9ball",
+    goal: {
+      type: "score",
+      targets: { A: 5, B: 5 },
+      source: "free",
+      ballHandicap: {
+        A: null, // ハンデなし＝9番のみ
+        B: { from: 7, scoringBalls: [7, 8, 9] },
+      },
+    },
+    firstSide: "A",
+    now: tick(),
+  });
+
+  pocket(m, "A", [1, 2, 3]);
+  eq(app.reduceMatch(m).score.A, 0, "ハンデなし側は1,2,3番では得点しない");
+
+  pocket(m, "A", [8]);
+  eq(app.reduceMatch(m).score.A, 0, "ハンデなし側は8番でも得点しない");
+
+  pocket(m, "A", [9]);
+  eq(app.reduceMatch(m).score.A, 1, "ハンデなし側は9番で1点");
+
+  turnEnd(m, "A", "miss");
+  pocket(m, "B", [1, 2]);
+  eq(app.reduceMatch(m).score.B, 0, "ハンデあり側も6番以下では得点しない");
+
+  pocket(m, "B", [7]);
+  eq(app.reduceMatch(m).score.B, 1, "ハンデあり側は7番で1点");
+  pocket(m, "B", [8]);
+  eq(app.reduceMatch(m).score.B, 2, "8番でも1点");
+}
+
+/* ============================================================ */
+section("ボールハンデ: 両側とも無ハンデならラック集計のまま");
+{
+  const m = app.createMatch({
+    gameId: "9ball",
+    goal: {
+      type: "racks",
+      targets: { A: 3, B: 3 },
+      source: "free",
+      ballHandicap: { A: null, B: null },
+    },
+    firstSide: "A",
+    now: tick(),
+  });
+  eq(app.reduceMatch(m).score.A, 0, "初期状態は0点");
+  // ラック集計の種目なので、ラック勝利で1つ増える
+  app.appendEvent(m, { t: "RACK_WIN", side: "A", d: { winner: "A" } });
+  eq(app.reduceMatch(m).racks.A, 1, "ラック集計はそのまま動く");
+}
+
+/* ============================================================ */
 console.log("\n========================================");
 console.log("成功: " + pass + " / 失敗: " + fail);
 if (failures.length) {
