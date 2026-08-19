@@ -242,6 +242,12 @@
 
       <!-- ボウラードの投球入力（何個入れたかを押す） -->
       <div id="bowlPad" class="bowl-pad" hidden></div>
+    </div>
+
+    <!-- 交代と補助フラグは常に押せる位置に置く。
+         盤面（縦に長い）と一緒にスクロールさせると、
+         縦の短い端末で画面の外に出て押せなくなるため分けている -->
+    <div class="play-fixed">
       <button id="turnBtn" class="turn-btn">交代 → <span id="turnNextName">相手</span></button>
       <div id="flagButtons" class="flag-buttons"></div>
     </div>

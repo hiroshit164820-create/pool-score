@@ -341,8 +341,11 @@ button:focus-visible {
 
 /* スコア欄そのものがボタン */
 .score-panel {
-  flex: 1;
-  min-height: 120px;
+  /* min-height を固定にすると、縦の短い端末でスコアボード（overflow:hidden）から
+     2つ目のパネルがはみ出して丸ごと見えなくなる。
+     画面に追随させて、狭いときは両方を縮める */
+  flex: 1 1 0;
+  min-height: min(120px, 13vh);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -413,16 +416,35 @@ button:focus-visible {
   width: 1em;
 }
 
-/* 数字。画面幅と高さの小さい方に追従させ、台の脇からでも読めるようにする */
+/* 数字。画面幅と高さの小さい方に追従させ、台の脇からでも読めるようにする。
+   名前とハンデの帯が上に乗るぶん数字が下へ押し下げられて見えるので、
+   上下の余白を数字側に寄せてパネルの真ん中で読めるようにする */
+/* 数字は「名前の行を除いた残り」に収める。
+   flex:1 で残りを取り、min-height:0 で縮める。
+   font-size を画面基準(vh)のままにすると、パネルが縮んだときに
+   中身だけ大きく残って名前を押し出すため、上限を控えめにしている。
+   （行の高さより文字が大きい状態にしない） */
 .score-panel .val {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   font-size: min(26vw, 17vh);
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+/* 上に乗る帯は必要な高さだけ取らせ、数字の場所を奪わない */
+.score-panel .sp-head,
+.score-panel .handicap {
+  flex: 0 0 auto;
+}
+/* パネルが縮んだときに名前を上へ押し出さない。
+   中身が入りきらない場合は、はみ出す側を数字にする（数字は overflow:hidden で収まる） */
+.score-panel {
+  overflow: hidden;
 }
 .score-panel.side-a .val {
   color: var(--side-a);
@@ -522,6 +544,16 @@ button:focus-visible {
   flex-direction: column;
   gap: 8px;
   padding: 0 14px 10px;
+}
+/* 交代・補助フラグの置き場。盤面と同じ体裁にする */
+.play-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.play-fixed:empty {
+  display: none;
 }
 
 .tap-hint {
@@ -1121,6 +1153,28 @@ button.danger {
   padding: 0 6px;
 }
 
+/* 選んだ人を塗りつぶして白文字にする。
+   誰を選んだのかが一目で分かるようにするため（左＝青／右＝赤）。
+   色はスコアパネルと同じ割り当てにして、画面ごとに食い違わないようにする */
+.picker-chip.is-chosen {
+  color: #ffffff;
+  font-weight: 900;
+}
+.picker-chip.is-chosen.side-a {
+  background: var(--side-a);
+  border-color: var(--side-a);
+}
+.picker-chip.is-chosen.side-b {
+  background: var(--side-b);
+  border-color: var(--side-b);
+}
+/* 塗った上ではSLタグが読みにくくなるので、白抜きに寄せる */
+.picker-chip.is-chosen .pc-sl {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.28);
+  border-color: #ffffff;
+}
+
 .sl-field {
   margin-bottom: 12px;
 }
@@ -1609,18 +1663,22 @@ body {
 /* ローテーションは盤面が縦を大きく使うため、
    スコアが画面外へ押し出されないよう各部を詰める。
    数字は小さくしても、パネル自体は必ず見えている状態を保つ */
+/* ローテーション等の盤面つき種目。
+   #screenMatch 側の指定より後ろ・同じ強さで書かないと効かないため、
+   セレクタを #screenMatch.grid-mode に合わせている（下の方に再掲あり） */
 .screen.grid-mode .scoreboard {
-  flex: 0 0 auto;
-  gap: 8px;
-  padding: 10px 14px 4px;
+  gap: 6px;
+  padding: 8px 14px 4px;
 }
 .screen.grid-mode .score-panel {
-  flex: 0 0 auto;
-  min-height: 0;
+  /* 名前の行と数字が両方入る高さ。56px だと数字がはみ出して消える */
+  flex: 1 1 0;
+  min-height: 78px;
   padding: 6px 12px;
 }
 .screen.grid-mode .score-panel .val {
-  font-size: min(13vw, 8vh);
+  /* パネルの高さ(78px)から名前の行を引いた残りに収まる大きさにする */
+  font-size: min(13vw, 6vh, 44px);
 }
 .screen.grid-mode .score-panel .name {
   font-size: 17px;
@@ -1683,10 +1741,21 @@ body {
   animation: swap-flash 420ms ease-out;
 }
 
-/* 撞いている側のパネルに印を付ける */
+/* 撞いている側のパネルに印を付ける。
+   点線を地と同じ黒にすると白いパネルの上で枠線と紛れるため、
+   その側の色（左＝青／右＝橙）で塗り、太さも上げて離れても分かるようにする */
 .score-panel.is-turn {
-  outline: 3px dashed var(--ink);
-  outline-offset: -7px;
+  outline: 5px dashed var(--turn-mark, var(--side-a));
+  outline-offset: -8px;
+  background: var(--turn-tint, #eef4ff);
+}
+.score-panel.side-a.is-turn {
+  --turn-mark: var(--side-a);
+  --turn-tint: #e8f1ff;
+}
+.score-panel.side-b.is-turn {
+  --turn-mark: #c26a00;
+  --turn-tint: #fff2e0;
 }
 
 /* 予約中の補助フラグ */
@@ -1773,24 +1842,28 @@ body {
 .sheet-side.side-a .sh-name { color: var(--side-a); }
 .sheet-side.side-b .sh-name { color: #c26a00; }
 
-/* 得点マス。1点=1マスで消していく（JPA公式シートと同じ） */
+/* 得点マス。1点=1マスで消していく（JPA公式シートと同じ）。
+   10列の格子に固定して、数字が詰まって重なるのを防ぐ。
+   横幅に追随させつつ最低32pxを確保し、文字も読める大きさまで上げる */
 .sheet-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 3px;
 }
 .sheet-cell {
-  width: 22px;
-  height: 20px;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: var(--text-dim);
   border: 1px solid var(--ink);
   background: var(--surface);
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
 }
 .sheet-cell.filled {
   background: var(--side-a);
@@ -1950,6 +2023,10 @@ button,
 }
 #screenMatch .play-area {
   gap: 6px;
+  padding: 0 14px 6px;
+}
+#screenMatch .play-fixed {
+  gap: 6px;
   padding: 0 14px 8px;
 }
 #screenMatch .bottom-bar {
@@ -1968,22 +2045,169 @@ button,
 }
 #screenMatch .scoreboard {
   flex: 1 1 auto;
-  min-height: 150px;
+  /* 縦の短い端末では固定の下限が盤面のボタンを画面外へ押し出すため、
+     画面の高さに追随させる。スコアが読める最低限（110px）は残す。
+     overflow:hidden は付けない——中身（2つ目のパネルや帯）が
+     切り落とされて「あるのに見えない」状態になるため */
+  min-height: clamp(110px, 22vh, 150px);
   overflow: hidden;
+}
+/* 盤面つきの種目（ローテーション）は、スコアボードの中に
+   パネル2つと帯（ラック情報・ブレイク・ターン）が全部入る。
+   高さを頭打ちにすると2つ目のパネルや帯が切り落とされて
+   「あるのに見えない」状態になるので、中身ぶんの高さを取らせる。
+   足りない縦は盤面（play-area）側がスクロールして吸収する */
+#screenMatch.grid-mode .scoreboard {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+/* 縦の短い端末では、スコアボードの中の帯（ラック情報・ブレイク・ターン）を
+   詰めて盤面の球ボタンぶんの高さを空ける。
+   パネルと帯は全部見えたまま、文字だけ小さくする */
+@media (max-height: 820px) {
+  #screenMatch.grid-mode .scoreboard {
+    gap: 4px;
+    padding: 6px 14px 2px;
+  }
+  /* 縦が足りないときは、パネルを「名前と数字を横に並べた1行」にする。
+     縦に積むと、名前・数字・進捗バーで3段ぶんの高さが要り、
+     どれかが必ず切れる。横に並べれば1段で収まり、両方とも読める */
+  #screenMatch.grid-mode .score-panel {
+    min-height: 52px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+  }
+  #screenMatch.grid-mode .score-panel .sp-head {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #screenMatch.grid-mode .score-panel .val {
+    flex: 0 0 auto;
+    font-size: 30px;
+    min-height: 0;
+  }
+  /* 進捗バーは横並びでは置き場が無いので、狭いときは出さない
+     （残り何点かは「/ 61」の表示で分かる） */
+  #screenMatch.grid-mode .score-panel .progress {
+    display: none;
+  }
+  #screenMatch.grid-mode .meta-line,
+  #screenMatch.grid-mode .break-banner,
+  #screenMatch.grid-mode .turn-banner {
+    padding: 2px 10px;
+    font-size: 13px;
+  }
+  #screenMatch.grid-mode .turn-banner .tb-name,
+  #screenMatch.grid-mode .break-banner .bb-name {
+    font-size: 15px;
+  }
+  /* 球のボタンも詰める。タップ目標の下限（44px）は必ず超えたまま、
+     3段の盤面が1画面に収まる高さまで下げる */
+  #screenMatch.grid-mode .ball-btn {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  #screenMatch.grid-mode .ball-grid {
+    gap: 4px;
+  }
+  /* 「◯◯が入れた球を押してください」の案内は、
+     場所が足りないときは球のボタンを優先して隠す */
+  #screenMatch.grid-mode .tap-hint {
+    display: none;
+  }
+  /* 盤面つきの種目で縦が足りないときは、重複している帯を落とす。
+     「いまの番」はパネルの点線と枠の色で、ブレイク権は BREAK の印で
+     すでに分かるため、帯が無くても情報は失われない。
+     （ラック番号とブレイク入れ替えボタンのある meta-line は残す） */
+  #screenMatch.grid-mode .break-banner,
+  #screenMatch.grid-mode .turn-banner {
+    display: none;
+  }
 }
 #screenMatch .break-banner,
 #screenMatch .turn-banner,
 #screenMatch .shotclock,
 #screenMatch .chessclock,
 #screenMatch .sheet-area,
-#screenMatch .play-area,
 #screenMatch .bottom-bar {
   flex: 0 0 auto;
 }
-/* スコアシートは中身が多いので、ここだけスクロールさせる */
-#screenMatch .sheet-area {
-  max-height: 34vh;
+/* 盤面（ローテーション等の球ボタン）は縦を大きく取る。
+   縮めないままだと、縦の短い端末で下部ボタンを画面の外へ押し出すため、
+   入りきらないときはここをスクロールさせる */
+#screenMatch .play-area {
+  /* 盤面（球のボタン・ボウラードの表）は縦に長い。
+     入りきらないときだけ縮んでスクロールする */
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
+}
+/* 交代と補助フラグは縮めない。常に押せる位置に残す */
+#screenMatch .play-fixed {
+  flex: 0 0 auto;
+}
+/* 盤面が入りきる高さがあるなら、スコアボードに吸わせず盤面へ回す。
+   flex-basis を auto のままにすると、スコアボードが中身ぶんの高さを
+   先に確保してしまい、盤面のボタンが隠れる */
+#screenMatch .scoreboard {
+  flex: 1 1 0;
+}
+/* スコアシートは中身が多いので、ここだけスクロールさせる。
+   マスを読める大きさにしたぶん縦に伸びるため、取り分を抑える。
+   ここを広げると盤面（マスワリ等のボタン）が押し出されて見えなくなるので、
+   「シートは見出し＋数行が見えれば足りる」側に倒している */
+#screenMatch .sheet-area {
+  max-height: 19vh;
+  overflow-y: auto;
+}
+/* 縦が短い端末ではシートの取り分をさらに削り、下部ボタンを画面内に残す */
+@media (max-height: 700px) {
+  #screenMatch .sheet-area {
+    max-height: 15vh;
+  }
+  /* 盤面の球ボタンも詰めて、1画面に収まる余地を作る */
+  #screenMatch .play-area {
+    gap: 4px;
+  }
+  #screenMatch .play-fixed {
+    gap: 4px;
+    padding-bottom: 6px;
+  }
+  #screenMatch .tap-hint {
+    display: none; /* 場所が足りないときは説明よりボタンを優先する */
+  }
+}
+/* スコアシートを出しているときは、パネルが潰れて
+   名前が上に切れ・数字が下にはみ出すのを防ぐ。
+   数字はパネルの高さに追随させる（vhだと画面基準になり収まらない） */
+#screenMatch.has-sheet .scoreboard {
+  /* 縦の短い端末（375x667 など）では固定の下限が入ると
+     スコアボードが縮めず、下部ボタンが画面の外へ押し出される。
+     画面の高さに追随させて、狭いときは素直に縮ませる */
+  min-height: min(200px, 24vh);
+}
+#screenMatch.has-sheet .score-panel {
+  /* 名前の帯と数字が両方入る高さを確保する。
+     足りないと justify-content:center が上下へはみ出させ、名前が切れる */
+  min-height: 96px;
+  padding: 6px 12px;
+  justify-content: flex-start;
+  gap: 2px;
+}
+#screenMatch.has-sheet .score-panel .val {
+  font-size: min(18vw, 52px);
+}
+#screenMatch.has-sheet .score-panel .name {
+  font-size: 16px;
+}
+#screenMatch.has-sheet .score-panel .sp-head {
+  min-height: 22px;
+}
+/* 進捗バーはシート表示中は情報が重複するので薄くして場所を空ける */
+#screenMatch.has-sheet .score-panel .progress {
+  height: 6px;
 }
 
 /* 試合中は1画面に収める。
@@ -2185,8 +2409,11 @@ body.match-active .app {
 /* 1人用の種目（ボウラード）。
    相手の欄が無いぶん、スコアとスコア表に縦を回す */
 #screenMatch.solo-mode .scoreboard {
-  flex: 0 0 auto;
+  /* 1人用は上を詰めて盤面（10フレームの表とピンのボタン）を優先する。
+     0 0 auto のままだと縮めず、縦の短い端末でボタンが画面外に出る */
+  flex: 0 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 #screenMatch.solo-mode .score-panel {
   min-height: 0;
@@ -2196,8 +2423,12 @@ body.match-active .app {
   font-size: min(18vw, 11vh);
 }
 #screenMatch.solo-mode .sheet-area {
+  /* ボウラードの10フレーム表。余白を全部吸うと投球ボタン（1〜10）が
+     画面の外に出て押せなくなるため、盤面が必要な高さを取ったあとの
+     残りだけを使う（flex-basis を 0 にして、伸びる側にだけ回す） */
   max-height: none;
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-height: 84px;
   overflow-y: auto;
 }
 #screenMatch.solo-mode .meta-line {

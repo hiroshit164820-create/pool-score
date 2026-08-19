@@ -29,12 +29,17 @@ const SHEET = (function () {
   function render(match, st) {
     const area = $("sheetArea");
     if (!area) return;
+    const screen = $("screenMatch");
     const kind = kindFor(match);
     if (!kind) {
       area.hidden = true;
+      // シート無しの通常配置に戻す
+      if (screen) screen.classList.remove("has-sheet");
       return;
     }
     area.hidden = false;
+    // シートが縦を取るぶん、スコアパネルを詰める配置に切り替える
+    if (screen) screen.classList.add("has-sheet");
     UI.clear(area);
 
     if (kind === "bowlard") renderBowlard(area, match, st);

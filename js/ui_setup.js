@@ -297,9 +297,16 @@ const SETUP = (function () {
    * カテゴリごとの種目選択。
    * 選んだカテゴリだけを開き、ダブルスは切替スイッチにして行数を減らす。
    */
+  /** 注意書きの要素。描き直しで一度DOMから外れるため参照を持っておく */
+  let gameNoteEl = null;
+
   function renderGameGroups() {
     const wrap = $("gameGroups");
     if (!wrap) return;
+    if (!gameNoteEl) gameNoteEl = $("gameNote");
+    // 消される前に外へ退避する（clearは子を取り外すので参照が切れる）
+    if (gameNoteEl && gameNoteEl.parentNode === wrap) wrap.removeChild(gameNoteEl);
+    let noteHost = null;
     UI.clear(wrap);
 
     GAME_GROUPS.forEach(function (grp) {
@@ -362,9 +369,19 @@ const SETUP = (function () {
           );
         }
         body.appendChild(row);
+
+        // 注意書きは選んだ種目のすぐ下に出す。
+        // カテゴリの外（一覧の末尾）に置くと「JPAの説明」に見えてしまう
+        if (active) noteHost = body;
       });
       wrap.appendChild(body);
     });
+
+    // 選択行があればその直下、無ければ元の位置（種目一覧の直後）へ戻す
+    if (gameNoteEl) {
+      if (noteHost) noteHost.appendChild(gameNoteEl);
+      else wrap.parentNode.insertBefore(gameNoteEl, wrap.nextSibling);
+    }
   }
 
   function selectGame(id) {
@@ -613,6 +630,30 @@ const SETUP = (function () {
    * JPA種目のときは、その人に登録されたスキルレベルも一緒に反映する。
    * 手で選び直せるよう、反映後もスキルレベルの選択欄は触れるままにする。
    */
+
+  /**
+   * 名前欄の現在値。描き直しの途中はDOMがまだ揃っていないため、
+   * renderPlayerFields が控えたスナップショットがあればそちらを見る。
+   */
+  let nameSnapshot = null;
+  const NAME_IDS = ["inNameA", "inNameA2", "inNameB", "inNameB2"];
+
+  function currentName(id) {
+    if (nameSnapshot) return (nameSnapshot[id] || "").trim();
+    return readName(id, "");
+  }
+
+  /** いま名前欄に入っている人の一覧（自分の欄は除く）。同じ人の二重選択を防ぐ */
+  function takenNames(exceptId) {
+    const out = [];
+    NAME_IDS.forEach(function (id) {
+      if (id === exceptId) return;
+      const v = currentName(id);
+      if (v) out.push(v);
+    });
+    return out;
+  }
+
   function playerPicker(targetId, side) {
     const players = STORE.listPlayers();
     if (!players.length) return null;
@@ -620,24 +661,33 @@ const SETUP = (function () {
     const wrap = UI.el("div", { class: "picker-wrap" });
     wrap.appendChild(UI.el("div", { class: "picker-label", text: "登録した人から選ぶ" }));
 
+    const taken = takenNames(targetId);
+    const chosen = currentName(targetId);
+
     const chips = UI.el("div", { class: "chips picker" });
     players.forEach(function (p) {
+      // 他の欄で選ばれている人は候補から外す（1人目に選んだ人が2人目に出ない）
+      if (taken.indexOf(p.name) >= 0) return;
       const sk = p.skill || {};
       const slTag = jpaKind() === "eight" ? sk.eight : sk.nine;
+      const isChosen = !!chosen && chosen === p.name;
       chips.appendChild(
         UI.el("button", {
           type: "button",
-          class: "chip small-chip picker-chip",
+          class: "chip small-chip picker-chip"
+            + (isChosen ? " is-chosen side-" + String(side || "a").toLowerCase() : ""),
+          "aria-pressed": String(isChosen),
           onclick: function () {
             const node = $(targetId);
             if (node) node.value = p.name;
             applyPlayerSkill(p, side);
             // ダブルスで1人目を選んだら、続けて2人目を選べるようにする
             const g2 = GAMES[selectedGame];
-            if (g2.playersPerSide === 2 && targetId === "inName" + side && !secondOpen[side]) {
+            if (g2.playersPerSide === 2 && targetId === "inName" + side) {
               secondOpen[side] = true;
-              renderPlayerFields();
             }
+            // 選んだ人を塗り、他の欄の候補から外すために描き直す
+            renderPlayerFields();
           },
         }, [
           UI.el("span", { class: "pc-name", text: p.name }),
@@ -702,6 +752,13 @@ const SETUP = (function () {
   function renderPlayerFields() {
     const g = GAMES[selectedGame];
     const wrap = $("playerFields");
+    // 描き直しで入力中の名前が消えないよう、いまの値を控えてから作り直す
+    const keep = {};
+    NAME_IDS.forEach(function (id) {
+      const n = $(id);
+      if (n) keep[id] = n.value || "";
+    });
+    nameSnapshot = keep;
     UI.clear(wrap);
     const per = g.playersPerSide;
 
@@ -788,6 +845,13 @@ const SETUP = (function () {
         }
       });
     });
+
+    // 控えた値を書き戻す（新しく作った欄には値が入っていないため）
+    Object.keys(keep).forEach(function (id) {
+      const n = $(id);
+      if (n && !n.value && keep[id]) n.value = keep[id];
+    });
+    nameSnapshot = null;
   }
 
   /**

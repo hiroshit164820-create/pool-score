@@ -18,8 +18,8 @@ function isStripeBall(n) {
 const BALL_SETS = {
   // 通常のプール球（多くの店にある標準配色）
   standard: {
-    label: "標準",
-    note: "一般的なプール球の配色です。",
+    label: "標準（パラジウム）",
+    note: "一般的なプール球の配色です。アラミス パラジウムもこの配色です。",
     numberStyle: "circle", // 番号を白い丸の中に置く（一般的な意匠）
     stripeBase: "#f4efe2", // ストライプ球の地色
     stripeOnBase: false, // false = 地が白で帯が色（通常の向き）
