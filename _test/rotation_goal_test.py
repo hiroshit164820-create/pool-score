@@ -111,21 +111,28 @@ with sync_playwright() as p:
     bt_field = pg.locator("#breakTypeToggle").locator("xpath=ancestor::div[@class='field'][1]")
     check(bt_field.is_hidden(), "ブレイク方式の選択は出さない（規程で決まっているため）")
 
-    # 勝利条件は点数制
+    # ローテーションには「何点先取」という決め方が無いので入力を出さない
+    check(pg.locator("#goalArea .goal-picker").count() == 0,
+          "先取点の入力を出さない", pg.locator("#goalArea .goal-picker").count())
     goal_label = pg.text_content("#goalArea") or ""
-    check("点" in goal_label, "勝利条件の単位が点になる", goal_label[:60])
-    check(helpers.goal_value(pg) == 180, "既定はJAPA A級の180点", helpers.goal_value(pg))
+    check("120点" in goal_label, "1ラック120点だと案内される", goal_label[:80])
+    check("61点" in goal_label, "61点で決着すると案内される", goal_label[:80])
 
-    opts_r = pg.locator("#goalArea .goal-picker select.goal-more option").all_text_contents()
-    check(any("120点先取" in o for o in opts_r), "JAPA B級の120点も選べる", opts_r[:8])
+    # 既定の決着点は61点（120点の過半数）
+    goal_default = pg.evaluate("() => null")  # 保存後に確認する
 
-    # 短くして試合を始める（検証を早く終わらせるため）
-    helpers.set_goal(pg, 20)
     pg.fill("#inNameA", "山田")
     pg.fill("#inNameB", "佐藤")
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(500)
     check(pg.is_visible("#screenMatch"), "試合が始まる")
+
+    saved = pg.evaluate("""() => {
+      const idx = JSON.parse(localStorage.getItem('pool_matches_index') || '[]');
+      const m = JSON.parse(localStorage.getItem('pool_match_' + idx[0].id));
+      return m.goal.targets;
+    }""")
+    check(saved["A"] == 61 and saved["B"] == 61, "決着点は61点（120点の過半数）", saved)
 
     # ================================================================
     section("④ 盤面から得点を記録できる")
@@ -187,14 +194,20 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "71_rotation.png"), full_page=False)
 
     # ================================================================
-    section("⑤ ローテーションの決着")
-    # 残りを入れて20点を超えさせる（Aは17点）
+    section("⑤ ローテーションの決着（61点）")
+    # Aは17点。残りの球を全部入れて61点を超えさせる
     pg.click("#turnBtn")
     pg.wait_for_timeout(300)
-    pg.click('#ballGrid .ball-btn[data-ball="4"]')
-    pg.wait_for_timeout(500)
-    check(pg.text_content("#scoreA") == "21", "21点になる", pg.text_content("#scoreA"))
-    check(pg.is_visible("#finishModal"), "20点先取を超えたので終了の確認が出る")
+    for n in [1, 2, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15]:
+        btn = pg.locator('#ballGrid .ball-btn[data-ball="%d"]' % n)
+        if btn.count() and not btn.is_disabled():
+            btn.click()
+            pg.wait_for_timeout(180)
+        if pg.is_visible("#finishModal"):
+            break
+    score = int(pg.text_content("#scoreA") or "0")
+    check(score >= 61, "61点以上になる", score)
+    check(pg.is_visible("#finishModal"), "61点で終了の確認が出る")
 
     # ================================================================
     real = [e for e in errs if "favicon" not in e.lower()]

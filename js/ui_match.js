@@ -215,6 +215,17 @@ const MATCH = (function () {
     render();
     vibrate(30);
 
+    // 交代したことをはっきり伝える。
+    // 押しても画面がほとんど変わらないと「効いていない」と思われる
+    const now = reduceMatch(match);
+    UI.toast(sideName(now.turn) + " の番です");
+    const tb = $("turnBanner");
+    if (tb) {
+      tb.classList.remove("swapped");
+      void tb.offsetWidth;
+      tb.classList.add("swapped");
+    }
+
     if (clock) startClockForCurrentTurn();
   }
 
@@ -339,10 +350,13 @@ const MATCH = (function () {
     });
 
     const after = reduceMatch(match);
+    const prevBreak = st.breakSide || st.firstSide;
+    let nextBreak = null;
+    let bt = null;
     if (!after.winner) {
       // 次のラックを開始する（ブレイク権は方式に従って自動決定）
-      const bt = (match.options && match.options.breakType) || r.base.defaultBreakType;
-      const nextBreak = nextBreakSide(bt, st.breakSide || st.firstSide, side);
+      bt = (match.options && match.options.breakType) || r.base.defaultBreakType;
+      nextBreak = nextBreakSide(bt, prevBreak, side);
       appendEvent(match, {
         t: "RACK_START",
         side: null,
@@ -359,10 +373,45 @@ const MATCH = (function () {
     if (final.winner) {
       vibrate([120, 60, 120, 60, 200]);
       openFinish();
-    } else if (clock) {
-      // ラックが変わったのでエクステンション回数を戻す（既定は1ラック1回）
-      clock.resetRack();
-      startClockForCurrentTurn();
+    } else {
+      // 次のラックに移ったこと、ブレイク権がどうなったかを知らせる。
+      // オルタネートでは自動で入れ替わるので、黙って変わると混乱する
+      announceNextRack(final.rackNo, prevBreak, nextBreak, bt);
+      if (clock) {
+        // ラックが変わったのでエクステンション回数を戻す（既定は1ラック1回）
+        clock.resetRack();
+        startClockForCurrentTurn();
+      }
+    }
+  }
+
+  /**
+   * 次のラックへ移ったことを画面で知らせる。
+   *
+   * ブレイク権が入れ替わった場合はそれも一緒に伝える。
+   * オルタネートブレイクは自動で交代するため、黙って変わると
+   * 誰がブレイクするのか分からなくなる。
+   */
+  function announceNextRack(rackNo, prevBreak, nextBreak, breakType) {
+    const parts = ["ラック " + rackNo + " へ"];
+    if (nextBreak) {
+      if (nextBreak !== prevBreak) {
+        parts.push("ブレイクは " + sideName(nextBreak) + " に交代");
+      } else {
+        parts.push(sideName(nextBreak) + " が続けてブレイク");
+      }
+    }
+    UI.toast(parts.join(" ／ "));
+
+    // バナーを一瞬光らせて、ブレイク権が変わったことを目でも分かるようにする
+    if (nextBreak && nextBreak !== prevBreak) {
+      const banner = $("breakBanner");
+      if (banner) {
+        banner.classList.remove("swapped");
+        void banner.offsetWidth; // アニメーションを再生し直す
+        banner.classList.add("swapped");
+      }
+      vibrate([40, 50, 40]);
     }
   }
 
@@ -546,7 +595,8 @@ const MATCH = (function () {
     const bt = (match.options && match.options.breakType) || r.base.defaultBreakType;
     const btLabel = { winner: "ウィナーズブレイク", alternate: "オルタネートブレイク", continuation: "連続ブレイク" }[bt] || bt;
     const btShort = { winner: "ウィナーズ", alternate: "オルタネート", continuation: "連続" }[bt] || bt;
-    const parts = [match.goal.targets.A + " 対 " + match.goal.targets.B + unit, btShort];
+    const parts = [match.goal.targets.A + " 対 " + match.goal.targets.B + unit];
+    if (!r.base.breakTypeFixed) parts.push(btShort);
     if (match.goal.targets.A !== match.goal.targets.B) parts.push("ハンデ戦");
     if (hasAnyHandicap()) parts.push("ボールハンデ");
     $("matchSubtitle").textContent = parts.join(" ・ ");
@@ -585,6 +635,17 @@ const MATCH = (function () {
 
     $("rackInfo").textContent = "ラック " + Math.max(1, st.rackNo);
 
+    // イニング表示。14-1のように交代回数が実力の指標になる種目で出す
+    const inningNode = $("inningInfo");
+    if (g.showInnings) {
+      inningNode.hidden = false;
+      // 1イニング目を戦っている間は「1イニング目」と出す
+      // （engine は完了した回数を数えるため +1 して表示する）
+      inningNode.textContent = (st.innings + 1) + "イニング目";
+    } else {
+      inningNode.hidden = true;
+    }
+
     // ブレイク権の表示。台の脇から見て一目で分かるよう、名前を大きく出す
     const bs = st.breakSide || st.firstSide;
     $("breakToggleName").textContent = sideName(bs);
@@ -612,15 +673,32 @@ const MATCH = (function () {
       : "ラックを取った側のスコアをタップしてください";
     $("tapHint").hidden = gridMode && !finished;
 
-    // ターン交代ボタン
+    // ターン交代ボタン。
+    // 「いま誰の番か」と「押すと誰に渡るか」を別々に出す。
+    // ボタンの文言だけだと、それが現在なのか次なのか読み取れない
     const turnBtn = $("turnBtn");
     turnBtn.hidden = finished;
-    $("turnNextName").textContent = sideName(st.turn === "A" ? "B" : "A");
+    const curTurn = st.turn || st.breakSide || st.firstSide;
+    $("turnNextName").textContent = sideName(curTurn === "A" ? "B" : "A");
     turnBtn.disabled = finished;
+
+    const turnBanner = $("turnBanner");
+    // イニングを数える種目（JPA・14-1）では特に重要なので必ず出す。
+    // それ以外でも交代ボタンを使うので出しておく
+    turnBanner.hidden = finished;
+    $("turnBannerName").textContent = sideName(curTurn);
+    turnBanner.classList.toggle("side-a", curTurn === "A");
+    turnBanner.classList.toggle("side-b", curTurn === "B");
+    // 撞いている側のパネルにも印を付ける
+    ["A", "B"].forEach(function (sd) {
+      $("panel" + sd).classList.toggle("is-turn", !finished && curTurn === sd);
+    });
 
     // 盤面を使う種目は画面の詰め方を変える（スコアが押し出されないように）
     $("screenMatch").classList.toggle("grid-mode", gridMode);
     renderBallGrid(r, st);
+    renderBowlPad(r, st);
+    if (typeof SHEET !== "undefined") SHEET.render(match, st);
     renderFlagButtons(r.base);
     renderShotClock();
     renderChessClock();
@@ -719,6 +797,96 @@ const MATCH = (function () {
     }
   }
 
+  /** ボウラードか（1人用・フレーム制） */
+  function usesBowlPad(r) {
+    return r.scoring.kind === "bowling";
+  }
+
+  /**
+   * ボウラードの投球入力。
+   * 「今の投球で何個入れたか」を押す。残り球数までしか押せない。
+   */
+  function renderBowlPad(r, st) {
+    const wrap = $("bowlPad");
+    if (!usesBowlPad(r)) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    UI.clear(wrap);
+
+    if (st.winner) {
+      wrap.appendChild(UI.el("p", { class: "hint", text: "全10フレームが終わりました。" }));
+      return;
+    }
+
+    const cfg = { frames: r.scoring.frames, pinsPerFrame: r.scoring.pinsPerFrame };
+    const throws = SHEET.bowlardThrows(match);
+    const sc = buildBowlardScore(throws, cfg);
+    const left = bowlardRemainingPins(throws, cfg);
+
+    // 何フレームの何投目か
+    let frameNo = sc.frames.length;
+    for (let i = 0; i < sc.frames.length; i++) {
+      if (sc.frames[i].score === null || !sc.frames[i].throws.length) { frameNo = i + 1; break; }
+    }
+    wrap.appendChild(
+      UI.el("p", { class: "bp-who", text: frameNo + "フレーム目：入れた球の数を押してください" })
+    );
+
+    const pad = UI.el("div", { class: "bp-nums" });
+    for (let n = 0; n <= left; n++) {
+      pad.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "bp-btn" + (n === left && left === cfg.pinsPerFrame ? " strike" : ""),
+          "data-pins": String(n),
+          text: String(n),
+          onclick: UI.guard(function () { recordThrow(n); }),
+        })
+      );
+    }
+    wrap.appendChild(pad);
+  }
+
+  /**
+   * ボウラードの1投を記録する。
+   * 入れた球の数だけ POCKET イベントに球を積む（球番号は得点に影響しない）。
+   */
+  function recordThrow(pins) {
+    const before = reduceMatch(match);
+    if (before.winner) return;
+    const r = resolveGame(match.gameId);
+    const cfg = { frames: r.scoring.frames, pinsPerFrame: r.scoring.pinsPerFrame };
+
+    // 入れた球の数を balls の個数で表す（1..pins の番号を使う）
+    const balls = [];
+    for (let i = 1; i <= pins; i++) balls.push(i);
+    appendEvent(match, { t: "POCKET", side: "A", d: { balls: balls, onBreak: false } });
+
+    const throws = SHEET.bowlardThrows(match);
+    const sc = buildBowlardScore(throws, cfg);
+
+    // 10フレーム全部が確定したら試合終了
+    if (sc.complete) {
+      appendEvent(match, {
+        t: "MATCH_END",
+        side: null,
+        d: { winner: "A", by: "goal", hasUnresolvedError: false },
+      });
+    }
+
+    save();
+    render();
+    bump("A");
+    UI.toast(pins === cfg.pinsPerFrame ? "ストライク！" : pins + "個");
+
+    if (sc.complete) {
+      vibrate([120, 60, 120, 60, 200]);
+      openFinish();
+    }
+  }
+
   /** 補助フラグのボタンを種目に応じて出し分ける */
   function renderFlagButtons(base) {
     const wrap = $("flagButtons");
@@ -751,20 +919,39 @@ const MATCH = (function () {
       { key: "safety", label: "セーフティ", show: base.safetyCallable, hint: "" },
     ];
 
-    defs.filter(function (d) { return d.show; }).forEach(function (d) {
+    const shown = defs.filter(function (d) { return d.show; });
+    shown.forEach(function (d) {
+      const on = !!flags[d.key];
       wrap.appendChild(
         UI.el("button", {
           type: "button",
-          "aria-pressed": String(!!flags[d.key]),
+          "aria-pressed": String(on),
           title: d.hint,
-          text: d.label,
+          // 押した状態が「これから記録される予約」だと分かるようにする。
+          // 押した瞬間には何も起きず、次にラックを取ったときに効くため
+          text: (on ? "✓ " : "") + d.label,
           onclick: function () {
             flags[d.key] = !flags[d.key];
             renderFlagButtons(base);
+            if (flags[d.key]) {
+              UI.toast(d.label + "：このあとラックを取った側に記録します。");
+            }
           },
         })
       );
     });
+
+    // 予約中のものがあれば、その場に文章で出しておく
+    const on = shown.filter(function (d) { return flags[d.key]; });
+    if (on.length) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint flag-pending",
+          text: on.map(function (d) { return d.label; }).join("・")
+            + " を付けて記録します。スコアをタップしてください。",
+        })
+      );
+    }
 
     if (!wrap.children.length) {
       wrap.appendChild(

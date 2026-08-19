@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- user-scalable=no: スコアを素早く連打したときにダブルタップ拡大が
+     起きないようにする。台の脇で連打する道具なので拡大されると使えない。
+     文字サイズは16px以上を確保しているため、拡大できなくても読める -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#c84c0c">
 <title>ビリヤードスコア記録</title>
 <link rel="manifest" href="manifest.json">
@@ -170,6 +173,7 @@
 
       <div class="meta-line">
         <span id="rackInfo">ラック 1</span>
+        <span id="inningInfo" class="inning-info" hidden></span>
         <button id="breakToggleBtn" class="break-toggle">
           <span class="bt-label">ブレイク</span>
           <span class="bt-name" id="breakToggleName">—</span>
@@ -181,7 +185,17 @@
         <span class="bb-icon" aria-hidden="true"></span>
         <span class="bb-text"><b id="breakBannerName">—</b> のブレイク</span>
       </div>
+
+      <!-- いま誰が撞いているか。JPAのようにイニングを数える種目では
+           これが分からないと記録できない -->
+      <div class="turn-banner" id="turnBanner" hidden>
+        <span class="tb-label">いまの番</span>
+        <b class="tb-name" id="turnBannerName">—</b>
+      </div>
     </div>
+
+    <!-- 公式スコアシートに沿った表示（JPA・ボウラード） -->
+    <div id="sheetArea" class="sheet-area" hidden></div>
 
     <div id="shotClockBar" class="shotclock hidden">
       <span class="time" id="scTime">45</span>
@@ -210,6 +224,9 @@
       <!-- 球ごとに点が違う種目（ローテーション）で使う盤面。
            どの球を入れたかを押して記録する -->
       <div id="ballGrid" class="ball-grid" hidden></div>
+
+      <!-- ボウラードの投球入力（何個入れたかを押す） -->
+      <div id="bowlPad" class="bowl-pad" hidden></div>
       <button id="turnBtn" class="turn-btn">交代 → <span id="turnNextName">相手</span></button>
       <div id="flagButtons" class="flag-buttons"></div>
     </div>
@@ -334,6 +351,7 @@
 <script src="js/chessclock.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui_setup.js"></script>
+<script src="js/ui_sheet.js"></script>
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>

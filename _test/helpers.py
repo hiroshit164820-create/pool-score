@@ -17,6 +17,7 @@ GROUP_OF = {
     "8ball": "standard",
     "rotation": "standard",
     "straight": "standard",
+    "bowlard": "standard",
     "jpa_9ball": "jpa",
     "jpa_9ball_doubles": "jpa",
     "jpa_8ball": "jpa",
@@ -187,3 +188,28 @@ def goal_value(page, side=None):
     sel = picker.locator("select.goal-more")
     v = sel.input_value()
     return int(v) if v else None
+
+
+def open_second_member(page, side):
+    """
+    ダブルスの2人目の欄を出す。
+
+    1人目が決まってから出す作りなので、
+    「＋ 2人目を選ぶ」を押すか、1人目を入力する。
+    """
+    sel = "#inName%s2" % side
+    if page.locator(sel).count():
+        return
+    btn = page.locator('.team-field:has(#inName%s) .add-member' % side)
+    if btn.count():
+        btn.click()
+        page.wait_for_timeout(200)
+
+
+def fill_doubles(page, side, name1, name2):
+    """ダブルスの2人を入力する（2人目の欄を出してから入れる）"""
+    page.fill("#inName%s" % side, name1)
+    page.wait_for_timeout(200)
+    open_second_member(page, side)
+    page.fill("#inName%s2" % side, name2)
+    page.wait_for_timeout(150)

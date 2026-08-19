@@ -750,6 +750,93 @@ section("ボールハンデ: 両側とも無ハンデならラック集計のま
 }
 
 /* ============================================================ */
+section("ボウラード: ボウリングと同じ計算になる");
+{
+  const cfg = { frames: 10, pinsPerFrame: 10 };
+
+  // パーフェクト: 全部ストライク（12投）= 300点
+  const perfect = [10,10,10,10,10,10,10,10,10,10,10,10];
+  eq(app.buildBowlardScore(perfect, cfg).total, 300, "オールストライクで300点");
+  eq(app.buildBowlardScore(perfect, cfg).complete, true, "完了として扱う");
+
+  // 全部9本+ミス(0) = 90点
+  const nines = [];
+  for (let f = 0; f < 10; f++) { nines.push(9, 0); }
+  eq(app.buildBowlardScore(nines, cfg).total, 90, "9本+ミスを10回で90点");
+
+  // 全部スペア(5,5)＋最後に5 = 150点
+  const spares = [];
+  for (let f = 0; f < 10; f++) { spares.push(5, 5); }
+  spares.push(5);
+  eq(app.buildBowlardScore(spares, cfg).total, 150, "オールスペア(5-5)で150点");
+
+  // 1投も入らない = 0点
+  const gutter = [];
+  for (let f = 0; f < 10; f++) { gutter.push(0, 0); }
+  eq(app.buildBowlardScore(gutter, cfg).total, 0, "1個も入らなければ0点");
+}
+
+/* ============================================================ */
+section("ボウラード: ストライクとスペアのボーナス");
+{
+  const cfg = { frames: 10, pinsPerFrame: 10 };
+
+  // 1F ストライク → 次の2投(3,4)がボーナス = 17点
+  const r = app.buildBowlardScore([10, 3, 4], cfg);
+  eq(r.frames[0].kind, "strike", "1フレーム目はストライク");
+  eq(r.frames[0].score, 17, "ストライクは10+3+4=17");
+  eq(r.frames[1].score, 24, "2フレーム目は17+7=24");
+
+  // スペア → 次の1投がボーナス
+  const r2 = app.buildBowlardScore([6, 4, 5, 2], cfg);
+  eq(r2.frames[0].kind, "spare", "6+4はスペア");
+  eq(r2.frames[0].score, 15, "スペアは10+5=15");
+  eq(r2.frames[1].score, 22, "2フレーム目は15+7=22");
+
+  // オープンフレーム
+  const r3 = app.buildBowlardScore([3, 4], cfg);
+  eq(r3.frames[0].kind, "open", "10未満はオープン");
+  eq(r3.frames[0].score, 7, "そのまま7点");
+
+  // ボーナスが未確定のうちは score を出さない
+  const r4 = app.buildBowlardScore([10], cfg);
+  eq(r4.frames[0].score, null, "次の2投が無いうちは点数を確定させない");
+  eq(r4.complete, false, "未完了");
+}
+
+/* ============================================================ */
+section("ボウラード: 10フレーム目の扱い");
+{
+  const cfg = { frames: 10, pinsPerFrame: 10 };
+  // 9フレームまで0点、10フレーム目でストライク→3投
+  const t = [];
+  for (let f = 0; f < 9; f++) { t.push(0, 0); }
+  t.push(10, 10, 10);
+  const r = app.buildBowlardScore(t, cfg);
+  eq(r.total, 30, "10フレーム目のオールストライクは30点");
+  eq(r.complete, true, "3投で完了");
+
+  // 10フレーム目がオープンなら2投で終わり
+  const t2 = [];
+  for (let f = 0; f < 9; f++) { t2.push(0, 0); }
+  t2.push(3, 4);
+  const r2 = app.buildBowlardScore(t2, cfg);
+  eq(r2.total, 7, "オープンは2投で7点");
+  eq(r2.complete, true, "2投で完了");
+}
+
+/* ============================================================ */
+section("ボウラード: 次の投球で入れられる残り球数");
+{
+  const cfg = { frames: 10, pinsPerFrame: 10 };
+  eq(app.bowlardRemainingPins([], cfg), 10, "最初は10個");
+  eq(app.bowlardRemainingPins([3], cfg), 7, "3個入れたら残り7個");
+  eq(app.bowlardRemainingPins([3, 4], cfg), 10, "フレームが変わると10個に戻る");
+  eq(app.bowlardRemainingPins([10], cfg), 10, "ストライクの次も10個");
+  eq(app.bowlardRemainingPins([6, 4], cfg), 10, "スペアの次も10個");
+}
+
+/* ============================================================ */
 console.log("\n========================================");
 console.log("成功: " + pass + " / 失敗: " + fail);
 if (failures.length) {

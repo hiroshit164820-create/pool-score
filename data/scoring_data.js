@@ -75,6 +75,15 @@ const SCORING = {
     badBreakPenalty: -2, // 第4項: オープニングブレイクが正常でない場合は2点減点
   },
 
+  // ボウラード: ボウリングと同じ計算。
+  // ストライク=10+次の2投、スペア=10+次の1投、10フレーム制で最高300点
+  bowlard: {
+    kind: "bowling",
+    frames: 10,
+    pinsPerFrame: 10,
+    throwsPerFrame: 2,
+  },
+
   // カイルン: 3ステップを順に完遂して1点。唯一の減点あり
   step: {
     kind: "stepMachine",

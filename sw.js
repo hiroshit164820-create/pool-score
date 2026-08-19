@@ -8,7 +8,7 @@
  *   CACHE_VERSION を上げると古いキャッシュを捨てて入れ替える。
  *   ファイルを変更したときは必ずこの数字を上げること。
  */
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = "pool-score-" + CACHE_VERSION;
 
 const ASSETS = [
@@ -27,6 +27,7 @@ const ASSETS = [
   "./js/ui_setup.js",
   "./js/ui_match.js",
   "./js/ui_history.js",
+  "./js/ui_sheet.js",
   "./js/ui_players.js",
   "./js/app.js",
   "./icon-192.png",

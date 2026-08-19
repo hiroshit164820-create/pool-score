@@ -29,6 +29,7 @@ const EXPORTS = [
   "reduceMatch", "applyEvent", "checkWin", "makeScorer",
   "createMatch", "appendEvent", "voidEvent", "undoLast", "nextBreakSide",
   "buildResult", "other", "makeMatchId",
+  "buildBowlardScore", "bowlardRemainingPins", "effectiveScoreKind",
 ];
 
 function loadApp(extraFiles) {

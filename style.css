@@ -1636,3 +1636,366 @@ body {
   min-height: 52px;
   font-size: 18px;
 }
+
+/* ---------- ターン表示 ---------- */
+/* 「いま誰の番か」。JPAのようにイニングを数える種目では必須 */
+.turn-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 14px 0;
+  padding: 6px 14px;
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+}
+.turn-banner[hidden] {
+  display: none;
+}
+.turn-banner .tb-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.turn-banner .tb-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-pixel);
+  font-size: 19px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.turn-banner.side-a { background: #cfe3ff; }
+.turn-banner.side-b { background: #ffd9cc; }
+
+/* 交代・ブレイク交代のときに一瞬光らせる */
+@keyframes swap-flash {
+  0% { background: var(--coin); transform: translateX(0); }
+  30% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+.turn-banner.swapped,
+.break-banner.swapped {
+  animation: swap-flash 420ms ease-out;
+}
+
+/* 撞いている側のパネルに印を付ける */
+.score-panel.is-turn {
+  outline: 3px dashed var(--ink);
+  outline-offset: -7px;
+}
+
+/* 予約中の補助フラグ */
+.flag-pending {
+  flex: 1 0 100%;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 4px 10px;
+  margin-top: 6px;
+}
+
+/* ---------- ダブルスの人数入力 ---------- */
+.team-field .member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.team-field .member-no {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+}
+.add-member {
+  width: 100%;
+  margin-top: 4px;
+  background: var(--surface);
+  border-style: dashed;
+}
+
+/* ---------- スコアシート ---------- */
+.sheet-area {
+  margin: 0 14px 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.sheet-area[hidden] {
+  display: none;
+}
+.sheet-title {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+.sheet-side {
+  margin-bottom: 10px;
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.sheet-head .sh-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-head .sh-sl {
+  font-size: 12px;
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 0 6px;
+}
+.sheet-head .sh-target {
+  font-variant-numeric: tabular-nums;
+}
+.sheet-side.side-a .sh-name { color: var(--side-a); }
+.sheet-side.side-b .sh-name { color: #c26a00; }
+
+/* 得点マス。1点=1マスで消していく（JPA公式シートと同じ） */
+.sheet-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.sheet-cell {
+  width: 22px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  font-variant-numeric: tabular-nums;
+}
+.sheet-cell.filled {
+  background: var(--side-a);
+  color: #fff;
+}
+.side-b .sheet-cell.filled {
+  background: #c26a00;
+}
+/* ラックの区切り（公式シートの×印） */
+.sheet-cell.rack-end {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.sheet-cell.goal {
+  border-width: 3px;
+}
+.sheet-foot {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 800;
+  padding-top: 6px;
+  border-top: 2px solid var(--ink);
+}
+.sheet-src {
+  margin-top: 6px;
+}
+
+/* ---------- ボウラード ---------- */
+.bowl-table {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+.bowl-frame {
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 56px;
+}
+.bowl-frame.pending {
+  background: var(--surface-2);
+}
+.bowl-frame .bf-no {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-dim);
+  padding: 0 3px;
+  border-bottom: 1px solid var(--ink);
+}
+.bowl-frame .bf-marks {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 1px 3px;
+  min-height: 18px;
+}
+.bowl-frame .bf-m {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid var(--ink);
+}
+.bowl-frame .bf-score {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.bowl-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 2px solid var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+.bowl-total b {
+  font-family: var(--font-pixel);
+  font-size: 24px;
+}
+
+/* ボウラードの投球入力 */
+.bowl-pad[hidden] {
+  display: none;
+}
+.bowl-pad .bp-who {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  padding: 4px 10px;
+  text-align: center;
+}
+.bp-nums {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.bp-btn {
+  min-height: 56px;
+  font-family: var(--font-pixel);
+  font-size: 19px;
+  border-radius: 0;
+  background: var(--surface);
+}
+.bp-btn.strike {
+  background: var(--coin);
+}
+
+/* ---------- イニング表示 ---------- */
+.inning-info {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--ink);
+  padding: 1px 8px;
+}
+.inning-info[hidden] {
+  display: none;
+}
+
+/* ---------- ダブルタップ拡大の抑止 ---------- */
+/* touch-action: manipulation はダブルタップズームだけを無効にする
+   （スクロールとピンチは残る）。素早く連打してもズームしない */
+button,
+.score-panel,
+.ball-btn,
+.bp-btn,
+.chip {
+  touch-action: manipulation;
+}
+
+/* 情報の帯（ブレイク・ターン）が増えたぶん、
+   試合画面の縦を詰めて下部ボタンが画面内に収まるようにする。
+   台の脇で使うので「押せるが見えていない」状態を作らない */
+#screenMatch .scoreboard {
+  padding: 10px 14px 4px;
+  gap: 8px;
+}
+#screenMatch .break-banner,
+#screenMatch .turn-banner {
+  padding: 5px 12px;
+}
+#screenMatch .play-area {
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+#screenMatch .bottom-bar {
+  padding-top: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+/* 試合画面は1画面に収める。
+   スコアボードが flex:1 で余白を全部吸うため、下の帯やボタンが増えると
+   画面からはみ出す。画面全体を縦のflexにして、
+   スコアボードだけを縮む側にする（最低限の高さは確保する） */
+#screenMatch {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+#screenMatch .scoreboard {
+  flex: 1 1 auto;
+  min-height: 150px;
+  overflow: hidden;
+}
+#screenMatch .break-banner,
+#screenMatch .turn-banner,
+#screenMatch .shotclock,
+#screenMatch .chessclock,
+#screenMatch .sheet-area,
+#screenMatch .play-area,
+#screenMatch .bottom-bar {
+  flex: 0 0 auto;
+}
+/* スコアシートは中身が多いので、ここだけスクロールさせる */
+#screenMatch .sheet-area {
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+/* 試合中は1画面に収める。
+   .app は min-height:100% で伸びるため、そのままだと
+   帯が増えたぶん下部ボタンが画面の外へ出る。
+   body に印を付けて、試合中だけ高さを固定する */
+body.match-active,
+body.match-active .app {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+body.match-active .app {
+  min-height: 0;
+}

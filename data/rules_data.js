@@ -50,6 +50,24 @@ const BASE_RULES = {
     rackEndsScoring: true,
   },
 
+  bowlard: {
+    label: "ボウラード",
+    // 1フレームに10個の球を並べ、2投（=2イニング）で何個入れるかを数える。
+    // 公式競技ではなく1人用の練習競技。ボウリングのスコア方式をそのまま使う。
+    balls: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    keyBall: null,
+    callShot: true,
+    solo: true, // 1人で行う（対戦しない）
+    frames: 10,
+    throwsPerFrame: 2,
+    defaultBreakType: "continuation",
+    breakTypeFixed: true,
+    hasBreakAce: false,
+    hasMasuwari: false,
+    safetyCallable: false,
+    rackEndsScoring: false,
+  },
+
   rotation: {
     label: "ローテーション",
     balls: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],

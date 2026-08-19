@@ -83,6 +83,8 @@ const UI = (function () {
     Array.prototype.forEach.call(screens, function (node) {
       node.classList.toggle("active", node.id === id);
     });
+    // 試合中は画面を1枚に収める（下部の操作ボタンがはみ出さないように）
+    document.body.classList.toggle("match-active", id === "screenMatch");
     window.scrollTo(0, 0);
   }
 
@@ -126,6 +128,7 @@ const SETUP = (function () {
         { id: "8ball", doubles: null },
         { id: "rotation", doubles: null },
         { id: "straight", doubles: null },
+        { id: "bowlard", doubles: null },
       ],
     },
     {
@@ -213,7 +216,8 @@ const SETUP = (function () {
   }
 
   function renderGames() {
-    renderRecentGames();
+    // 「よく使う種目」は出さない（本人の指示）。
+    // カテゴリを開けばすぐ選べるので、上に重複して並べる意味が薄いため
     renderGameGroups();
   }
 
@@ -364,8 +368,21 @@ const SETUP = (function () {
     }
 
     // 種目に合った既定値にする（ラック先取か点数先取かで桁が違う）
-    const preset = (g.goalPresets && g.goalPresets[0]) || null;
-    if (preset) goalValues = { A: preset.v, B: preset.v };
+    if (g.goalDefault) {
+      goalValues = { A: g.goalDefault, B: g.goalDefault };
+    } else {
+      const preset = (g.goalPresets && g.goalPresets[0]) || null;
+      if (preset) goalValues = { A: preset.v, B: preset.v };
+    }
+    // 種目が変わったらダブルスの段階表示を初期化する
+    secondOpen.A = false;
+    secondOpen.B = false;
+
+    // 先取点を出さない種目ではハンデも使わないので、状態を戻しておく
+    if (g.goalHidden) {
+      goalMode = "same";
+      ballHandicap = { A: null, B: null };
+    }
 
     renderPlayerFields();
     renderGoalArea(); // 中で renderBallHandicap も呼ばれる
@@ -506,6 +523,12 @@ const SETUP = (function () {
             const node = $(targetId);
             if (node) node.value = p.name;
             applyPlayerSkill(p, side);
+            // ダブルスで1人目を選んだら、続けて2人目を選べるようにする
+            const g2 = GAMES[selectedGame];
+            if (g2.playersPerSide === 2 && targetId === "inName" + side && !secondOpen[side]) {
+              secondOpen[side] = true;
+              renderPlayerFields();
+            }
           },
         }, [
           UI.el("span", { class: "pc-name", text: p.name }),
@@ -560,14 +583,25 @@ const SETUP = (function () {
     UI.toast(player.name + " のスキルレベル（SL" + v + "）を反映しました。");
   }
 
+  /**
+   * ダブルスで2人目の欄を出しているか（側ごと）。
+   * 最初から2つ並べると「どっちに誰を入れるのか」が分かりにくいため、
+   * 1人目が決まってから2人目を出す。
+   */
+  const secondOpen = { A: false, B: false };
+
   function renderPlayerFields() {
     const g = GAMES[selectedGame];
     const wrap = $("playerFields");
     UI.clear(wrap);
     const per = g.playersPerSide;
 
-    [["A", "プレーヤーA"], ["B", "プレーヤーB"]].forEach(function (pair) {
+    // 1人用の種目（ボウラード）は相手を入力させない
+    const sides = g.solo ? [["A", "プレーヤー"]] : [["A", "プレーヤーA"], ["B", "プレーヤーB"]];
+
+    sides.forEach(function (pair) {
       const side = pair[0];
+
       if (per === 1) {
         const field = UI.el("div", { class: "field" }, [
           UI.el("label", { text: pair[1] + " の名前" }),
@@ -576,24 +610,74 @@ const SETUP = (function () {
         const picker = playerPicker("inName" + side, side);
         if (picker) field.appendChild(picker);
         wrap.appendChild(field);
-      } else {
-        const field = UI.el("div", { class: "field" }, [
-          UI.el("label", { text: (side === "A" ? "チームA" : "チームB") + " の2人" }),
-          UI.el("div", { class: "row" }, [
-            UI.el("input", { type: "text", id: "inName" + side, placeholder: "1人目" }),
-            UI.el("input", { type: "text", id: "inName" + side + "2", placeholder: "2人目" }),
-          ]),
-        ]);
-        const p1 = playerPicker("inName" + side, side);
-        if (p1) {
-          field.appendChild(UI.el("p", { class: "hint", text: "1人目に入れる" }));
-          field.appendChild(p1);
-          const p2 = playerPicker("inName" + side + "2", side);
-          field.appendChild(UI.el("p", { class: "hint", text: "2人目に入れる" }));
-          field.appendChild(p2);
-        }
-        wrap.appendChild(field);
+        return;
       }
+
+      // ---- ダブルス ----
+      const teamLabel = side === "A" ? "チームA" : "チームB";
+      const field = UI.el("div", { class: "field team-field" });
+      field.appendChild(UI.el("label", { text: teamLabel }));
+
+      // 1人目
+      const in1 = UI.el("input", {
+        type: "text", id: "inName" + side, placeholder: "1人目の名前",
+      });
+      field.appendChild(UI.el("div", { class: "member-row" }, [
+        UI.el("span", { class: "member-no", text: "1" }),
+        in1,
+      ]));
+      const p1 = playerPicker("inName" + side, side);
+      if (p1) field.appendChild(p1);
+
+      // 2人目。1人目が入るまでは「追加」ボタンだけを出す
+      const hasFirst = !!(in1.value || "").trim() || !!readName("inName" + side, "");
+      const showSecond = secondOpen[side] || hasFirst
+        || !!readName("inName" + side + "2", "");
+
+      if (showSecond) {
+        const in2 = UI.el("input", {
+          type: "text", id: "inName" + side + "2", placeholder: "2人目の名前",
+        });
+        field.appendChild(UI.el("div", { class: "member-row" }, [
+          UI.el("span", { class: "member-no", text: "2" }),
+          in2,
+        ]));
+        const p2 = playerPicker("inName" + side + "2", side);
+        if (p2) field.appendChild(p2);
+      } else {
+        field.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "add-member",
+            text: "＋ 2人目を選ぶ",
+            onclick: function () {
+              secondOpen[side] = true;
+              renderPlayerFields();
+            },
+          })
+        );
+      }
+
+      wrap.appendChild(field);
+
+      // 1人目が入力されたら2人目の欄を出す。
+      // 入力のたびに全部描き直すと文字が打てなくなるので、
+      // 「空→何か入った」瞬間だけ描き直す
+      in1.addEventListener("input", function () {
+        const now = !!(in1.value || "").trim();
+        if (now && !secondOpen[side]) {
+          secondOpen[side] = true;
+          const caret = in1.value;
+          renderPlayerFields();
+          const again = $("inName" + side);
+          if (again) {
+            again.value = caret;
+            again.focus();
+            // カーソルを末尾に戻す
+            try { again.setSelectionRange(caret.length, caret.length); } catch (e) { /* 無視 */ }
+          }
+        }
+      });
     });
   }
 
@@ -691,6 +775,7 @@ const SETUP = (function () {
     const unit = bhOn ? "点" : (g.goalType === "racks" ? "ラック" : "点");
 
     // ハンデの有無。ここが「なし」なら左右別の入力もボールハンデも出さない
+    // ※ ローテーションは goalHidden で先取点の入力自体を出さない（後述）
     const modeToggle = UI.el("div", { class: "toggle-group" }, [
       UI.el("button", { type: "button", "data-v": "same", "aria-pressed": String(goalMode === "same"), text: "ハンデなし" }),
       UI.el("button", { type: "button", "data-v": "handicap", "aria-pressed": String(goalMode === "handicap"), text: "ハンデあり" }),
@@ -705,6 +790,18 @@ const SETUP = (function () {
       renderGoalArea();
     });
     wrap.appendChild(UI.el("div", { class: "field" }, [UI.el("label", { text: "ハンデ" }), modeToggle]));
+
+    // 種目によっては先取点の入力自体を出さない（games_data.js の goalHidden）
+    if (g.goalHidden) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: g.goalHiddenNote || "この種目は決まった点数で行います。",
+        })
+      );
+      renderBallHandicap();
+      return;
+    }
 
     if (goalMode === "same") {
       // ハンデなし: 両者共通の先取数を1つ選ぶだけ
@@ -851,6 +948,8 @@ const SETUP = (function () {
         .filter(Boolean);
       return { name: label, playerIds: ids };
     }
+    // 1人用の種目でも、記録の形をそろえるため2側ぶん作る（B側は使わない）
+    if (g.solo) return [one("A", "プレーヤー"), { name: "—", playerIds: [] }];
     return [one("A", "プレーヤーA"), one("B", "プレーヤーB")];
   }
 

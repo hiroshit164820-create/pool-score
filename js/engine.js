@@ -646,3 +646,142 @@ function buildResult(match, now) {
   }
   return result;
 }
+
+/* ============================================================
+ * ボウラード（ボウリング式スコア）
+ *
+ * 1フレームに10個の球を並べ、2投で何個入れるかを数える。
+ *   1投目で10個 = ストライク → 10 + 次の2投ぶん
+ *   2投で10個   = スペア     → 10 + 次の1投ぶん
+ * 10フレーム目だけは、ストライク/スペアのときに投球を足す。
+ *
+ * ボウリングの規則そのままで、ビリヤード固有の規程ではない。
+ * ============================================================ */
+
+/**
+ * 投球の並び（各投で入れた球数の配列）からフレームごとのスコアを組み立てる。
+ *
+ * @param {number[]} throws 各投で入れた球数。ストライクは10が1つ入る
+ * @param {object} cfg      { frames, pinsPerFrame }
+ * @returns {{frames: Array, total: number, complete: boolean}}
+ */
+function buildBowlardScore(throws, cfg) {
+  const nFrames = (cfg && cfg.frames) || 10;
+  const pins = (cfg && cfg.pinsPerFrame) || 10;
+  const t = (throws || []).slice();
+
+  const frames = [];
+  let i = 0;
+  let total = 0;
+
+  for (let f = 0; f < nFrames; f++) {
+    const isLast = f === nFrames - 1;
+    const frame = {
+      no: f + 1,
+      throws: [],
+      kind: null, // "strike" | "spare" | "open" | null(未完了)
+      score: null, // 累計。ボーナスが確定するまで null
+    };
+
+    if (i >= t.length) {
+      frames.push(frame);
+      continue;
+    }
+
+    if (!isLast) {
+      const a = t[i];
+      if (a === pins) {
+        // ストライク。次の2投がボーナス
+        frame.throws = [a];
+        frame.kind = "strike";
+        const b1 = t[i + 1];
+        const b2 = t[i + 2];
+        if (b1 !== undefined && b2 !== undefined) {
+          total += pins + b1 + b2;
+          frame.score = total;
+        }
+        i += 1;
+      } else {
+        const b = t[i + 1];
+        frame.throws = b === undefined ? [a] : [a, b];
+        if (b === undefined) {
+          // 2投目がまだ
+          frames.push(frame);
+          i += 1;
+          continue;
+        }
+        if (a + b === pins) {
+          // スペア。次の1投がボーナス
+          frame.kind = "spare";
+          const b1 = t[i + 2];
+          if (b1 !== undefined) {
+            total += pins + b1;
+            frame.score = total;
+          }
+        } else {
+          frame.kind = "open";
+          total += a + b;
+          frame.score = total;
+        }
+        i += 2;
+      }
+    } else {
+      // 10フレーム目。ストライク/スペアなら3投目まで
+      const a = t[i];
+      const b = t[i + 1];
+      const c = t[i + 2];
+      const got = [a, b, c].filter(function (x) { return x !== undefined; });
+      frame.throws = got;
+
+      const needThree = a === pins || (a !== undefined && b !== undefined && a + b === pins);
+      const done = needThree ? got.length === 3 : got.length === 2;
+      if (done) {
+        frame.kind = a === pins ? "strike" : (a + b === pins ? "spare" : "open");
+        total += got.reduce(function (x, y) { return x + y; }, 0);
+        frame.score = total;
+      }
+      i += got.length;
+    }
+
+    frames.push(frame);
+  }
+
+  const complete = frames.every(function (f) { return f.score !== null; });
+  return { frames: frames, total: total, complete: complete };
+}
+
+/**
+ * 次にその投球で入れられる最大数を返す（入力ボタンの上限に使う）。
+ * 1フレーム目の1投目なら10、1投目で3個入れたあとの2投目なら7。
+ */
+function bowlardRemainingPins(throws, cfg) {
+  const nFrames = (cfg && cfg.frames) || 10;
+  const pins = (cfg && cfg.pinsPerFrame) || 10;
+  const t = (throws || []).slice();
+
+  let i = 0;
+  for (let f = 0; f < nFrames; f++) {
+    const isLast = f === nFrames - 1;
+    if (i >= t.length) return pins; // このフレームの1投目
+
+    if (!isLast) {
+      if (t[i] === pins) { i += 1; continue; }
+      if (t[i + 1] === undefined) return pins - t[i]; // 2投目
+      i += 2;
+    } else {
+      const a = t[i], b = t[i + 1], c = t[i + 2];
+      if (a === undefined) return pins;
+      if (b === undefined) return a === pins ? pins : pins - a;
+      const needThree = a === pins || a + b === pins;
+      if (!needThree) return 0; // 終了
+      if (c === undefined) {
+        // 3投目。直前がストライクなら10本立て直し
+        if (a === pins && b === pins) return pins;
+        if (a === pins) return pins - b;
+        return pins; // スペア後は10本立て直し
+      }
+      return 0;
+    }
+  }
+  return 0;
+}

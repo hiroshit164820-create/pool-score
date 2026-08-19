@@ -73,11 +73,11 @@ with sync_playwright() as p:
     check(any("JPA" in h for h in heads), "「JPA」カテゴリがある", heads)
 
     # 初期状態では「一般」だけが開いている＝一覧が短い
-    check(pg.locator(".game-pick").count() == 5, "最初は一般の5種目だけが見えている",
+    check(pg.locator(".game-pick").count() == 6, "最初は一般の6種目だけが見えている",
           pg.locator(".game-pick").count())
 
     # 畳んだ状態でも9種目すべて選べる
-    check(helpers.count_selectable_games(pg) == 10, "全カテゴリ合わせて10種目選べる",
+    check(helpers.count_selectable_games(pg) == 11, "全カテゴリ合わせて11種目選べる",
           helpers.count_selectable_games(pg))
 
     # ダブルスは切替スイッチになっている（行数を増やさない）
@@ -88,7 +88,14 @@ with sync_playwright() as p:
 
     # ダブルス切替が実際に効く
     helpers.pick_game(pg, "9ball_doubles")
-    check(pg.locator("#inNameA2").count() == 1, "ダブルスにすると2人目の入力欄が出る")
+    # 2人目は1人目が決まってから出す
+    check(pg.locator(".team-field:has(#inNameA) .add-member").count() == 1,
+          "ダブルスにすると2人目を追加するボタンが出る")
+    pg.fill("#inNameA", "山田")
+    pg.wait_for_timeout(300)
+    check(pg.locator("#inNameA2").count() == 1, "1人目を入れると2人目の欄が出る")
+    pg.fill("#inNameA", "")
+    pg.wait_for_timeout(150)
     helpers.pick_game(pg, "9ball")
     check(pg.locator("#inNameA2").count() == 0, "シングルスに戻すと2人目の欄が消える")
     pg.screenshot(path=os.path.join(SHOTS, "50_games.png"), full_page=True)

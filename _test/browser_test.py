@@ -47,7 +47,7 @@ def run():
         # ---------- 初期表示 ----------
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
         # 種目はカテゴリに畳まれている。全部開いたときに9種目選べること
-        check(helpers.count_selectable_games(page) == 10, "種目が10選べる（通常7＋JPA3）",
+        check(helpers.count_selectable_games(page) == 11, "種目が11選べる（通常8＋JPA3）",
               helpers.count_selectable_games(page))
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)
@@ -254,7 +254,14 @@ def run():
         page.wait_for_timeout(300)
         helpers.pick_game(page, "9ball_doubles")
         page.wait_for_timeout(250)
-        check(page.is_visible("#inNameA2"), "ダブルスでは2人目の入力欄が出る")
+        # 2人目は最初から出さず、1人目が決まってから出す
+        check(page.locator("#inNameA2").count() == 0,
+              "ダブルスでも2人目の欄は最初は出ない")
+        check(page.locator(".team-field:has(#inNameA) .add-member").count() == 1,
+              "「2人目を選ぶ」ボタンが出ている")
+        page.fill("#inNameA", "山田")
+        page.wait_for_timeout(300)
+        check(page.is_visible("#inNameA2"), "1人目を入れると2人目の欄が出る")
 
         # ---------- 10ボールでボタンが減ることの確認 ----------
         helpers.pick_game(page, "10ball")

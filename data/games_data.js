@@ -77,12 +77,19 @@ const GAMES = {
     base: "rotation", scoring: "ballValue", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "score",
-    // ※「61点先取」は日本の公式規程(NBA/JAPA)に存在しないため入れない。
-    //   実在する数値はJAPA第71回全日本アマの A級180点 / B級・女子級120点。
-    goalPresets: [
-      { label: "JAPA A級 180点", v: 180 },
-      { label: "JAPA B級/女子級 120点", v: 120 },
-    ],
+    // ローテーションは「何点先取」という決め方をしない種目なので、
+    // 設定画面に先取点の入力を出さない（本人の指示）。
+    //
+    // 1ラック=120点で、過半数の61点を取った時点で相手が追いつけなくなる。
+    // これを既定の決着点にする（数字は 1+2+...+15=120 の過半数という算術で、
+    // 「61点先取」という制度が公式規程にあるという意味ではない）。
+    //
+    // ※ JAPA第71回全日本アマは A級180点 / B級・女子級120点 という
+    //   先取点を定めているが、それは複数ラックを通しての大会規定。
+    goalHidden: true,
+    goalHiddenNote:
+      "ローテーションは1ラック120点です。61点を取った時点で相手が追いつけなくなるため、そこで決着します。",
+    goalDefault: 61,
   },
 
   straight: {
@@ -90,6 +97,10 @@ const GAMES = {
     base: "straight", scoring: "straight", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "score",
+    // 14-1はイニング（交代の回数）が実力の指標になるため画面に出す。
+    // 数え方はJPAと同じで、後攻→先攻に手番が移った時点で1イニング
+    // （engine.js が全種目で数えている。ここは表示するかどうかの指定）
+    showInnings: true,
     // 先取点は大会・場によって決める（規程は数値を固定していない）。
     // 実際によく使われる値をプリセットとして置く。
     goalPresets: [
@@ -97,6 +108,17 @@ const GAMES = {
       { label: "100点先取", v: 100 },
       { label: "150点先取", v: 150 },
     ],
+  },
+
+  bowlard: {
+    label: "ボウラード",
+    base: "bowlard", scoring: "bowlard", goal: "free",
+    playersPerSide: 1, mode: "frame",
+    goalType: "score",
+    solo: true, // 1人用。相手を入力しない
+    goalHidden: true,
+    goalHiddenNote: "ボウラードは10フレームで、最高300点です。先取点はありません。",
+    goalDefault: 300,
   },
 
   kailun: {
