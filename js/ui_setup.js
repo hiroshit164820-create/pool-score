@@ -70,9 +70,10 @@ const UI = (function () {
   }
 
   function showScreen(id) {
-    ["screenSetup", "screenMatch", "screenHistory"].forEach(function (s) {
-      const node = $(s);
-      if (node) node.classList.toggle("active", s === id);
+    // 画面はDOMから拾う（画面を足したときに列挙を直し忘れないように）
+    const screens = document.querySelectorAll("section.screen");
+    Array.prototype.forEach.call(screens, function (node) {
+      node.classList.toggle("active", node.id === id);
     });
     window.scrollTo(0, 0);
   }
@@ -100,18 +101,26 @@ const SETUP = (function () {
   const $ = UI.$;
 
   // Phase 1.0 で出す種目（実装済みのものだけ並べる）
-  const AVAILABLE = ["9ball", "9ball_doubles", "10ball", "10ball_doubles", "8ball", "straight"];
+  // 画面に出す種目。data/games_data.js に定義があるものだけ並べる
+  const AVAILABLE = [
+    "9ball", "9ball_doubles", "10ball", "10ball_doubles", "8ball", "straight",
+    "jpa_9ball", "jpa_9ball_doubles", "jpa_8ball",
+  ];
 
   let selectedGame = "9ball";
   let goalMode = "same"; // same | handicap
   let goalValues = { A: 5, B: 5 };
+  // JPA用。スキルレベルから持ち点を自動算出する
+  let skillLevels = { A: 5, B: 5 };
 
   function init() {
     renderGameChips();
     UI.bindToggle($("breakTypeToggle"), function () {});
     UI.bindToggle($("firstSideToggle"), function () {});
-    UI.bindToggle($("scEnableToggle"), function (v) {
-      $("scDetail").hidden = v !== "on";
+    UI.bindToggle($("clockTypeToggle"), function (v) {
+      // ショットクロックとチェスクロックは同時には使わない
+      $("scDetail").hidden = v !== "shot";
+      $("ccDetail").hidden = v !== "chess";
     });
     UI.bindToggle($("scModeToggle"), function () {});
     $("startMatchBtn").addEventListener("click", UI.guard(startMatch));
@@ -173,6 +182,27 @@ const SETUP = (function () {
     renderGoalArea();
   }
 
+  /** 登録済みプレーヤーを選ぶボタン列。押すと名前欄に入る */
+  function playerPicker(targetId) {
+    const players = STORE.listPlayers();
+    if (!players.length) return null;
+    const chips = UI.el("div", { class: "chips picker" });
+    players.forEach(function (p) {
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip small-chip",
+          text: p.name,
+          onclick: function () {
+            const node = $(targetId);
+            if (node) node.value = p.name;
+          },
+        })
+      );
+    });
+    return chips;
+  }
+
   function renderPlayerFields() {
     const g = GAMES[selectedGame];
     const wrap = $("playerFields");
@@ -182,22 +212,30 @@ const SETUP = (function () {
     [["A", "プレーヤーA"], ["B", "プレーヤーB"]].forEach(function (pair) {
       const side = pair[0];
       if (per === 1) {
-        wrap.appendChild(
-          UI.el("div", { class: "field" }, [
-            UI.el("label", { text: pair[1] + " の名前" }),
-            UI.el("input", { type: "text", id: "inName" + side, placeholder: pair[1] }),
-          ])
-        );
+        const field = UI.el("div", { class: "field" }, [
+          UI.el("label", { text: pair[1] + " の名前" }),
+          UI.el("input", { type: "text", id: "inName" + side, placeholder: pair[1] }),
+        ]);
+        const picker = playerPicker("inName" + side);
+        if (picker) field.appendChild(picker);
+        wrap.appendChild(field);
       } else {
-        wrap.appendChild(
-          UI.el("div", { class: "field" }, [
-            UI.el("label", { text: (side === "A" ? "チームA" : "チームB") + " の2人" }),
-            UI.el("div", { class: "row" }, [
-              UI.el("input", { type: "text", id: "inName" + side, placeholder: "1人目" }),
-              UI.el("input", { type: "text", id: "inName" + side + "2", placeholder: "2人目" }),
-            ]),
-          ])
-        );
+        const field = UI.el("div", { class: "field" }, [
+          UI.el("label", { text: (side === "A" ? "チームA" : "チームB") + " の2人" }),
+          UI.el("div", { class: "row" }, [
+            UI.el("input", { type: "text", id: "inName" + side, placeholder: "1人目" }),
+            UI.el("input", { type: "text", id: "inName" + side + "2", placeholder: "2人目" }),
+          ]),
+        ]);
+        const p1 = playerPicker("inName" + side);
+        if (p1) {
+          field.appendChild(UI.el("p", { class: "hint", text: "1人目に入れる:" }));
+          field.appendChild(p1);
+          const p2 = playerPicker("inName" + side + "2");
+          field.appendChild(UI.el("p", { class: "hint", text: "2人目に入れる:" }));
+          field.appendChild(p2);
+        }
+        wrap.appendChild(field);
       }
     });
   }
@@ -206,6 +244,12 @@ const SETUP = (function () {
     const g = GAMES[selectedGame];
     const wrap = $("goalArea");
     UI.clear(wrap);
+
+    // JPAはスキルレベルから持ち点が決まるため、専用のUIにする
+    if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
+      renderJpaGoalArea(g, wrap);
+      return;
+    }
 
     const unit = g.goalType === "racks" ? "ラック" : "点";
     const presets = g.goalPresets || [];
@@ -276,6 +320,88 @@ const SETUP = (function () {
     }
   }
 
+  /**
+   * JPAの勝利条件UI。
+   * スキルレベルを選ぶと、公式表から持ち点（9ボール）または先取ゲーム数（8ボール）が決まる。
+   * 数値は data/handicap_data.js（JPA公式・APA公式で確認済み）から引く。
+   */
+  function renderJpaGoalArea(g, wrap) {
+    UI.clear(wrap); // 再描画のたびに作り直す（古い表示が残らないように）
+    const is8 = g.goal === "jpaSL8";
+    const isDoubles = g.playersPerSide === 2;
+
+    // 選べるスキルレベルの範囲（8ボールは2〜7、9ボールは1〜9）
+    const range = is8 ? [2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+    ["A", "B"].forEach(function (side) {
+      const chips = UI.el("div", { class: "chips" });
+      range.forEach(function (sl) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            text: "SL" + sl,
+            "aria-pressed": String(skillLevels[side] === sl),
+            onclick: function () {
+              skillLevels[side] = sl;
+              renderJpaGoalArea(g, wrap);
+            },
+          })
+        );
+      });
+      const label = isDoubles
+        ? (side === "A" ? "チームA" : "チームB") + " のスキルレベル（2人の合計）"
+        : (side === "A" ? "プレーヤーA" : "プレーヤーB") + " のスキルレベル";
+      const holder = UI.el("div", { class: "field" }, [UI.el("label", { text: label }), chips]);
+      wrap.appendChild(holder);
+    });
+
+    // 算出結果を表示する
+    let targets = null;
+    let err = null;
+    try {
+      targets = is8
+        ? jpaGoal8Ball(skillLevels.A, skillLevels.B)
+        : jpaGoal9Ball(skillLevels.A, skillLevels.B, isDoubles);
+    } catch (e) {
+      err = e && e.message ? e.message : "算出できません";
+    }
+
+    if (targets) {
+      goalValues = { A: targets.A, B: targets.B };
+      const unit = is8 ? "ゲーム先取" : "点";
+      wrap.appendChild(
+        UI.el("div", { class: "field" }, [
+          UI.el("label", { text: "この組み合わせの勝利条件" }),
+          UI.el("p", {
+            class: "jpa-result",
+            text: "SL" + skillLevels.A + " → " + targets.A + unit + "　／　SL" +
+              skillLevels.B + " → " + targets.B + unit,
+          }),
+        ])
+      );
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: is8
+            ? "JPA（APA）の公式対戦表から自動で決まります。"
+            : "JPA公式のスキルレベル別持ち点から自動で決まります。",
+        })
+      );
+    } else {
+      wrap.appendChild(UI.el("p", { class: "hint warn", text: err || "算出できません" }));
+    }
+
+    if (isDoubles) {
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "ダブルスのスキルレベルは、2人のスキルレベルを足した数です。",
+        })
+      );
+    }
+  }
+
   function readName(id, fallback) {
     const node = $(id);
     const v = node && node.value ? node.value.trim() : "";
@@ -305,12 +431,19 @@ const SETUP = (function () {
     return [one("A", "プレーヤーA"), one("B", "プレーヤーB")];
   }
 
+  function num(id, dflt) {
+    const node = $(id);
+    if (!node) return dflt;
+    const v = parseInt(node.value, 10);
+    return isNaN(v) ? dflt : v;
+  }
+
+  function clockType() {
+    return UI.toggleValue($("clockTypeToggle")) || "none";
+  }
+
   function buildShotClock() {
-    if (UI.toggleValue($("scEnableToggle")) !== "on") return { enabled: false };
-    function num(id, dflt) {
-      const v = parseInt($(id).value, 10);
-      return isNaN(v) ? dflt : v;
-    }
+    if (clockType() !== "shot") return { enabled: false };
     return {
       enabled: true,
       seconds: num("scSeconds", 45),
@@ -324,6 +457,31 @@ const SETUP = (function () {
     };
   }
 
+  function buildChessClock() {
+    if (clockType() !== "chess") return { enabled: false };
+    return {
+      enabled: true,
+      minutes: num("ccMinutes", 30),
+      warnAtSec: num("ccWarn", 60),
+      byoyomiSec: num("ccByoyomi", 0),
+      timeoutLoses: true,
+    };
+  }
+
+  /** 勝利条件（ハンデ含む）を組み立てる */
+  function buildGoal(g) {
+    const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
+    return {
+      type: g.goalType === "racks" || g.goalType === "games" ? "racks" : "score",
+      targets: { A: goalValues.A, B: goalValues.B },
+      source: isJpa ? g.goal : "free",
+      // JPAはチームポイントの算出に敗者のスキルレベルが要るため必ず持たせる
+      meta: isJpa ? { skillLevel: { A: skillLevels.A, B: skillLevels.B } } : {},
+      ballHandicap: { A: null, B: null },
+      raceType: "raceTo",
+    };
+  }
+
   function startMatch() {
     const g = GAMES[selectedGame];
     if (goalValues.A < 1 || goalValues.B < 1) {
@@ -334,17 +492,11 @@ const SETUP = (function () {
     const match = createMatch({
       gameId: selectedGame,
       sides: buildSides(),
-      goal: {
-        type: g.goalType === "racks" ? "racks" : "score",
-        targets: { A: goalValues.A, B: goalValues.B },
-        source: "free",
-        meta: {},
-        ballHandicap: { A: null, B: null },
-        raceType: "raceTo",
-      },
+      goal: buildGoal(g),
       options: {
         breakType: UI.toggleValue($("breakTypeToggle")) || BASE_RULES[g.base].defaultBreakType,
         shotClock: buildShotClock(),
+        chessClock: buildChessClock(),
         inputMode: g.mode,
       },
       firstSide: UI.toggleValue($("firstSideToggle")) || "A",

@@ -725,3 +725,130 @@ button:focus-visible {
     transform: none;
   }
 }
+
+/* ---------- チェスクロック（持ち時間制） ---------- */
+.chessclock {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 0 14px 10px;
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.chessclock.hidden {
+  display: none;
+}
+.chessclock .cc-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+}
+/* いま時間が減っている側をはっきり示す */
+.chessclock .cc-side.active {
+  background: var(--surface);
+  border-color: var(--ink);
+}
+.chessclock .cc-side.warn .cc-time {
+  color: #b45309;
+}
+.chessclock .cc-side.byoyomi .cc-time {
+  color: #b45309;
+}
+.chessclock .cc-side.expired .cc-time {
+  color: var(--danger);
+}
+.chessclock .cc-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chessclock .cc-time {
+  font-size: 26px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.chessclock button {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+/* ---------- ターン交代ボタン ---------- */
+.turn-btn {
+  width: 100%;
+  min-height: 60px;
+  font-size: 17px;
+  background: var(--side-b);
+}
+.turn-btn[hidden] {
+  display: none;
+}
+
+/* ---------- プレーヤー選択チップ ---------- */
+.chips.picker {
+  gap: 8px;
+  margin-top: 8px;
+}
+.chip.small-chip {
+  min-height: 44px;
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+/* ---------- 成績表 ---------- */
+.stat-title {
+  font-size: 15px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--ink);
+}
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 15px;
+}
+.stat-row + .stat-row {
+  border-top: 1px solid rgba(43, 33, 24, 0.12);
+}
+.stat-key {
+  color: var(--text-dim);
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+.stat-val {
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* JPAの算出結果 */
+.jpa-result {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  font-size: 16px;
+  font-weight: 900;
+  text-align: center;
+}

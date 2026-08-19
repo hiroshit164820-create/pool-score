@@ -11,7 +11,8 @@ const MATCH = (function () {
   const $ = UI.$;
 
   let match = null;
-  let clock = null;
+  let clock = null; // ショットクロック
+  let chess = null; // チェスクロック
   let wakeLock = null;
   // 次のラック勝者と一緒に記録する補助フラグ
   let flags = { masuwari: false, breakAce: false, safety: false };
@@ -22,18 +23,26 @@ const MATCH = (function () {
     match = m;
     flags = { masuwari: false, breakAce: false, safety: false };
     setupShotClock();
+    setupChessClock();
     bindOnce();
     render();
     UI.showScreen("screenMatch");
     requestWakeLock();
     // 未決着なら計測を開始する（規程第5章第5条第2項a: 全球停止＝記録操作の時点）
-    if (!reduceMatch(match).winner) startClockForCurrentTurn();
+    if (!reduceMatch(match).winner) {
+      startClockForCurrentTurn();
+      startChessForCurrentTurn();
+    }
   }
 
   function close() {
     if (clock) {
       clock.destroy();
       clock = null;
+    }
+    if (chess) {
+      chess.destroy();
+      chess = null;
     }
     releaseWakeLock();
     match = null;
@@ -66,6 +75,13 @@ const MATCH = (function () {
       if (!clock) return;
       if (!clock.extend()) UI.toast("延長はもう使えません。", "warn");
       renderShotClock();
+    }));
+
+    $("turnBtn").addEventListener("click", UI.guard(onTurnChange));
+    $("ccPauseBtn").addEventListener("click", UI.guard(function () {
+      if (!chess) return;
+      chess.togglePause();
+      renderChessClock();
     }));
 
     $("closeReviseBtn").addEventListener("click", function () { $("reviseModal").hidden = true; });
@@ -109,9 +125,114 @@ const MATCH = (function () {
     $("shotClockBar").classList.remove("hidden");
   }
 
+  /* ---------- チェスクロック ---------- */
+
+  function setupChessClock() {
+    if (chess) chess.destroy();
+    const cfg = (match.options && match.options.chessClock) || { enabled: false };
+    if (!cfg.enabled) {
+      chess = null;
+      $("chessClockBar").classList.add("hidden");
+      return;
+    }
+    chess = createChessClock(cfg, {
+      onTick: function () { renderChessClock(); },
+      onWarn: function (side, sec) {
+        vibrate([80, 60, 80]);
+        UI.toast(sideName(side) + " の残り時間 " + sec + "秒", "warn");
+      },
+      onByoyomi: function (side) {
+        vibrate([120, 60, 120]);
+        UI.toast(sideName(side) + " は秒読みに入りました。", "warn");
+      },
+      onExpire: function (side) {
+        vibrate([200, 80, 200, 80, 200]);
+        appendEvent(match, { t: "SHOT_CLOCK", side: side, d: { event: "chessTimeout" } });
+        if (cfg.timeoutLoses) {
+          // 時間切れ負け。相手の勝ちとして確定させる
+          appendEvent(match, {
+            t: "MATCH_END",
+            side: null,
+            d: { winner: side === "A" ? "B" : "A", by: "time", hasUnresolvedError: false },
+          });
+          save();
+          render();
+          UI.toast(sideName(side) + " の時間切れです。" + sideName(side === "A" ? "B" : "A") + " の勝ちになります。", "danger");
+          openFinish();
+        } else {
+          save();
+          render();
+          UI.toast(sideName(side) + " の持ち時間がなくなりました。", "danger");
+        }
+      },
+    });
+    $("chessClockBar").classList.remove("hidden");
+  }
+
+  function renderChessClock() {
+    if (!chess) return;
+    const s = chess.state();
+    ["A", "B"].forEach(function (side) {
+      $("ccName" + side).textContent = sideName(side);
+      const inByo = s.inByoyomi[side];
+      $("ccTime" + side).textContent = inByo
+        ? "秒読み " + (s.side === side ? s.byoyomiRemainSec : s.byoyomiSec)
+        : chess.fmt(s.remainSec[side]);
+      const node = $("ccSide" + side);
+      node.classList.toggle("active", s.side === side && s.running && !s.paused);
+      node.classList.toggle("warn", !inByo && s.remainSec[side] <= s.warnAtSec);
+      node.classList.toggle("byoyomi", !!inByo);
+      node.classList.toggle("expired", s.expired === side);
+    });
+    $("ccPauseBtn").textContent = s.paused || !s.running ? "再開" : "一時停止";
+    $("ccPauseBtn").disabled = !!s.expired;
+  }
+
+  /** いまターンを持っている側のチェスクロックを動かす */
+  function startChessForCurrentTurn() {
+    if (!chess) return;
+    const st = reduceMatch(match);
+    chess.start(st.turn || st.breakSide || "A");
+    renderChessClock();
+  }
+
+  /** ターン交代（チェスクロックの切替と、イニング計算の土台になる） */
+  function onTurnChange() {
+    const st = reduceMatch(match);
+    if (st.winner) return;
+
+    const from = st.turn;
+    let usedSec = null;
+    if (chess) {
+      const r = chess.switchTurn();
+      usedSec = r.usedSec;
+    }
+    const d = { reason: "miss" };
+    if (usedSec !== null) d.usedSec = usedSec;
+    appendEvent(match, { t: "TURN_END", side: from, d: d });
+
+    save();
+    render();
+    vibrate(30);
+
+    if (clock) startClockForCurrentTurn();
+  }
+
   function startClockForCurrentTurn() {
     if (!clock) return;
     const st = reduceMatch(match);
+    // 直前のショットにかかった時間を記録する（平均タイムの算出に使う）
+    const prev = clock.state();
+    if (prev.running && prev.side) {
+      const used = prev.totalSec - prev.remainSec;
+      if (used > 0) {
+        appendEvent(match, {
+          t: "SHOT_CLOCK",
+          side: prev.side,
+          d: { event: "shot", usedSec: used },
+        });
+      }
+    }
     clock.start(st.turn || st.breakSide || "A");
     renderShotClock();
   }
@@ -372,8 +493,15 @@ const MATCH = (function () {
       ? "球を1個入れるごとに、その人のスコアをタップしてください"
       : "ラックを取った側のスコアをタップしてください";
 
+    // ターン交代ボタン
+    const turnBtn = $("turnBtn");
+    turnBtn.hidden = finished;
+    $("turnNextName").textContent = sideName(st.turn === "A" ? "B" : "A");
+    turnBtn.disabled = finished;
+
     renderFlagButtons(r.base);
     renderShotClock();
+    renderChessClock();
   }
 
   /** 補助フラグのボタンを種目に応じて出し分ける */

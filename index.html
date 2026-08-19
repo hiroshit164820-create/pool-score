@@ -22,7 +22,10 @@
   <section id="screenSetup" class="screen active">
     <div class="topbar">
       <h1>ビリヤードスコア記録</h1>
-      <button id="toHistoryBtn" class="small ghost">履歴</button>
+      <div style="display:flex;gap:6px">
+        <button id="toPlayersBtn2" class="small ghost">選手</button>
+        <button id="toHistoryBtn" class="small ghost">履歴</button>
+      </div>
     </div>
 
     <div class="setup-body">
@@ -53,16 +56,16 @@
         </div>
       </div>
 
-      <div class="section-title">ショットクロック</div>
+      <div class="section-title">時計</div>
       <div class="field">
-        <div class="switch-row">
-          <span class="label-main">この試合で使う</span>
-          <div id="scEnableToggle" class="toggle-group" style="max-width:210px">
-            <button type="button" data-v="off" aria-pressed="true">使わない</button>
-            <button type="button" data-v="on" aria-pressed="false">使う</button>
-          </div>
+        <label>使う時計</label>
+        <div id="clockTypeToggle" class="toggle-group">
+          <button type="button" data-v="none" aria-pressed="true">使わない</button>
+          <button type="button" data-v="shot" aria-pressed="false">ショット<span class="btn-sub">1ショットごと</span></button>
+          <button type="button" data-v="chess" aria-pressed="false">チェス<span class="btn-sub">持ち時間制</span></button>
         </div>
       </div>
+
       <div id="scDetail" hidden>
         <div class="row">
           <div class="field">
@@ -91,6 +94,24 @@
             <button type="button" data-v="auto" aria-pressed="false">自動で延長</button>
           </div>
           <p class="hint">時間切れになると、その時点でファウルとして記録します。</p>
+        </div>
+      </div>
+
+      <div id="ccDetail" hidden>
+        <div class="row">
+          <div class="field">
+            <label>持ち時間（分・1人あたり）</label>
+            <input type="number" id="ccMinutes" value="30" min="1" max="180" step="5">
+          </div>
+          <div class="field">
+            <label>残り何秒で警告</label>
+            <input type="number" id="ccWarn" value="60" min="0" max="300" step="10">
+          </div>
+        </div>
+        <div class="field">
+          <label>秒読み（秒・0なら無し）</label>
+          <input type="number" id="ccByoyomi" value="0" min="0" max="120" step="10">
+          <p class="hint">持ち時間を使い切っても、1回の番ごとにこの秒数だけ撞けます。0にすると使い切った時点で時間切れ負けです。</p>
         </div>
       </div>
 
@@ -147,8 +168,21 @@
       </span>
     </div>
 
+    <div id="chessClockBar" class="chessclock hidden">
+      <div class="cc-side" id="ccSideA">
+        <span class="cc-name" id="ccNameA">A</span>
+        <span class="cc-time" id="ccTimeA">30:00</span>
+      </div>
+      <div class="cc-side" id="ccSideB">
+        <span class="cc-name" id="ccNameB">B</span>
+        <span class="cc-time" id="ccTimeB">30:00</span>
+      </div>
+      <button id="ccPauseBtn" class="small">一時停止</button>
+    </div>
+
     <div class="play-area">
       <p class="tap-hint" id="tapHint">ラックを取った側のスコアをタップしてください</p>
+      <button id="turnBtn" class="turn-btn">交代 → <span id="turnNextName">相手</span></button>
       <div id="flagButtons" class="flag-buttons"></div>
     </div>
 
@@ -171,9 +205,42 @@
     <div class="list" id="historyList"></div>
     <div class="bottom-bar">
       <button id="newMatchBtn" class="primary">新しい試合</button>
+      <button id="toPlayersBtn" class="ghost">プレーヤー</button>
       <button id="importBtn" class="ghost">読み込み</button>
       <input type="file" id="importInput" accept="application/json" hidden>
     </div>
+  </section>
+
+  <!-- ================= プレーヤー ================= -->
+  <section id="screenPlayers" class="screen">
+    <div class="topbar">
+      <h1>プレーヤー</h1>
+      <button id="backFromPlayersBtn" class="small ghost">戻る</button>
+    </div>
+    <div class="list">
+      <div class="field">
+        <label>よく使うプレーヤーを登録</label>
+        <div class="row">
+          <input type="text" id="newPlayerName" placeholder="名前を入力">
+          <button id="addPlayerBtn" class="primary" style="flex:0 0 auto">登録</button>
+        </div>
+        <p class="hint">登録すると、試合を作るときに名前を選べるようになります。</p>
+      </div>
+      <div id="playerList"></div>
+    </div>
+    <div class="bottom-bar">
+      <button id="playersToStatsBtn" class="ghost">成績を見る</button>
+      <button id="playersNewMatchBtn" class="primary">新しい試合</button>
+    </div>
+  </section>
+
+  <!-- ================= 成績 ================= -->
+  <section id="screenStats" class="screen">
+    <div class="topbar">
+      <h1>成績</h1>
+      <button id="backFromStatsBtn" class="small ghost">戻る</button>
+    </div>
+    <div class="list" id="statsBody"></div>
   </section>
 
 </div>
@@ -210,10 +277,12 @@
 <script src="data/handicap_data.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/shotclock.js"></script>
+<script src="js/chessclock.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui_setup.js"></script>
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
+<script src="js/ui_players.js"></script>
 <script src="js/app.js"></script>
 <script>
 // オフラインでも使えるようにする。file:// で開いた場合は登録しない（動かないため）

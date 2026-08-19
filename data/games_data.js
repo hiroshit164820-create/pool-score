@@ -16,6 +16,7 @@ const GAMES = {
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
     goalPresets: [
+      { label: "3先", v: 3 },
       { label: "5先（ゴサキ）", v: 5 },
       { label: "7先（ナナサキ）", v: 7 },
     ],
@@ -27,6 +28,7 @@ const GAMES = {
     playersPerSide: 2, mode: "rack",
     goalType: "racks",
     goalPresets: [
+      { label: "3先", v: 3 },
       { label: "5先", v: 5 },
       { label: "7先", v: 7 },
     ],
@@ -38,6 +40,8 @@ const GAMES = {
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
     goalPresets: [
+      { label: "3先", v: 3 },
+      { label: "5先", v: 5 },
       { label: "7先", v: 7 },
       { label: "8先", v: 8 },
     ],
@@ -49,6 +53,8 @@ const GAMES = {
     playersPerSide: 2, mode: "rack",
     goalType: "racks",
     goalPresets: [
+      { label: "3先", v: 3 },
+      { label: "5先", v: 5 },
       { label: "7先", v: 7 },
       { label: "8先", v: 8 },
     ],
@@ -60,6 +66,7 @@ const GAMES = {
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
     goalPresets: [
+      { label: "3先", v: 3 },
       { label: "5先", v: 5 },
       { label: "7先", v: 7 },
     ],

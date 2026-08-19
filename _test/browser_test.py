@@ -43,7 +43,7 @@ def run():
 
         # ---------- 初期表示 ----------
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
-        check(page.locator("#gameChips .chip").count() == 6, "種目が6つ出ている（9/9D/10/10D/8/14-1）")
+        check(page.locator("#gameChips .chip").count() == 9, "種目が9つ出ている（通常6＋JPA3）")
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)
 
@@ -76,7 +76,7 @@ def run():
         page.fill("#goalB", "2")
 
         # ショットクロックを使う
-        page.click('#scEnableToggle button[data-v="on"]')
+        page.click('#clockTypeToggle button[data-v="shot"]')
         page.wait_for_timeout(150)
         check(page.is_visible("#scSeconds"), "ショットクロックONで詳細設定が出る")
         page.fill("#scSeconds", "30")

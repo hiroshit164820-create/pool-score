@@ -5,16 +5,24 @@ echo ========================================
 echo  ビリヤードスコア記録 検証
 echo ========================================
 echo.
-echo [1/3] スコア計算エンジン
+echo [1/5] スコア計算エンジン
 node _test\engine.test.js
 if errorlevel 1 goto failed
 echo.
-echo [2/3] ショットクロック
+echo [2/5] ショットクロック
 node _test\shotclock.test.js
 if errorlevel 1 goto failed
 echo.
-echo [3/3] 実ブラウザでの通し確認
+echo [3/5] チェスクロック
+node _test\chessclock.test.js
+if errorlevel 1 goto failed
+echo.
+echo [4/5] 実ブラウザでの通し確認
 python _test\browser_test.py
+if errorlevel 1 goto failed
+echo.
+echo [5/5] 新機能（JPA・プレーヤー・成績・時計）
+python _test\features_test.py
 if errorlevel 1 goto failed
 echo.
 echo ========================================

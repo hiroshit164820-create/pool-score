@@ -221,6 +221,11 @@ function emptySideStats() {
     stepCycles: 0,
     penaltyPoints: 0, // 減点の合計（14-1・カイルン）
     threeFouls: 0,
+    // ショットクロックの平均タイム算出用
+    shotClockShots: 0, // 計測できたショット数
+    shotClockTotalSec: 0, // その合計秒数
+    turns: 0, // ターンを取った回数
+    chessTimeUsedSec: 0, // チェスクロックで使った時間
   };
 }
 
@@ -438,6 +443,11 @@ function applyTurnEnd(st, ev, ctx) {
   const reason = (ev.d && ev.d.reason) || "miss";
   const from = ev.side || st.turn;
   if (reason === "safety" && ctx.base.safetyCallable) st.stats[from].safety++;
+  st.stats[from].turns++;
+  // チェスクロック使用時、このターンで使った時間
+  if (ev.d && typeof ev.d.usedSec === "number") {
+    st.stats[from].chessTimeUsedSec += ev.d.usedSec;
+  }
 
   const to = other(from);
   // イニング（JPA規則）: 後攻→先攻にターンが移った時に1イニング。ラックを跨いでも継続
@@ -544,8 +554,14 @@ function applyDeadBalls(st, ev) {
 function applyShotClock(st, ev) {
   if (!ev.side) return;
   const kind = ev.d && ev.d.event;
-  if (kind === "violation") st.stats[ev.side].shotClockViolations++;
-  if (kind === "extension") st.stats[ev.side].shotClockExtensions++;
+  const s = st.stats[ev.side];
+  if (kind === "violation") s.shotClockViolations++;
+  if (kind === "extension") s.shotClockExtensions++;
+  // 1ショットにかかった秒数（平均タイムの算出に使う）
+  if (kind === "shot" && typeof ev.d.usedSec === "number") {
+    s.shotClockShots++;
+    s.shotClockTotalSec += ev.d.usedSec;
+  }
 }
 
 /* ============================================================
@@ -580,6 +596,15 @@ function buildResult(match, now) {
     innings: st.innings,
     hasUnresolvedError: st.hasUnresolvedError,
     perSide: { A: st.stats.A, B: st.stats.B },
+    // ショットクロックの平均タイム（計測できたショットのみ）
+    avgShotSec: {
+      A: st.stats.A.shotClockShots
+        ? st.stats.A.shotClockTotalSec / st.stats.A.shotClockShots
+        : null,
+      B: st.stats.B.shotClockShots
+        ? st.stats.B.shotClockTotalSec / st.stats.B.shotClockShots
+        : null,
+    },
   };
 
   // JPAはチームポイントも確定させる

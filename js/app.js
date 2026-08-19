@@ -8,6 +8,12 @@
     UI.$("toHistoryBtn").addEventListener("click", function () {
       HISTORY.open();
     });
+    UI.$("toPlayersBtn2").addEventListener("click", function () {
+      PLAYERS.open();
+    });
+    UI.$("toPlayersBtn").addEventListener("click", function () {
+      PLAYERS.open();
+    });
 
     // 進行中の試合があれば、続きから再開できるようにする
     const ongoing = STORE.findOngoing();
