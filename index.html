@@ -32,6 +32,16 @@
     </div>
 
     <div class="setup-body">
+      <!-- 中断した試合があれば、いちばん上で再開できるようにする -->
+      <div id="resumeCard" class="resume-card" hidden>
+        <div class="rc-head">中断中の試合があります</div>
+        <div class="rc-body" id="resumeInfo"></div>
+        <div class="rc-actions">
+          <button id="resumeBtn" class="primary">続きから再開する</button>
+          <button id="resumeDiscardBtn" class="ghost small">この試合を終了して保存</button>
+        </div>
+      </div>
+
       <div class="section-title">競技種目</div>
       <div id="gameRecent" class="recent-games"></div>
       <div id="gameGroups" class="game-groups"></div>
@@ -46,6 +56,11 @@
       <div id="ballHandicapSection">
         <div class="section-title">ボールハンデ</div>
         <div id="ballHandicapArea"></div>
+      </div>
+
+      <div id="ballSetSection" hidden>
+        <div class="section-title">使うボール</div>
+        <div id="ballSetArea"></div>
       </div>
 
       <div class="section-title">ブレイク</div>
@@ -340,8 +355,15 @@
   </div>
 </div>
 
+<!-- どの画面からでも1つ前に戻れるボタン。
+     画面ごとの「戻る」を探さなくて済むように常に同じ位置に出す -->
+<button id="globalBackBtn" class="global-back" hidden>
+  <span aria-hidden="true">◀</span><span class="gb-label">戻る</span>
+</button>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
+<script src="data/balls_data.js"></script>
 <script src="data/rules_data.js"></script>
 <script src="data/scoring_data.js"></script>
 <script src="data/games_data.js"></script>

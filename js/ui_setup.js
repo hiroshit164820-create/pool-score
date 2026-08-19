@@ -77,7 +77,23 @@ const UI = (function () {
     }, 2600);
   }
 
-  function showScreen(id) {
+  // どの画面から来たかを覚えておく（常時出る「戻る」で1つ前に戻すため）
+  const screenStack = [];
+
+  function currentScreen() {
+    const on = document.querySelector("section.screen.active");
+    return on ? on.id : null;
+  }
+
+  function showScreen(id, opts) {
+    const from = currentScreen();
+    // 履歴に積む。同じ画面への移動と、戻る操作自体は積まない
+    if (from && from !== id && !(opts && opts.back)) {
+      screenStack.push(from);
+      // 積みっぱなしにならないよう上限を設ける
+      if (screenStack.length > 20) screenStack.shift();
+    }
+
     // 画面はDOMから拾う（画面を足したときに列挙を直し忘れないように）
     const screens = document.querySelectorAll("section.screen");
     Array.prototype.forEach.call(screens, function (node) {
@@ -85,7 +101,32 @@ const UI = (function () {
     });
     // 試合中は画面を1枚に収める（下部の操作ボタンがはみ出さないように）
     document.body.classList.toggle("match-active", id === "screenMatch");
+    updateBackButton(id);
     window.scrollTo(0, 0);
+  }
+
+  /**
+   * 常時出る「戻る」ボタンの出し入れ。
+   *
+   * 試合中は出さない。記録中に画面を離れる操作を親指の届く場所に置くと、
+   * 誤って抜けてしまうため（試合画面には専用の「中断」がある）。
+   */
+  function updateBackButton(id) {
+    const btn = document.getElementById("globalBackBtn");
+    if (!btn) return;
+    const hide = id === "screenMatch" || (id === "screenSetup" && !screenStack.length);
+    btn.hidden = hide;
+  }
+
+  /** 1つ前の画面に戻る */
+  function goBack() {
+    const prev = screenStack.pop();
+    showScreen(prev || "screenSetup", { back: true });
+  }
+
+  function bindBackButton() {
+    const btn = document.getElementById("globalBackBtn");
+    if (btn) btn.addEventListener("click", goBack);
   }
 
   /** 直近と同じボタンの連打を無視する（誤タップ防止） */
@@ -103,6 +144,7 @@ const UI = (function () {
     $: $, el: el, clear: clear,
     bindToggle: bindToggle, toggleValue: toggleValue, setToggle: setToggle,
     toast: toast, showScreen: showScreen, guard: guard,
+    goBack: goBack, bindBackButton: bindBackButton,
   };
 })();
 
@@ -159,6 +201,9 @@ const SETUP = (function () {
   let goalValues = { A: 5, B: 5 };
   // JPA用。スキルレベルから持ち点を自動算出する
   let skillLevels = { A: 5, B: 5 };
+  // 使うボールセット（盤面の色分けに使う）。前回選んだものを覚える
+  let ballSet = (STORE.getSettings() || {}).ballSet || "standard";
+
   // ボールハンデ。「N番以上を入れたら1点」の N を持つ（null＝ハンデなし）
   // 出典: CUES「相手は9番、自分は7番以上を入れたら1ポイント」（04_種目ルール仕様.md）
   let ballHandicap = { A: null, B: null };
@@ -489,6 +534,70 @@ const SETUP = (function () {
     }
   }
 
+  /**
+   * 使うボールの選択。
+   * 盤面で番号を色分けする種目（ローテーション）でだけ出す。
+   * セットによって6番7番の色が通常と違うため、実際に使う球に合わせる。
+   */
+  function renderBallSet() {
+    const section = $("ballSetSection");
+    const wrap = $("ballSetArea");
+    if (!section || !wrap) return;
+    UI.clear(wrap);
+
+    const g = GAMES[selectedGame];
+    const usesGrid = SCORING[g.scoring].kind === "ballScore"
+      && !!SCORING[g.scoring].scoreOf && !!BASE_RULES[g.base].rackTotal;
+    section.hidden = !usesGrid;
+    if (!usesGrid) return;
+
+    const chips = UI.el("div", { class: "chips ballset-chips" });
+    BALL_SET_ORDER.forEach(function (id) {
+      const set = BALL_SETS[id];
+      const btn = UI.el("button", {
+        type: "button",
+        class: "chip ballset-chip",
+        "data-set": id,
+        "aria-pressed": String(ballSet === id),
+        onclick: function () {
+          ballSet = id;
+          const st = STORE.getSettings() || {};
+          st.ballSet = id;
+          STORE.saveSettings(st);
+          renderBallSet();
+        },
+      }, [UI.el("span", { class: "bs-name", text: set.label })]);
+
+      // 見本を並べる。6番7番が違うセットがあるので見比べられるようにする
+      const swatch = UI.el("span", { class: "bs-swatch" });
+      [1, 4, 6, 7].forEach(function (n) {
+        const ap = ballAppearance(id, n);
+        swatch.appendChild(
+          UI.el("i", {
+            class: "bs-dot",
+            style: "background:" + ap.base
+              + (ap.band ? ";box-shadow: inset 0 0 0 3px " + ap.band : ""),
+            title: n + "番",
+          })
+        );
+      });
+      btn.appendChild(swatch);
+      chips.appendChild(btn);
+    });
+    wrap.appendChild(chips);
+
+    const cur = BALL_SETS[ballSet];
+    if (cur && cur.note) {
+      wrap.appendChild(UI.el("p", { class: "hint", text: cur.note }));
+    }
+    wrap.appendChild(
+      UI.el("p", {
+        class: "hint",
+        text: "色は商品画像に寄せた近似です（メーカーは色の数値を公開していません）。",
+      })
+    );
+  }
+
   /** 設定画面での側の呼び名。名前が入っていればそれを使う */
   function nameForSide(side) {
     const g = GAMES[selectedGame];
@@ -767,6 +876,7 @@ const SETUP = (function () {
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
       renderBallHandicap();
+      renderBallSet();
       return;
     }
 
@@ -800,6 +910,7 @@ const SETUP = (function () {
         })
       );
       renderBallHandicap();
+      renderBallSet();
       return;
     }
 
@@ -834,6 +945,7 @@ const SETUP = (function () {
 
     // ハンデの有無に連動してボールハンデの欄も出し入れする
     renderBallHandicap();
+    renderBallSet();
   }
 
   /**
@@ -1045,6 +1157,7 @@ const SETUP = (function () {
       sides: buildSides(),
       goal: buildGoal(g),
       options: {
+        ballSet: ballSet,
         breakType: UI.toggleValue($("breakTypeToggle")) || BASE_RULES[g.base].defaultBreakType,
         shotClock: buildShotClock(),
         chessClock: buildChessClock(),

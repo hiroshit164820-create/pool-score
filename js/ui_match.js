@@ -63,7 +63,10 @@ const MATCH = (function () {
     $("quitMatchBtn").addEventListener("click", UI.guard(function () {
       save();
       close();
-      HISTORY.open();
+      // 中断したら設定画面に戻す。いちばん上に「続きから再開する」が出る
+      UI.showScreen("screenSetup");
+      window.dispatchEvent(new Event("pool-score:refresh-resume"));
+      UI.toast("中断しました。上の「続きから再開する」からいつでも戻れます。");
     }));
 
     $("scPauseBtn").addEventListener("click", UI.guard(function () {
@@ -571,6 +574,23 @@ const MATCH = (function () {
     return effectiveScoreKind(r.scoring, match.goal) === "ballScore";
   }
 
+  /**
+   * 画面に出すスコアを返す。
+   *
+   * ボウラードはストライク／スペアのボーナスがあるため、
+   * 落球数の合計（st.score）ではなくボウリング式の集計を出す。
+   */
+  function displayScore(st) {
+    const r = resolveGame(match.gameId);
+    if (r.scoring.kind === "bowling") {
+      const bsc = buildBowlardScore(SHEET.bowlardThrows(match), {
+        frames: r.scoring.frames, pinsPerFrame: r.scoring.pinsPerFrame,
+      });
+      return { A: bsc.total, B: 0 };
+    }
+    return match.goal.type === "racks" ? st.racks : st.score;
+  }
+
   /** どちらかにボールハンデが設定されているか */
   function hasAnyHandicap() {
     const bh = match && match.goal && match.goal.ballHandicap;
@@ -601,7 +621,7 @@ const MATCH = (function () {
     if (hasAnyHandicap()) parts.push("ボールハンデ");
     $("matchSubtitle").textContent = parts.join(" ・ ");
 
-    const cur = match.goal.type === "racks" ? st.racks : st.score;
+    const cur = displayScore(st);
     ["A", "B"].forEach(function (side) {
       $("name" + side).textContent = sideName(side);
       $("score" + side).textContent = String(cur[side]);
@@ -696,6 +716,22 @@ const MATCH = (function () {
 
     // 盤面を使う種目は画面の詰め方を変える（スコアが押し出されないように）
     $("screenMatch").classList.toggle("grid-mode", gridMode);
+
+    // 1人用の種目（ボウラード）は、相手側の欄とブレイク・交代を出さない。
+    // 対戦していないので、出ていると何を操作するのか分からなくなる
+    const solo = !!g.solo;
+    $("screenMatch").classList.toggle("solo-mode", solo);
+    if (solo) {
+      $("panelB").hidden = true;
+      $("breakBanner").hidden = true;
+      $("turnBanner").hidden = true;
+      $("turnBtn").hidden = true;
+      $("breakToggleBtn").hidden = true;
+      $("tapHint").hidden = true;
+    } else {
+      $("panelB").hidden = false;
+      $("breakToggleBtn").hidden = false;
+    }
     renderBallGrid(r, st);
     renderBowlPad(r, st);
     if (typeof SHEET !== "undefined") SHEET.render(match, st);
@@ -738,19 +774,36 @@ const MATCH = (function () {
     const onTable = {};
     (st.onTable || []).forEach(function (b) { onTable[b] = true; });
 
+    // 実際に使っているボールセットの色で描く。
+    // 番号だけの白いボタンより、手元の球と同じ色のほうが押し間違えにくい
+    const setId = (match.options && match.options.ballSet) || "standard";
+
     const grid = UI.el("div", { class: "bg-balls" });
     r.base.balls.forEach(function (b) {
       const left = !!onTable[b];
+      const ap = ballAppearance(setId, b);
+
+      // ストライプ球は帯を描く。地と帯の向きはセットによって違う
+      // ストライプは中央の帯。実物より細めにして地の色を残す
+      // （地が見えないと何番の系統か分からなくなる）
+      const style = ap.band
+        ? "background: linear-gradient(180deg," + ap.base + " 0 22%," + ap.band
+          + " 22% 78%," + ap.base + " 78% 100%); color:" + ap.ink
+        : "background:" + ap.base + "; color:" + ap.ink;
+
       grid.appendChild(
         UI.el("button", {
           type: "button",
           class: "ball-btn" + (left ? "" : " gone"),
           disabled: left ? null : "disabled",
           "data-ball": String(b),
+          style: style,
           title: b + "番（" + r.scoring.scoreOf(b) + "点）",
-          text: String(b),
           onclick: UI.guard(function () { recordBall(shooter, b); }),
-        })
+        }, [
+          // 番号は白い丸の中に置く。実物と同じで、色地でも数字が読める
+          UI.el("span", { class: "bb-num shape-" + ap.shape, text: String(b) }),
+        ])
       );
     });
     wrap.appendChild(grid);
@@ -1025,7 +1078,7 @@ const MATCH = (function () {
   function openFinish() {
     const st = reduceMatch(match);
     const unit = match.goal.type === "racks" ? "ラック" : "点";
-    const cur = match.goal.type === "racks" ? st.racks : st.score;
+    const cur = displayScore(st);
     const box = $("finishSummary");
     UI.clear(box);
 
@@ -1057,6 +1110,7 @@ const MATCH = (function () {
     $("finishModal").hidden = true;
     close();
     HISTORY.open();
+    window.dispatchEvent(new Event("pool-score:refresh-resume"));
     UI.toast("試合を保存しました。");
   }
 

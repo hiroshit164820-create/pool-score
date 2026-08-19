@@ -278,9 +278,9 @@ def run():
         page.screenshot(path=os.path.join(SHOT_DIR, "07_10ball.png"), full_page=True)
 
         # ---------- 14-1（球1個=1点・減点あり） ----------
+        # 中断すると設定画面に戻る（履歴を経由しない）
         page.click("#quitMatchBtn")
-        page.wait_for_timeout(300)
-        page.click("#newMatchBtn")
+        page.wait_for_timeout(400)
         page.wait_for_timeout(300)
         helpers.pick_game(page, "straight")
         page.wait_for_timeout(250)

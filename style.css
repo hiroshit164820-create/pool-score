@@ -1999,3 +1999,219 @@ body.match-active .app {
 body.match-active .app {
   min-height: 0;
 }
+
+/* ---------- ボールセットの選択 ---------- */
+.ballset-chips {
+  flex-direction: column;
+  align-items: stretch;
+}
+.ballset-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+.ballset-chip .bs-name {
+  flex: 1;
+  min-width: 0;
+}
+.bs-swatch {
+  display: inline-flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.bs-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  display: inline-block;
+}
+
+/* ---------- 盤面のボール（実物の色に合わせる） ---------- */
+/* 番号は白い丸の中に置く。色地の上でも数字が読めるようにするため */
+.ball-btn .bb-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #f4efe2;
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  line-height: 1;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+.ball-btn.gone .bb-num {
+  opacity: 0.6;
+}
+
+/* セットごとの数字枠の意匠。
+   ダイナスフィアは白い三角（プラチナム）/ 菱形（チタニウム）が特徴なので、
+   実物と同じ形にして見分けをつけやすくする */
+.ball-btn .bb-num.shape-triangle {
+  border-radius: 0;
+  border: 0;
+  width: 30px;
+  height: 26px;
+  /* 上が丸い三角（ロータ形）を近似する */
+  clip-path: polygon(50% 0%, 100% 78%, 78% 100%, 22% 100%, 0% 78%);
+  padding-top: 3px;
+}
+.ball-btn .bb-num.shape-diamond {
+  border-radius: 0;
+  border: 0;
+  width: 30px;
+  height: 30px;
+  clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%);
+  font-size: 13px;
+}
+.bs-dot.shape-triangle {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 78%, 78% 100%, 22% 100%, 0% 78%);
+  border: 0;
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+/* 帯は実物より細くする。太いと地の色が見えず、
+   何番の系統かが分からなくなる */
+.ball-btn {
+  overflow: hidden;
+}
+
+/* 情報の帯が増えたので、試合画面ではブレイクとターンを1行にまとめる。
+   縦を食い過ぎると盤面が押し出されるため */
+#screenMatch.grid-mode .break-banner,
+#screenMatch.grid-mode .turn-banner {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 3px 10px;
+  font-size: 14px;
+}
+#screenMatch.grid-mode .break-banner .bb-text b,
+#screenMatch.grid-mode .turn-banner .tb-name {
+  font-size: 15px;
+}
+#screenMatch.grid-mode .break-banner .bb-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- 中断中の試合（再開カード） ---------- */
+.resume-card {
+  margin-bottom: 18px;
+  padding: 12px;
+  background: var(--coin);
+  border: var(--bw-thick) solid var(--ink);
+  box-shadow: var(--shadow);
+}
+.resume-card[hidden] {
+  display: none;
+}
+.resume-card .rc-head {
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+.resume-card .rc-game {
+  font-size: 14px;
+  font-weight: 800;
+}
+.resume-card .rc-score {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+.resume-card .rc-score b {
+  font-family: var(--font-pixel);
+  font-size: 22px;
+  font-weight: 400;
+}
+.resume-card .rc-nm {
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resume-card .rc-vs {
+  color: var(--text-dim);
+}
+.resume-card .rc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.resume-card .rc-actions button {
+  width: 100%;
+}
+.resume-card .rc-actions .primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- どこからでも戻れるボタン ---------- */
+/* 画面ごとの「戻る」を探さずに済むよう、常に同じ位置に出す。
+   親指の届く左下に置く（右下は主要ボタンが並ぶため避ける） */
+.global-back {
+  position: fixed;
+  left: calc(10px + env(safe-area-inset-left));
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 14px;
+  font-size: 14px;
+  background: var(--surface);
+  border-radius: 0;
+}
+.global-back[hidden] {
+  display: none;
+}
+.global-back .gb-label {
+  font-weight: 800;
+}
+
+/* 1人用の種目（ボウラード）。
+   相手の欄が無いぶん、スコアとスコア表に縦を回す */
+#screenMatch.solo-mode .scoreboard {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+#screenMatch.solo-mode .score-panel {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+#screenMatch.solo-mode .score-panel .val {
+  font-size: min(18vw, 11vh);
+}
+#screenMatch.solo-mode .sheet-area {
+  max-height: none;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+#screenMatch.solo-mode .meta-line {
+  display: none;
+}
+
+/* hidden 属性が効くようにする（.score-panel は display:flex を持つため） */
+#screenMatch.solo-mode .score-panel[hidden],
+.score-panel[hidden],
+.turn-btn[hidden],
+.break-toggle[hidden] {
+  display: none !important;
+}
+/* 1人用ではブレイクの印も出さない */
+#screenMatch.solo-mode .breakmark {
+  display: none;
+}

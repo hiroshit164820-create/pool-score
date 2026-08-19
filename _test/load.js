@@ -13,6 +13,7 @@ const vm = require("vm");
 const ROOT = path.join(__dirname, "..");
 
 const FILES = [
+  "data/balls_data.js",
   "data/rules_data.js",
   "data/scoring_data.js",
   "data/games_data.js",
@@ -30,6 +31,7 @@ const EXPORTS = [
   "createMatch", "appendEvent", "voidEvent", "undoLast", "nextBreakSide",
   "buildResult", "other", "makeMatchId",
   "buildBowlardScore", "bowlardRemainingPins", "effectiveScoreKind",
+  "BALL_SETS", "BALL_SET_ORDER", "ballAppearance", "isStripeBall",
 ];
 
 function loadApp(extraFiles) {

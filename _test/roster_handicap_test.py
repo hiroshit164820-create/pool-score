@@ -263,9 +263,9 @@ with sync_playwright() as p:
     check(sel == "none", "本文の長押し選択が抑えられている", sel)
 
     # ただし入力欄は選択できる必要がある
+    # 中断すると設定画面に戻る（履歴を経由しない）
     pg.click("#quitMatchBtn")
     pg.wait_for_timeout(400)
-    pg.click("#newMatchBtn")
     pg.wait_for_timeout(300)
     insel = pg.evaluate("""() => {
       const el = document.querySelector('#inNameA');
