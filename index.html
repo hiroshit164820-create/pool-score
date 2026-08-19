@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#22b573">
+<title>ビリヤードスコア記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- iPhoneでホーム画面から開いたときに全画面にする -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ビリヤード">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ================= 試合作成 ================= -->
+  <section id="screenSetup" class="screen active">
+    <div class="topbar">
+      <h1>ビリヤードスコア記録</h1>
+      <button id="toHistoryBtn" class="small ghost">履歴</button>
+    </div>
+
+    <div class="setup-body">
+      <div class="section-title">競技種目</div>
+      <div id="gameChips" class="chips"></div>
+      <p id="gameNote" class="hint"></p>
+
+      <div class="section-title">プレーヤー</div>
+      <div id="playerFields"></div>
+
+      <div class="section-title">勝利条件</div>
+      <div id="goalArea"></div>
+
+      <div class="section-title">ブレイク</div>
+      <div class="field">
+        <label>ブレイク方式</label>
+        <div id="breakTypeToggle" class="toggle-group">
+          <button type="button" data-v="winner" aria-pressed="true">ウィナーズ<br><span class="btn-sub">勝った側が次もブレイク</span></button>
+          <button type="button" data-v="alternate" aria-pressed="false">オルタネート<br><span class="btn-sub">交互にブレイク</span></button>
+        </div>
+        <p id="breakTypeNote" class="hint"></p>
+      </div>
+      <div class="field">
+        <label>先にブレイクする人</label>
+        <div id="firstSideToggle" class="toggle-group">
+          <button type="button" data-v="A" aria-pressed="true">プレーヤーA</button>
+          <button type="button" data-v="B" aria-pressed="false">プレーヤーB</button>
+        </div>
+      </div>
+
+      <div class="section-title">ショットクロック</div>
+      <div class="field">
+        <div class="switch-row">
+          <span class="label-main">この試合で使う</span>
+          <div id="scEnableToggle" class="toggle-group" style="max-width:210px">
+            <button type="button" data-v="off" aria-pressed="true">使わない</button>
+            <button type="button" data-v="on" aria-pressed="false">使う</button>
+          </div>
+        </div>
+      </div>
+      <div id="scDetail" hidden>
+        <div class="row">
+          <div class="field">
+            <label>持ち時間（秒）</label>
+            <input type="number" id="scSeconds" value="45" min="10" max="180" step="5">
+          </div>
+          <div class="field">
+            <label>残り何秒で警告</label>
+            <input type="number" id="scWarn" value="15" min="0" max="60" step="5">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>延長の回数（1人あたり）</label>
+            <input type="number" id="scExtCount" value="2" min="0" max="9" step="1">
+          </div>
+          <div class="field">
+            <label>延長の時間（秒）</label>
+            <input type="number" id="scExtSec" value="45" min="10" max="180" step="5">
+          </div>
+        </div>
+        <div class="field">
+          <label>延長の使い方</label>
+          <div id="scModeToggle" class="toggle-group">
+            <button type="button" data-v="declare" aria-pressed="true">宣言して使う</button>
+            <button type="button" data-v="auto" aria-pressed="false">自動で延長</button>
+          </div>
+          <p class="hint">時間切れになると、その時点でファウルとして記録します。</p>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <button id="startMatchBtn" class="primary" style="width:100%">この内容で試合を始める</button>
+      <div style="height:20px"></div>
+    </div>
+  </section>
+
+  <!-- ================= 試合中 ================= -->
+  <section id="screenMatch" class="screen">
+    <div class="topbar">
+      <div>
+        <h1 id="matchTitle">9ボール</h1>
+        <div class="sub" id="matchSubtitle"></div>
+      </div>
+      <button id="quitMatchBtn" class="small ghost">中断</button>
+    </div>
+
+    <div class="scoreboard">
+      <!-- スコア欄そのものがボタン。タップで1点（1ラック）加算する -->
+      <button type="button" class="score-panel side-a" id="panelA">
+        <span class="sp-head">
+          <span class="breakmark" id="breakMarkA"></span>
+          <span class="name" id="nameA">プレーヤーA</span>
+          <span class="target" id="targetA"></span>
+        </span>
+        <span class="val" id="scoreA">0</span>
+        <span class="progress"><i id="barA" style="width:0%"></i></span>
+      </button>
+
+      <button type="button" class="score-panel side-b" id="panelB">
+        <span class="sp-head">
+          <span class="breakmark" id="breakMarkB"></span>
+          <span class="name" id="nameB">プレーヤーB</span>
+          <span class="target" id="targetB"></span>
+        </span>
+        <span class="val" id="scoreB">0</span>
+        <span class="progress"><i id="barB" style="width:0%"></i></span>
+      </button>
+
+      <div class="meta-line">
+        <span id="rackInfo">ラック 1</span>
+        <button id="breakToggleBtn" class="break-toggle ghost">ブレイク: —</button>
+      </div>
+    </div>
+
+    <div id="shotClockBar" class="shotclock hidden">
+      <span class="time" id="scTime">45</span>
+      <span class="sc-info" id="scInfo"></span>
+      <span class="sc-btns">
+        <button id="scPauseBtn" class="small">一時停止</button>
+        <button id="scExtBtn" class="small">延長</button>
+      </span>
+    </div>
+
+    <div class="play-area">
+      <p class="tap-hint" id="tapHint">ラックを取った側のスコアをタップしてください</p>
+      <div id="flagButtons" class="flag-buttons"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <button id="undoBtn">⟲ 取り消し</button>
+      <button id="reviseBtn" class="ghost">⋯ 訂正</button>
+      <button id="finishBtn" class="ghost">試合終了</button>
+    </div>
+  </section>
+
+  <!-- ================= 履歴 ================= -->
+  <section id="screenHistory" class="screen">
+    <div class="topbar">
+      <h1>履歴</h1>
+      <div>
+        <button id="exportBtn" class="small ghost">書き出し</button>
+        <button id="backFromHistoryBtn" class="small ghost">戻る</button>
+      </div>
+    </div>
+    <div class="list" id="historyList"></div>
+    <div class="bottom-bar">
+      <button id="newMatchBtn" class="primary">新しい試合</button>
+      <button id="importBtn" class="ghost">読み込み</button>
+      <input type="file" id="importInput" accept="application/json" hidden>
+    </div>
+  </section>
+
+</div>
+
+<!-- 訂正モーダル -->
+<div class="modal-backdrop" id="reviseModal" hidden>
+  <div class="modal">
+    <h2>記録の訂正</h2>
+    <p class="hint">取り消したい記録を選んでください。取り消した記録も履歴には残ります。</p>
+    <div class="ev-list" id="evList"></div>
+    <div class="modal-actions">
+      <button id="closeReviseBtn" class="ghost">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 試合終了モーダル -->
+<div class="modal-backdrop" id="finishModal" hidden>
+  <div class="modal">
+    <h2>試合を終了します</h2>
+    <div id="finishSummary"></div>
+    <div class="modal-actions">
+      <button id="cancelFinishBtn" class="ghost">まだ続ける</button>
+      <button id="confirmFinishBtn" class="primary">終了して保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="data/rules_data.js"></script>
+<script src="data/scoring_data.js"></script>
+<script src="data/games_data.js"></script>
+<script src="data/handicap_data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/shotclock.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui_setup.js"></script>
+<script src="js/ui_match.js"></script>
+<script src="js/ui_history.js"></script>
+<script src="js/app.js"></script>
+<script>
+// オフラインでも使えるようにする。file:// で開いた場合は登録しない（動かないため）
+if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {
+      /* 登録できなくてもアプリ自体は動くので握りつぶす */
+    });
+  });
+}
+</script>
+</body>
+</html>

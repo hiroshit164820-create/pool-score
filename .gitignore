@@ -1,0 +1,7 @@
+# 検証で出るスクリーンショット（成果物ではないので追跡しない）
+_test/shots/
+
+# OS が作るファイル
+Thumbs.db
+desktop.ini
+.DS_Store
