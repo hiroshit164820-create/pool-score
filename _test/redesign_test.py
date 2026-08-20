@@ -356,14 +356,24 @@ with sync_playwright() as p:
     check(len(blocked) == 0, "地面の装飾が下部ボタンを覆っていない", blocked)
 
     # 実際に押して効くことまで確かめる
-    pg.click("#panelA")
-    pg.wait_for_timeout(300)
-    before_score = pg.text_content("#scoreA")
-    pg.click("#undoBtn")
-    pg.wait_for_timeout(300)
-    after_score = pg.text_content("#scoreA")
-    check(before_score != after_score, "取り消しボタンが実際に効く",
-          (before_score, after_score))
+    # ショットクロックが動いていると、得点の直後に自動の記録
+    # （経過時間）が積まれる。取り消しがそれを食べてしまい、
+    # 得点が残ったまま「取り消した」ことになる不具合があった（2026-08-20修正）。
+    # 1回だけでは当たり外れがあるため、続けて押して毎回効くことを見る。
+    for _try in range(5):
+        pre_tap = pg.text_content("#scoreA")
+        pg.click("#panelA")
+        pg.wait_for_timeout(300)
+        before_score = pg.text_content("#scoreA")
+        check(pre_tap != before_score, "%d回目: タップで加点される" % (_try + 1),
+              (pre_tap, before_score))
+        pg.click("#undoBtn")
+        pg.wait_for_timeout(300)
+        after_score = pg.text_content("#scoreA")
+        check(before_score != after_score, "%d回目: 取り消しボタンが実際に効く" % (_try + 1),
+              (before_score, after_score))
+        check(after_score == pre_tap, "%d回目: 取り消すと押す前の点に戻る" % (_try + 1),
+              (pre_tap, after_score))
 
     # ================================================================
     section("⑩ 世界観の要素が入っている")

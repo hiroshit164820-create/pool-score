@@ -2942,38 +2942,35 @@ body.match-active .app {
 }
 .tb-ball {
   position: absolute;
-  /* 幅と高さを固定する。% 指定にすると台の縦横比で楕円になる */
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  min-height: 30px;
+  /* 幅と高さを固定する。% 指定にすると台の縦横比で楕円になる。
+     指で掴む的なので44pxを確保する（30pxでは指より小さく、
+     どけるつもりが動く・動かすつもりが消えるが起きていた） */
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   flex: 0 0 auto;
   box-sizing: border-box;
-  margin: -15px 0 0 -15px;
+  margin: -22px 0 0 -22px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-pixel);
   font-size: 11px;
-  color: #fff;
   background: var(--ball-color, #888);
   border: 2px solid var(--ink);
   border-radius: 50%;
   box-shadow: none;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
   touch-action: none;
   z-index: 2;
 }
 .tb-ball.cue {
   background: #f6f2e8;
 }
-/* ストライプ球は上下に白帯を入れて見分ける */
-.tb-ball.stripe {
-  background:
-    linear-gradient(180deg, #f6f2e8 0 22%, var(--ball-color, #888) 22% 78%, #f6f2e8 78% 100%);
-  color: var(--ink);
-  text-shadow: none;
+/* 掴んでいる球は指の下から出す。重なった球を掴み分けるため */
+.tb-ball.dragging .bb-num {
+  transform: translateY(-2px);
 }
 .tb-ball.dragging {
   z-index: 3;
@@ -2989,31 +2986,43 @@ body.match-active .app {
 }
 .tray-ball {
   aspect-ratio: 1 / 1;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-pixel);
   font-size: 12px;
-  color: #fff;
   background: var(--ball-color, #888);
   border: 2px solid var(--ink);
   border-radius: 50%;
   box-shadow: var(--shadow-sm);
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 .tray-ball.cue {
   color: var(--ink);
   background: #f6f2e8;
-  text-shadow: none;
 }
-.tray-ball.stripe {
-  color: var(--ink);
-  background:
-    linear-gradient(180deg, #f6f2e8 0 26%, var(--ball-color, #888) 26% 74%, #f6f2e8 74% 100%);
-  text-shadow: none;
+/* 配置図の番号枠。試合画面の .bb-num をそのまま使うと台の上では大きいため
+   ここだけ一回り小さくする（形と白地は試合画面と同じ） */
+.tb-ball .bb-num,
+.tray-ball .bb-num {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border-width: 2px;
 }
+.tb-ball .bb-num.shape-triangle,
+.tray-ball .bb-num.shape-triangle {
+  width: 25px;
+  height: 22px;
+}
+.tb-ball .bb-num.shape-diamond,
+.tray-ball .bb-num.shape-diamond {
+  width: 25px;
+  height: 25px;
+  font-size: 11px;
+}
+
 .tray-ball.used {
   opacity: 0.25;
   box-shadow: none;

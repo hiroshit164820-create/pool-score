@@ -41,13 +41,15 @@ def section(name):
 
 
 POSITIONS = """() => Array.from(document.querySelectorAll('.tb-ball'))
-  .map(b => ({ n: b.textContent.trim(), left: b.style.left, top: b.style.top }))"""
+  .map(b => ({ n: b.dataset.ball, left: b.style.left, top: b.style.top }))"""
 
 STORED = "() => JSON.parse(localStorage.getItem('pool_layouts') || '[]')"
 
 
 def put(pg, label):
-    pg.click('.tray-ball:text-is("%s")' % label)
+    # 番号は .bb-num の中に入っているため、文字ではなく data-ball で選ぶ
+    n = "0" if label == "手" else label
+    pg.click('.tray-ball[data-ball="%s"]' % n)
     pg.wait_for_timeout(250)
 
 
@@ -101,23 +103,23 @@ with sync_playwright() as p:
     check(sz["w"] >= 28, "球が指で掴める大きさ", sz)
 
     # 置いた球は一覧から選べなくなる（同じ球を2個置けない）
-    check(pg.is_disabled('.tray-ball:text-is("1")'), "置いた球は一覧で選べなくなる")
+    check(pg.is_disabled('.tray-ball[data-ball="1"]'), "置いた球は一覧で選べなくなる")
 
     # 動かさずに離すと台からどける
-    ball = pg.locator('.tb-ball:text-is("9")')
+    ball = pg.locator('.tb-ball[data-ball="9"]')
     box = ball.bounding_box()
     pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     pg.mouse.down()
     pg.mouse.up()
     pg.wait_for_timeout(400)
     check(pg.locator(".tb-ball").count() == 2, "タップでどけられる", pg.locator(".tb-ball").count())
-    check(not pg.is_disabled('.tray-ball:text-is("9")'), "どけた球はまた選べる")
+    check(not pg.is_disabled('.tray-ball[data-ball="9"]'), "どけた球はまた選べる")
 
     # ================================================================
     section("3. 指で動かして位置を決められる")
     put(pg, "9")
     before = pg.evaluate(POSITIONS)
-    ball = pg.locator('.tb-ball:text-is("9")')
+    ball = pg.locator('.tb-ball[data-ball="9"]')
     box = ball.bounding_box()
     tb = pg.locator("#poolTable").bounding_box()
     pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)

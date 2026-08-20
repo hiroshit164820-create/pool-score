@@ -659,13 +659,19 @@ const MATCH = (function () {
       UI.toast("取り消せる記録がありません。", "warn");
       return;
     }
-    // 自動発行された RACK_START も一緒に取り消す
+    // 自動発行された記録（次ラックの RACK_START と、ショットクロックの
+    // 経過時間）も一緒に取り消す。得点だけ消して自動の記録が残ると、
+    // 平均タイムやブレイク側が実際より1つ多い状態でずれる。
+    // 末尾から続くぶんをまとめて消す（間に人の操作は挟まらない）
     const evs = match.events;
     for (let i = evs.length - 1; i >= 0; i--) {
       const e = evs[i];
       if (e.voided || e.t === "VOID") continue;
-      if (e.t === "RACK_START" && e.d && e.d.auto) {
+      const isAutoRack = (e.t === "RACK_START" && e.d && e.d.auto);
+      const isAutoShot = (e.t === "SHOT_CLOCK" && e.d && e.d.event === "shot");
+      if (isAutoRack || isAutoShot) {
         voidEvent(match, e.seq, "undoに伴う自動取り消し", new Date());
+        continue;
       }
       break;
     }

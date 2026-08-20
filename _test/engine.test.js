@@ -198,6 +198,40 @@ section("undo: 直近のイベントを1件ずつ戻せる");
 }
 
 /* ============================================================ */
+section("undo: ショットクロックの自動記録は取り消しに食われない");
+{
+  // ショットクロックONだと、得点の直後に経過時間の記録が自動で積まれる。
+  // undo がそれを取り消してしまい、得点が残ったまま「取り消した」ことに
+  // なる不具合があった（2026-08-20に実機の検証で特定）。
+  const m = app.createMatch({
+    gameId: "9ball",
+    goal: { type: "racks", targets: { A: 5, B: 5 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  app.appendEvent(m, { t: "RACK_WIN", side: "A", d: { winner: "A" } }, tick());
+  eq(app.reduceMatch(m).racks.A, 1, "1ラック取って1ラック");
+
+  // 得点のあとに自動の記録が積まれた状態を作る
+  app.appendEvent(m, { t: "SHOT_CLOCK", side: "A", d: { event: "shot", usedSec: 12 } }, tick());
+
+  app.undoLast(m, tick());
+  eq(app.reduceMatch(m).racks.A, 0, "自動記録があってもundoでラックが戻る");
+
+  // 人が操作したショットクロックの記録（反則）は取り消せる
+  const m2 = app.createMatch({
+    gameId: "9ball",
+    goal: { type: "racks", targets: { A: 5, B: 5 }, source: "free" },
+    firstSide: "A",
+    now: tick(),
+  });
+  app.appendEvent(m2, { t: "RACK_WIN", side: "A", d: { winner: "A" } }, tick());
+  app.appendEvent(m2, { t: "SHOT_CLOCK", side: "A", d: { event: "violation" } }, tick());
+  app.undoLast(m2, tick());
+  eq(app.reduceMatch(m2).racks.A, 1, "反則の記録はundoで消え、ラックは残る");
+}
+
+/* ============================================================ */
 section("スリーファール: 2ファール宣告がないと成立しない");
 {
   // 宣告なし → 3回ファウルしてもラックは失わない

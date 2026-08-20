@@ -142,6 +142,11 @@ function undoLast(match, now) {
     if (e.t === "VOID" || e.t === "MATCH_START") continue;
     // 自動発行された RACK_START は単独では取り消さない（直前の得点イベントと一緒に消える）
     if (e.t === "RACK_START" && e.d && e.d.auto) continue;
+    // ショットクロックが自動で残す記録（平均タイムの算出用）は人の操作ではない。
+    // これを取り消すと、得点が残ったまま「取り消した」ことになり、
+    // 押しても何も起きないように見える。ショットクロックONのときだけ
+    // 起きるため再現しにくい不具合になっていた（2026-08-20に実測で特定）
+    if (e.t === "SHOT_CLOCK" && e.d && e.d.event === "shot") continue;
     return voidEvent(match, e.seq, "undo", now);
   }
   return null;

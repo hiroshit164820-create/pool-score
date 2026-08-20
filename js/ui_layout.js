@@ -25,6 +25,7 @@ const LAYOUT = (function () {
     bound = true;
     $("layoutSaveBtn").addEventListener("click", UI.guard(save));
     $("layoutClearBtn").addEventListener("click", UI.guard(clearAll));
+    $("layoutUndoBtn").addEventListener("click", UI.guard(undo));
     $("layoutListBtn").addEventListener("click", UI.guard(toggleList));
   }
 
@@ -40,6 +41,7 @@ const LAYOUT = (function () {
     renderTable();
     renderTray();
     renderList();
+    syncUndo();
     const sub = $("layoutSub");
     if (sub) {
       sub.textContent = editingName
@@ -48,33 +50,99 @@ const LAYOUT = (function () {
     }
   }
 
+  /**
+   * ひとつ前の盤面。取り消し用に1手分だけ控える。
+   *
+   * 球は指より小さく、どけるつもりで動かす・動かすつもりでどけるが
+   * 起きやすい。取り消しが無いと置き直しになるため用意した。
+   */
+  let prevBalls = null;
+
+  /** 球の直径（px）。style.css の .tb-ball と揃える */
+  const BALL_PX = 44;
+
+  /** いまの盤面を控える。盤面を変える操作の直前に呼ぶ */
+  function remember() {
+    prevBalls = balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
+    syncUndo();
+  }
+
+  /** 取り消しボタンの出し分け */
+  function syncUndo() {
+    const btn = $("layoutUndoBtn");
+    if (btn) btn.disabled = !prevBalls;
+  }
+
+  function undo() {
+    if (!prevBalls) {
+      UI.toast("戻せる操作がありません。", "warn");
+      return;
+    }
+    balls = prevBalls;
+    prevBalls = null;
+    render();
+    UI.toast("元に戻しました。");
+  }
+
   function renderTable() {
     const wrap = $("tableBalls");
     if (!wrap) return;
     UI.clear(wrap);
 
     balls.forEach(function (b, i) {
+      // 試合画面と同じ描き方にする（別のアプリの球に見えないように）
       const node = UI.el("button", {
         type: "button",
-        class: "tb-ball" + (b.n === 0 ? " cue" : "") + (b.n >= 9 ? " stripe" : ""),
+        class: "tb-ball" + (b.n === 0 ? " cue" : ""),
         "data-idx": String(i),
+        "data-ball": String(b.n),
         title: b.n === 0 ? "手玉" : b.n + "番",
-        text: b.n === 0 ? "" : String(b.n),
       });
+      paintBall(node, b.n);
       node.style.left = (b.x * 100) + "%";
       node.style.top = (b.y * 100) + "%";
-      if (b.n > 0) node.style.setProperty("--ball-color", ballColor(b.n));
       bindDrag(node, i);
       wrap.appendChild(node);
     });
   }
 
-  /** 球の色。試合画面と同じ配色を使う（別物に見えないように） */
-  function ballColor(n) {
-    const set = (typeof BALL_SETS !== "undefined") ? BALL_SETS.standard : null;
-    if (!set || !set.colors) return "#888888";
-    const base = n > 8 ? n - 8 : n;
-    return set.colors[base] || "#888888";
+  /**
+   * 球を試合画面と同じ見た目に塗る。
+   *
+   * 色・帯・番号枠の形はすべて ballAppearance に任せる。
+   * ここで別に組み立てると、ボールセットを増やしたときに
+   * 配置図だけ古い色のまま取り残されるため。
+   */
+  function paintBall(node, n) {
+    UI.clear(node);
+    if (n === 0) {
+      // 手玉は番号を持たない。地の色だけ塗る
+      node.style.background = "#f6f2e8";
+      return;
+    }
+    const setId = currentBallSet();
+    const ap = ballAppearance(setId, n);
+    node.style.background = ap.band
+      ? "linear-gradient(180deg," + ap.base + " 0 22%," + ap.band
+        + " 22% 78%," + ap.base + " 78% 100%)"
+      : ap.base;
+    node.style.color = ap.ink;
+    // 番号は試合画面と同じく白い丸（セットによっては三角・菱形）の中に置く
+    node.appendChild(
+      UI.el("span", { class: "bb-num shape-" + ap.shape, text: String(n) })
+    );
+  }
+
+  /**
+   * いま選ばれているボールセット。
+   * 設定を読めないときは標準（パラジウム）に倒す。
+   */
+  function currentBallSet() {
+    try {
+      const st = STORE.getSettings() || {};
+      if (st.ballSet && BALL_SETS[st.ballSet]) return st.ballSet;
+    } catch (err) { /* 既定に倒す */ }
+    return "standard";
   }
 
   /**
@@ -103,6 +171,9 @@ const LAYOUT = (function () {
       const dy = Math.abs(e.clientY - startY);
       // 少し動いたら移動とみなす（指のぶれでタップが移動にならないように）
       if (!moved && dx < 6 && dy < 6) return;
+      // 動かす前の位置を控える（移動も取り消せるように）。
+      // moved が立つ前の1回だけなので、ドラッグ中に上書きされない
+      if (!moved) remember();
       moved = true;
 
       const table = $("poolTable").getBoundingClientRect();
@@ -119,10 +190,11 @@ const LAYOUT = (function () {
       try { node.releasePointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
       if (!moved) {
         // 動かさずに離した = 台からどける
+        remember();
         const b = balls[idx];
         balls.splice(idx, 1);
         render();
-        UI.toast((b.n === 0 ? "手玉" : b.n + "番") + " をどけました。");
+        UI.toast((b.n === 0 ? "手玉" : b.n + "番") + " をどけました。「元に戻す」で戻せます。");
       } else {
         render();
       }
@@ -152,15 +224,16 @@ const LAYOUT = (function () {
       const used = !!onTable[n];
       const btn = UI.el("button", {
         type: "button",
-        class: "tray-ball" + (n === 0 ? " cue" : "") + (n >= 9 ? " stripe" : "") + (used ? " used" : ""),
+        class: "tray-ball" + (n === 0 ? " cue" : "") + (used ? " used" : ""),
+        "data-ball": String(n),
         title: n === 0 ? "手玉" : n + "番",
-        text: n === 0 ? "手" : String(n),
         onclick: function () { addBall(n); },
       });
+      if (n === 0) btn.textContent = "手";
+      else paintBall(btn, n);
       // disabled は属性を付けた時点で効く（false を渡しても無効になる）ので
       // 使うときだけ設定する
       if (used) btn.disabled = true;
-      if (n > 0) btn.style.setProperty("--ball-color", ballColor(n));
       tray.appendChild(btn);
     });
   }
@@ -168,23 +241,50 @@ const LAYOUT = (function () {
   /** 球を台の真ん中あたりに置く。置いてから指で動かす */
   function addBall(n) {
     if (balls.some(function (b) { return b.n === n; })) return;
-    // 同じ場所に重ならないよう、置くたびに少しずらす
-    const k = balls.length;
-    balls.push({
-      n: n,
-      x: 0.5 + ((k % 5) - 2) * 0.07,
-      y: 0.5 + (Math.floor(k / 5) - 1) * 0.12,
-    });
+    remember();
+    const pos = freeSpot(balls.length);
+    balls.push({ n: n, x: pos.x, y: pos.y });
     render();
+  }
+
+  /**
+   * 新しい球を置く場所。
+   *
+   * 台は幅150px程度しかないため、間隔を割合で決め打つと
+   * 球（44px）同士が重なって掴み分けられなくなる。
+   * 実寸から1個分の幅を出して、それを間隔にする。
+   */
+  function freeSpot(k) {
+    const table = $("poolTable");
+    const rect = table ? table.getBoundingClientRect() : null;
+    // 実寸が取れないときだけ、割合の決め打ちに戻す
+    if (!rect || !rect.width || !rect.height) {
+      return { x: 0.5 + ((k % 3) - 1) * 0.24, y: 0.5 + (Math.floor(k / 3) - 1) * 0.13 };
+    }
+    // 球1個分＋隙間4px を間隔にする
+    const stepX = (BALL_PX + 4) / rect.width;
+    const stepY = (BALL_PX + 4) / rect.height;
+    // 1行に何個入るか（最低2個は並べる）
+    const perRow = Math.max(2, Math.floor(1 / stepX));
+    const col = k % perRow;
+    const row = Math.floor(k / perRow);
+    // 中央に寄せて並べる
+    const x = 0.5 + (col - (perRow - 1) / 2) * stepX;
+    const y = 0.5 + (row - 1) * stepY;
+    return {
+      x: Math.max(0.08, Math.min(0.92, x)),
+      y: Math.max(0.08, Math.min(0.92, y)),
+    };
   }
 
   function clearAll() {
     if (!balls.length) return;
+    remember();
     balls = [];
     editingId = null;
     editingName = "";
     render();
-    UI.toast("台をからにしました。");
+    UI.toast("台をからにしました。「元に戻す」で戻せます。");
   }
 
   /* ---------- 保存と呼び出し ---------- */
