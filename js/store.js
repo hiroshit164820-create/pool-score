@@ -194,6 +194,14 @@ const STORE = (function () {
         const c = function (v) { return Math.max(0, Math.min(1, Number(v) || 0)); };
         return { x1: c(l.x1), y1: c(l.y1), x2: c(l.x2), y2: c(l.y2) };
       }),
+      // strokes: [{ pts: [{x, y}, ...] }] 指でなぞった通りの線。
+      // 直線と同じく割合で持つ。無い配置は空として扱う
+      strokes: (layout.strokes || []).map(function (t) {
+        const c = function (v) { return Math.max(0, Math.min(1, Number(v) || 0)); };
+        return {
+          pts: (t.pts || []).map(function (q) { return { x: c(q.x), y: c(q.y) }; }),
+        };
+      }),
       note: String(layout.note || ""),
       createdAt: layout.createdAt || now,
       updatedAt: now,

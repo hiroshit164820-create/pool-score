@@ -77,7 +77,7 @@ with sync_playwright() as p:
 
     # ================= 1. ボタン =================
     section("1. 「直線を引く」のボタン")
-    btn = pg.locator("#layoutDrawBtn")
+    btn = pg.locator("#layoutLineBtn")
     check(btn.count() == 1, "ボタンがある")
     check((btn.text_content() or "").strip() == "直線を引く", "はじめは「直線を引く」",
           btn.text_content())
@@ -85,8 +85,11 @@ with sync_playwright() as p:
     check(box and box["height"] >= 44, "高さが44px以上（指で押せる）", box)
     btn.click()
     pg.wait_for_timeout(300)
-    check((btn.text_content() or "").strip() == "線を引くのをやめる",
-          "押すと「線を引くのをやめる」", btn.text_content())
+    check((btn.text_content() or "").strip() == "直線をやめる",
+          "押すと「直線をやめる」", btn.text_content())
+    check(pg.locator("#layoutDrawBtn").count() == 1, "「描画する」のボタンもある")
+    check((pg.text_content("#layoutDrawBtn") or "").strip() == "描画する",
+          "描画のほうは入っていない", pg.text_content("#layoutDrawBtn"))
     check(pg.eval_on_selector("#poolTable", "e => e.classList.contains('drawing')"),
           "台が線を引く状態になる")
     hint = pg.text_content("#layoutHint") or ""
@@ -100,8 +103,10 @@ with sync_playwright() as p:
                               "e => [e.getAttribute('x1'), e.getAttribute('y1'),"
                               " e.getAttribute('x2'), e.getAttribute('y2')]")
     def near(v, want, tol=4.0):
+        """SVGは 0〜1000 の座標系で描いている（なぞった線と揃えるため）。
+        割合(%)に直してから比べる"""
         try:
-            return abs(float(str(v).replace("%", "")) - want) <= tol
+            return abs(float(str(v).replace("%", "")) / 10.0 - want) <= tol
         except Exception:
             return False
     check(near(got[0], 25) and near(got[1], 25) and near(got[2], 75) and near(got[3], 60),
@@ -109,7 +114,7 @@ with sync_playwright() as p:
     check("preview" not in (pg.eval_on_selector(".pt-lines .ptl-main", "e => e.getAttribute('class')") or ""),
           "指を離したら破線ではなくなる")
     sub = pg.text_content("#layoutSub") or ""
-    check("線 1本" in sub, "説明に「線 1本」が出る", sub)
+    check("直線 1本" in sub, "説明に「直線 1本」が出る", sub)
     pg.screenshot(path=os.path.join(SHOTS, "line_drawn.png"))
 
     # ================= 3. 線を引く間は球を掴めない =================
@@ -176,7 +181,7 @@ with sync_playwright() as p:
     pg.click("#layoutListBtn")
     pg.wait_for_timeout(400)
     sub2 = pg.text_content("#layoutList") or ""
-    check("線 1本" in sub2, "一覧に「線 1本」が出る", sub2[:120])
+    check("直線 1本" in sub2, "一覧に「直線 1本」が出る", sub2[:120])
     pg.locator(".layout-item button", has_text="呼び出す").first.click()
     pg.wait_for_timeout(600)
     check(line_count(pg) == 1, "呼び出すと線が戻る", line_count(pg))
@@ -202,10 +207,10 @@ with sync_playwright() as p:
 
     # ================= 9. 線を引くのをやめる =================
     section("9. 線を引くのをやめる")
-    pg.click("#layoutDrawBtn")
+    pg.click("#layoutLineBtn")
     pg.wait_for_timeout(300)
-    check((pg.text_content("#layoutDrawBtn") or "").strip() == "直線を引く",
-          "文言が戻る", pg.text_content("#layoutDrawBtn"))
+    check((pg.text_content("#layoutLineBtn") or "").strip() == "直線を引く",
+          "文言が戻る", pg.text_content("#layoutLineBtn"))
     check(not pg.eval_on_selector("#poolTable", "e => e.classList.contains('drawing')"),
           "台の状態も戻る")
     # 球がまた掴める（タップでどける）

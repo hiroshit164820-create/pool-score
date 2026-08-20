@@ -18,10 +18,14 @@ const LAYOUT = (function () {
   let balls = [];
   // 台に引いた直線（{ x1, y1, x2, y2 }）。球と同じく台に対する割合で持つ
   let lines = [];
-  // 線を引くモード。入っている間は球を掴めない（指がどちらに効くか分からなくなるため）
-  let drawMode = false;
-  // 指を離す前の線。確定していないので lines には入れない
+  // なぞった通りの線（{ pts: [{x, y}, ...] }）。こちらも割合で持つ
+  let strokes = [];
+  // いまの操作。null（球を動かす）／"line"（直線）／"draw"（描画）
+  // 線を引く間は球を掴めない（指がどちらに効くか分からなくなるため）
+  let mode = null;
+  // 指を離す前の線。確定していないので lines / strokes には入れない
   let preview = null;
+  let previewPts = null;
   // 編集中の配置。保存済みを開いたときだけ id が入る
   let editingId = null;
   let editingName = "";
@@ -100,16 +104,22 @@ const LAYOUT = (function () {
     const actions = screen.querySelector(".layout-actions");
     if (actions && !actions.querySelector("button")) actions.hidden = true;
 
-    // 「直線を引く」の切り替え。球の一覧の上に置く。
+    // 「直線を引く」と「描画する」の切り替え。球の一覧の上に横に並べる。
     // 台の左右の列は細く、ここに置くと文字が読めなくなるため
     const hint = $("layoutHint");
-    if (hint && hint.parentNode && !$("layoutDrawBtn")) {
+    if (hint && hint.parentNode && !$("layoutLineBtn")) {
       const tools = UI.el("div", { class: "lay-tools" }, [
         UI.el("button", {
-          type: "button", id: "layoutDrawBtn", class: "ghost",
+          type: "button", id: "layoutLineBtn", class: "ghost",
           text: "直線を引く",
           "aria-pressed": "false",
-          onclick: function () { setDrawMode(!drawMode); },
+          onclick: function () { setMode(mode === "line" ? null : "line"); },
+        }),
+        UI.el("button", {
+          type: "button", id: "layoutDrawBtn", class: "ghost",
+          text: "描画する",
+          "aria-pressed": "false",
+          onclick: function () { setMode(mode === "draw" ? null : "draw"); },
         }),
       ]);
       hint.parentNode.insertBefore(tools, hint);
@@ -152,7 +162,8 @@ const LAYOUT = (function () {
     if (sub) {
       const bits = [];
       if (balls.length) bits.push(balls.length + "個");
-      if (lines.length) bits.push("線 " + lines.length + "本");
+      if (lines.length) bits.push("直線 " + lines.length + "本");
+      if (strokes.length) bits.push("描画 " + strokes.length + "本");
       sub.textContent = editingName
         ? editingName + " を編集中"
         : (bits.length ? bits.join("　") : "球を置いてください");
@@ -175,6 +186,9 @@ const LAYOUT = (function () {
       lines: lines.map(function (l) {
         return { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 };
       }),
+      strokes: strokes.map(function (t) {
+        return { pts: t.pts.map(function (q) { return { x: q.x, y: q.y }; }) };
+      }),
     };
   }
 
@@ -182,6 +196,7 @@ const LAYOUT = (function () {
   function restore(snap) {
     balls = (snap && snap.balls) ? snap.balls : [];
     lines = (snap && snap.lines) ? snap.lines : [];
+    strokes = (snap && snap.strokes) ? snap.strokes : [];
   }
 
   /** 球の直径（px）。css/v2.css の .tb-ball と揃える */
@@ -350,7 +365,16 @@ const LAYOUT = (function () {
     return node;
   }
 
-  function pct(v) { return (v * 100) + "%"; }
+  /**
+   * SVGの座標系。割合（0〜1）を 0〜VB の数に直して描く。
+   *
+   * なぞった線（polyline）は「%」を受け付けないため、
+   * 直線と同じ座標系に揃える必要がある。台は縦長なので
+   * preserveAspectRatio="none" で伸ばし、線の太さが縦横で
+   * 変わらないよう vector-effect="non-scaling-stroke" を付ける。
+   */
+  const VB = 1000;
+  function u(v) { return Math.round(v * VB * 10) / 10; }
 
   /**
    * 引いた直線を描く。
@@ -366,25 +390,40 @@ const LAYOUT = (function () {
     if (!table) return;
     let svg = table.querySelector(".pt-lines");
     if (!svg) {
-      svg = svgEl("svg", { class: "pt-lines" });
+      svg = svgEl("svg", {
+        class: "pt-lines",
+        viewBox: "0 0 " + VB + " " + VB,
+        preserveAspectRatio: "none",
+      });
       table.insertBefore(svg, $("tableBalls") || null);
       bindDraw(table);
     }
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-    const all = lines.concat(preview ? [preview] : []);
-    all.forEach(function (l, i) {
-      const isPreview = !!preview && i === all.length - 1;
-      const pos = { x1: pct(l.x1), y1: pct(l.y1), x2: pct(l.x2), y2: pct(l.y2) };
-      svg.appendChild(svgEl("line", {
-        class: "ptl-edge", "stroke-linecap": "round",
-        x1: pos.x1, y1: pos.y1, x2: pos.x2, y2: pos.y2,
-      }));
-      svg.appendChild(svgEl("line", {
-        class: "ptl-main" + (isPreview ? " is-preview" : ""),
-        "stroke-linecap": "round",
-        x1: pos.x1, y1: pos.y1, x2: pos.x2, y2: pos.y2,
-      }));
+    // 濃い縁取りの上に明るい線を重ねる。2本で1本に見せる
+    function pair(name, attrs, isPreview) {
+      ["ptl-edge", "ptl-main" + (isPreview ? " is-preview" : "")].forEach(function (cls) {
+        const node = svgEl(name, attrs);
+        node.setAttribute("class", cls);
+        node.setAttribute("stroke-linecap", "round");
+        node.setAttribute("stroke-linejoin", "round");
+        node.setAttribute("fill", "none");
+        node.setAttribute("vector-effect", "non-scaling-stroke");
+        svg.appendChild(node);
+      });
+    }
+
+    lines.concat(preview ? [preview] : []).forEach(function (l, i, arr) {
+      pair("line", {
+        x1: u(l.x1), y1: u(l.y1), x2: u(l.x2), y2: u(l.y2),
+      }, !!preview && i === arr.length - 1);
+    });
+
+    strokes.concat(previewPts ? [{ pts: previewPts }] : []).forEach(function (t, i, arr) {
+      if (!t.pts || t.pts.length < 2) return;
+      pair("polyline", {
+        points: t.pts.map(function (q) { return u(q.x) + "," + u(q.y); }).join(" "),
+      }, !!previewPts && i === arr.length - 1);
     });
   }
 
@@ -409,21 +448,29 @@ const LAYOUT = (function () {
     return Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
   }
 
-  /** 押した場所に一番近い線を消す。指の幅ぶん（16px）まで拾う */
+  /** 押した場所に一番近い線（直線・描画のどちらでも）を消す。指の幅ぶん（16px）まで拾う */
   function removeLineAt(pt, rect) {
     const px = pt.x * rect.width, py = pt.y * rect.height;
-    let hit = -1;
     let best = 16;
+    let hit = null;
     lines.forEach(function (l, i) {
       const d = distToLine(px, py, l, rect);
-      if (d < best) { best = d; hit = i; }
+      if (d < best) { best = d; hit = { kind: "line", i: i }; }
     });
-    if (hit < 0) {
+    strokes.forEach(function (t, i) {
+      for (let k = 1; k < t.pts.length; k++) {
+        const seg = { x1: t.pts[k - 1].x, y1: t.pts[k - 1].y, x2: t.pts[k].x, y2: t.pts[k].y };
+        const d = distToLine(px, py, seg, rect);
+        if (d < best) { best = d; hit = { kind: "stroke", i: i }; }
+      }
+    });
+    if (!hit) {
       UI.toast("台を指でなぞると線が引けます。", "warn");
       return;
     }
     remember();
-    lines.splice(hit, 1);
+    if (hit.kind === "line") lines.splice(hit.i, 1);
+    else strokes.splice(hit.i, 1);
     render();
     UI.toast("線を消しました。「一つ前に戻る」で戻せます。");
   }
@@ -439,17 +486,28 @@ const LAYOUT = (function () {
     let from = null;
 
     table.addEventListener("pointerdown", function (e) {
-      if (!drawMode) return;
+      if (!mode) return;
       e.preventDefault();
       from = ratioOf(e, table);
-      preview = { x1: from.x, y1: from.y, x2: from.x, y2: from.y };
+      if (mode === "line") preview = { x1: from.x, y1: from.y, x2: from.x, y2: from.y };
+      else previewPts = [{ x: from.x, y: from.y }];
       try { table.setPointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
     });
 
     table.addEventListener("pointermove", function (e) {
-      if (!drawMode || !from) return;
+      if (!mode || !from) return;
       const p = ratioOf(e, table);
-      preview = { x1: from.x, y1: from.y, x2: p.x, y2: p.y };
+      if (mode === "line") {
+        preview = { x1: from.x, y1: from.y, x2: p.x, y2: p.y };
+      } else {
+        // 指のぶれで点が増えすぎないよう、3px以上動いたときだけ足す
+        const rect = table.getBoundingClientRect();
+        const last = previewPts[previewPts.length - 1];
+        const dx = (p.x - last.x) * rect.width;
+        const dy = (p.y - last.y) * rect.height;
+        if (Math.sqrt(dx * dx + dy * dy) < 3) return;
+        previewPts.push({ x: p.x, y: p.y });
+      }
       renderLines();
     });
 
@@ -459,11 +517,31 @@ const LAYOUT = (function () {
       const rect = table.getBoundingClientRect();
       try { table.releasePointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
       const start = from;
+      const pts = previewPts;
       from = null;
       preview = null;
+      previewPts = null;
       const dx = (p.x - start.x) * rect.width;
       const dy = (p.y - start.y) * rect.height;
-      if (Math.sqrt(dx * dx + dy * dy) < 10) {
+      const moved = Math.sqrt(dx * dx + dy * dy);
+
+      if (mode === "draw") {
+        // なぞった長さで見る。ぐるっと回って元の場所に戻ることがあるため、
+        // 始点と終点の距離だけでは「押しただけ」と区別できない
+        const len = pathLenPx(pts, rect);
+        if (!pts || pts.length < 2 || len < 10) {
+          renderLines();
+          removeLineAt(p, rect);
+          return;
+        }
+        remember();
+        strokes.push({ pts: pts });
+        render();
+        UI.toast("描きました。線を押すと消せます。");
+        return;
+      }
+
+      if (moved < 10) {
         // ほとんど動いていない = 押しただけ。その場所の線を消す
         renderLines();
         removeLineAt(p, rect);
@@ -479,34 +557,58 @@ const LAYOUT = (function () {
     table.addEventListener("pointercancel", function () {
       from = null;
       preview = null;
+      previewPts = null;
       renderLines();
     });
   }
 
-  /** 「直線を引く」の入り切り */
-  function setDrawMode(on) {
-    drawMode = !!on;
-    const btn = $("layoutDrawBtn");
-    if (btn) {
-      btn.textContent = drawMode ? "線を引くのをやめる" : "直線を引く";
-      btn.className = drawMode ? "primary" : "ghost";
-      btn.setAttribute("aria-pressed", drawMode ? "true" : "false");
+  /** なぞった線の長さ（px） */
+  function pathLenPx(pts, rect) {
+    if (!pts || pts.length < 2) return 0;
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const dx = (pts[i].x - pts[i - 1].x) * rect.width;
+      const dy = (pts[i].y - pts[i - 1].y) * rect.height;
+      len += Math.sqrt(dx * dx + dy * dy);
     }
+    return len;
+  }
+
+  /**
+   * 「直線を引く」「描画する」の入り切り。
+   *
+   * どちらか一方だけが入る（同時には使えない）。
+   * もう一度押すと切れて、球を動かせる状態に戻る。
+   */
+  function setMode(next) {
+    mode = next || null;
+
+    [["layoutLineBtn", "line", "直線を引く", "直線をやめる"],
+     ["layoutDrawBtn", "draw", "描画する", "描画をやめる"]].forEach(function (d) {
+      const btn = $(d[0]);
+      if (!btn) return;
+      const on = mode === d[1];
+      btn.textContent = on ? d[3] : d[2];
+      btn.className = on ? "primary" : "ghost";
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
     // 線を引く間は球を掴めないようにする
     const wrap = $("tableBalls");
-    if (wrap) wrap.style.pointerEvents = drawMode ? "none" : "";
+    if (wrap) wrap.style.pointerEvents = mode ? "none" : "";
     const table = $("poolTable");
-    if (table) table.classList.toggle("drawing", drawMode);
+    if (table) table.classList.toggle("drawing", !!mode);
     const hint = $("layoutHint");
     if (hint) {
-      hint.textContent = drawMode
-        ? "台を指でなぞると直線が引けます。引いた線を押すと消せます。"
-        : "下の番号を押すと台に足せます。";
+      hint.textContent = mode === "line"
+        ? "2点を指でなぞると直線が引けます。引いた線を押すと消せます。"
+        : (mode === "draw"
+          ? "指でなぞった通りに線を描けます。描いた線を押すと消せます。"
+          : "下の番号を押すと台に足せます。");
     }
-    if (!drawMode) {
-      preview = null;
-      renderLines();
-    }
+    preview = null;
+    previewPts = null;
+    renderLines();
   }
 
   /**
@@ -681,10 +783,11 @@ const LAYOUT = (function () {
   }
 
   function clearAll() {
-    if (!balls.length && !lines.length) return;
+    if (!balls.length && !lines.length && !strokes.length) return;
     remember();
     balls = [];
     lines = [];
+    strokes = [];
     editingId = null;
     editingName = "";
     render();
@@ -700,7 +803,7 @@ const LAYOUT = (function () {
   }
 
   function save() {
-    if (!balls.length && !lines.length) {
+    if (!balls.length && !lines.length && !strokes.length) {
       UI.toast("先に球を置いてください。", "warn");
       return;
     }
@@ -715,6 +818,7 @@ const LAYOUT = (function () {
       name: (name || "").trim() || "名前なし",
       balls: balls,
       lines: lines,
+      strokes: strokes,
       note: memoValue(),
     });
     if (!saved) {
@@ -754,7 +858,8 @@ const LAYOUT = (function () {
           UI.el("div", {
             class: "li-sub",
             text: l.balls.length + "個"
-              + ((l.lines && l.lines.length) ? "　線 " + l.lines.length + "本" : ""),
+              + ((l.lines && l.lines.length) ? "　直線 " + l.lines.length + "本" : "")
+              + ((l.strokes && l.strokes.length) ? "　描画 " + l.strokes.length + "本" : ""),
           }),
           l.note ? UI.el("div", { class: "li-note", text: l.note }) : null,
         ]),
@@ -788,9 +893,12 @@ const LAYOUT = (function () {
       return;
     }
     balls = l.balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
-    // 線を入れる前に保存した配置には lines が無い
+    // 線を入れる前に保存した配置には lines / strokes が無い
     lines = (l.lines || []).map(function (t) {
       return { x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 };
+    });
+    strokes = (l.strokes || []).map(function (t) {
+      return { pts: (t.pts || []).map(function (q) { return { x: q.x, y: q.y }; }) };
     });
     editingId = l.id;
     editingName = l.name;
