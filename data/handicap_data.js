@@ -14,14 +14,49 @@
 const JPA_SL_9BALL = { 1: 14, 2: 19, 3: 25, 4: 31, 5: 38, 6: 46, 7: 55, 8: 65, 9: 75 };
 
 /**
- * JPA 9ボールダブルス ペアスキル別 必要得点
- * ペアスキル = 2人のSLの単純合計（出典: premier7.jp ペアスキル算出表）
- * 数値は APA公式 9-Ball Doubles Points Required To Win Chart
- * キーは合計SL。4以下は "4orLess" に丸める。
+ * JPA 9ボールダブルス 必要得点表（本人が2026-08-21にスコア表の画像を提供）
+ *
+ * 読み方: JPA_DOUBLES_9BALL[自分のSL][パートナーのSL] = そのペアの先取点。
+ * 表は対称（自分とパートナーを入れ替えても同じ）。
+ * 例: 自分SL4・パートナーSL6 → 24点先取（提供された表の橙色の欄）。
+ *
+ * ペアのSL合計が15を超える組み合わせは表に無い（対戦を組めない）。
+ * その欄は表でも塗りつぶされている。
+ *
+ * ⚠ 以前は「ペアスキル＝2人のSLの単純合計」で1次元の表を引いていたが、
+ *   提供された表は2人のSLを縦横で見る2次元表で、値も一致しない。
+ *   本人提供の表を正とする（JPA公式PDFでの直接確認は取れていない）。
  */
-const JPA_SL_9BALL_DOUBLES = {
-  4: 19, 5: 22, 6: 25, 7: 28, 8: 31, 9: 35, 10: 38, 11: 42, 12: 46,
+const JPA_DOUBLES_9BALL = {
+  1: { 1: 9, 2: 10, 3: 12, 4: 14, 5: 16, 6: 18, 7: 19, 8: 20, 9: 21 },
+  2: { 1: 10, 2: 12, 3: 14, 4: 16, 5: 18, 6: 19, 7: 21, 8: 22, 9: 23 },
+  3: { 1: 12, 2: 14, 3: 16, 4: 18, 5: 19, 6: 22, 7: 23, 8: 24, 9: 25 },
+  4: { 1: 14, 2: 16, 3: 18, 4: 19, 5: 22, 6: 24, 7: 25, 8: 26, 9: 29 },
+  5: { 1: 16, 2: 18, 3: 19, 4: 22, 5: 24, 6: 26, 7: 27, 8: 29, 9: 32 },
+  6: { 1: 18, 2: 19, 3: 22, 4: 24, 5: 26, 6: 28, 7: 29, 8: 32, 9: 35 },
+  7: { 1: 19, 2: 21, 3: 23, 4: 25, 5: 27, 6: 29, 7: 33, 8: 35 },
+  8: { 1: 20, 2: 22, 3: 24, 4: 26, 5: 29, 6: 32, 7: 35 },
+  9: { 1: 21, 2: 23, 3: 25, 4: 29, 5: 32, 6: 35 },
 };
+
+/** ダブルスで組めるSLの合計の上限（表で塗りつぶされている境目） */
+const JPA_DOUBLES_9BALL_MAX_SUM = 15;
+
+/**
+ * ダブルス1組の先取点を出す。
+ * @param {number} sl1 1人目のSL
+ * @param {number} sl2 2人目のSL
+ */
+function jpaDoubles9BallTarget(sl1, sl2) {
+  const row = JPA_DOUBLES_9BALL[sl1];
+  const v = row ? row[sl2] : undefined;
+  if (v === undefined) {
+    throw new Error("SL" + sl1 + " と SL" + sl2
+      + " の組み合わせは表にありません（合計"
+      + JPA_DOUBLES_9BALL_MAX_SUM + "以下まで）");
+  }
+  return v;
+}
 
 /**
  * JPA/APA 8ボール Games Must Win Chart
@@ -130,16 +165,26 @@ function jpaTeamPoints8(loserRacks, loserTarget) {
   return { winner: 2, loser: 0 };
 }
 
-/** JPA 9ボール: SLから両者の目標点を出す（ダブルスはペアスキル合計） */
-function jpaGoal9Ball(slA, slB, isDoubles) {
-  const table = isDoubles ? JPA_SL_9BALL_DOUBLES : JPA_SL_9BALL;
+/** JPA 9ボール（シングルス）: SLから両者の目標点を出す */
+function jpaGoal9Ball(slA, slB) {
   const pick = function (sl) {
-    if (isDoubles && sl < 4) sl = 4; // ダブルスは合計4以下を4に丸める
-    const v = table[sl];
+    const v = JPA_SL_9BALL[sl];
     if (v === undefined) throw new Error("スキルレベルが表の範囲外: " + sl);
     return v;
   };
   return { A: pick(slA), B: pick(slB) };
+}
+
+/**
+ * JPA 9ボールダブルス: 各チームの2人のSLから両チームの目標点を出す。
+ * @param {number[]} pairA チームAの2人のSL
+ * @param {number[]} pairB チームBの2人のSL
+ */
+function jpaGoal9BallDoubles(pairA, pairB) {
+  return {
+    A: jpaDoubles9BallTarget(pairA[0], pairA[1]),
+    B: jpaDoubles9BallTarget(pairB[0], pairB[1]),
+  };
 }
 
 /** JPA 8ボール: 両者のSLから先取ゲーム数を出す */

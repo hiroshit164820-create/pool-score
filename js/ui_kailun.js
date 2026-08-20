@@ -277,16 +277,21 @@ const KAILUNUI = (function () {
     });
   }
 
+  // 長押しで減点したあと、指を離したときの click で足し戻されないようにする。
+  // 減点すると画面を描き直すのでボタンが別物に入れ替わり、
+  // ボタン側の目印（held）では防げない。時刻で見張る
+  let lastLongPressAt = 0;
+  const LONG_MS = 500;
+  const TAP_BLOCK_MS = 600;
+
   /** タップで+1、長押しで-1。試合画面のスコアと同じ操作にそろえる */
   function bindScoreTap(btn, pid) {
     let timer = null;
-    let held = false;
-    const LONG_MS = 500;
 
     function down() {
-      held = false;
       timer = setTimeout(function () {
-        held = true;
+        timer = null;
+        lastLongPressAt = Date.now();
         adjust(pid, -1);
       }, LONG_MS);
     }
@@ -299,7 +304,7 @@ const KAILUNUI = (function () {
     btn.addEventListener("pointerleave", up);
     btn.addEventListener("pointercancel", up);
     btn.addEventListener("click", function () {
-      if (held) { held = false; return; }
+      if (Date.now() - lastLongPressAt < TAP_BLOCK_MS) return;
       adjust(pid, 1);
     });
   }

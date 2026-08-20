@@ -128,7 +128,8 @@ with sync_playwright() as p:
     check(btn2.count() == 1, "メモが無い試合は「メモを追加」に戻る", btn2.count())
 
     section("5. メモ無しでも今までどおり終了できる")
-    pg.click("#newMatchBtn")
+    # 履歴の下部ボタンは削除したので、下のタブから種目へ移る（2026-08-21）
+    pg.click("#tabSetup")
     pg.wait_for_timeout(400)
     play_and_finish(pg, "鈴木", "田中", None)
     saved2 = pg.evaluate(READ_NOTE, "鈴木")

@@ -263,7 +263,8 @@ def run():
         page.click('.match-card button:has-text("削除")')
         page.wait_for_timeout(300)
         check(page.locator(".match-card").count() == 1, "確認でキャンセルすると削除されない")
-        page.click("#newMatchBtn")
+        # 履歴の下部ボタンは削除したので、下のタブから種目へ移る（2026-08-21）
+        page.click("#tabSetup")
         page.wait_for_timeout(300)
         helpers.pick_game(page, "9ball_doubles")
         page.wait_for_timeout(250)

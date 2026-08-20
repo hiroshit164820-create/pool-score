@@ -64,9 +64,11 @@ with sync_playwright() as p:
     section("1. 登録が2つに分かれている")
     open_players(pg)
     check(pg.is_visible("#toggleSelfBtn"), "「自分を登録する」がある")
-    check(pg.is_visible("#toggleAddPlayerBtn"), "「対戦相手を登録する」がある")
+    # 「対戦相手を登録する」→「選手を登録する」に変えた（本人の指示 2026-08-21）。
+    # ダブルスのパートナーや3人以上で遊ぶ種目でも使うため
+    check(pg.is_visible("#toggleAddPlayerBtn"), "「選手を登録する」がある")
     check("自分" in (pg.text_content("#toggleSelfBtn") or ""), "自分の登録だと分かる文言")
-    check("相手" in (pg.text_content("#toggleAddPlayerBtn") or ""), "相手の登録だと分かる文言")
+    check("選手" in (pg.text_content("#toggleAddPlayerBtn") or ""), "選手の登録だと分かる文言")
 
     # 押すと欄の見出しが変わる（どちらを登録中か分かる）
     pg.click("#toggleSelfBtn")

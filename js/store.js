@@ -62,6 +62,8 @@ const STORE = (function () {
       guest: { A: !!match.sides[0].guest, B: !!match.sides[1].guest },
       createdAt: match.createdAt,
       updatedAt: match.updatedAt,
+      // 履歴に開始と終了の時刻を出すため（本人の指示 2026-08-21）
+      endedAt: res ? (res.endedAt || match.updatedAt) : null,
       finished: !!res,
       winner: res ? res.winner : null,
       scores: res ? res.scores : null,

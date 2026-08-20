@@ -1017,3 +1017,162 @@ button::after {
   font-size: 13px;
   white-space: nowrap;
 }
+
+/* ============ 2026-08-21（2便目）の指示ぶん ============ */
+
+/* ---------- カイルンの人選び ---------- */
+
+/* 選んだ名前が見えず、横スクロールも出ていた（本人の指摘 2026-08-21）。
+   プルダウンが縮まない指定だったため、名前の入力欄が30pxまで潰れて
+   値は入っているのに読めない状態になっていた。
+   入力欄を主役にして、プルダウンは縮む側にする */
+.kl-prow {
+  flex-wrap: nowrap;
+}
+.kl-prow input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.kl-prow select {
+  flex: 0 1 96px;
+  width: 96px;
+  min-width: 0;
+  max-width: 96px;
+  font-size: 13px;
+  padding: 4px 2px;
+}
+.kl-prow > button {
+  flex: 0 0 auto;
+}
+
+/* ---------- 中断中の試合を閉じる × ---------- */
+
+.home-card.resume,
+.resume-card {
+  position: relative;
+}
+.hc-close,
+.rc-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  z-index: 2;
+}
+/* ×のぶん、見出しが札の下に隠れないよう右に余白を作る */
+.home-card.resume .hc-title,
+.resume-card .rc-head {
+  padding-right: 52px;
+}
+
+/* ---------- 履歴カード（2026-08-21 の作り直し） ---------- */
+
+/* 種目名は太字で少し大きく（本人の指示 2026-08-21） */
+.match-card .mc-game {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+/* 開始と終了の時刻 */
+.match-card .mc-time {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #6b6255);
+  margin-bottom: 6px;
+}
+
+/* 名前・スコア・名前を3つの列にそろえる。
+   下に続く JPAポイントの行と数字の位置を合わせるため */
+.match-card .mc-main {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.match-card .mc-main .mc-nm:first-child {
+  justify-self: start;
+  text-align: left;
+}
+.match-card .mc-main .mc-nm:last-child {
+  justify-self: end;
+  text-align: right;
+}
+.match-card .mc-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: center;
+}
+.match-card .mc-num {
+  min-width: 76px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* JPAポイントの行。「P」は付けず、上のスコアと同じ幅で中央にそろえる */
+.match-card .mc-jpa {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.match-card .mc-jpa-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #6b6255);
+}
+
+/* マスワリ・セーフティは、出した人の名前の下に置く */
+.match-card .mc-under {
+  margin-top: 2px;
+}
+.match-card .mc-side-stats {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #6b6255);
+}
+.match-card .mc-under > .mc-side-stats:first-child {
+  justify-self: start;
+}
+.match-card .mc-under > .mc-side-stats:last-child {
+  justify-self: end;
+  text-align: right;
+}
+
+/* ボウラードは1人でやる種目。対戦形式の3列にはしない */
+.match-card .mc-solo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.match-card .mc-solo .mc-nm {
+  font-size: 17px;
+  font-weight: 900;
+}
+.match-card .mc-solo-stats {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* W-L の札は幅を固定する。JPAポイントの行と数字の位置をそろえるため */
+.match-card .mc-score .mc-wl {
+  flex: 0 0 20px;
+  width: 20px;
+  text-align: center;
+}
+.match-card .mc-wl.is-blank {
+  visibility: hidden;
+}
+.match-card .mc-jpa .mc-jpa-label {
+  justify-self: start;
+}

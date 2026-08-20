@@ -135,7 +135,9 @@ with sync_playwright() as p:
 
     check(pg.is_visible("#chessClockBar"), "試合画面にチェスクロックが出る")
     check(not pg.is_visible("#shotClockBar"), "ショットクロックは出ない")
-    check(pg.text_content("#ccTimeA") == "10:00", "Aの持ち時間が10:00", pg.text_content("#ccTimeA"))
+    # 開始直後は1秒動いていることがあるので、10:00か9:59なら合格にする
+    check(pg.text_content("#ccTimeA") in ("10:00", "9:59"),
+          "Aの持ち時間が10:00", pg.text_content("#ccTimeA"))
     check(pg.text_content("#ccNameA") == "山田", "名前が出る", pg.text_content("#ccNameA"))
 
     active = pg.evaluate("() => document.querySelector('#ccSideA').classList.contains('active')")
@@ -185,7 +187,7 @@ with sync_playwright() as p:
         pg.click("#confirmFinishBtn")
         pg.wait_for_timeout(500)
 
-    pg.click("#toPlayersBtn")
+    pg.click("#tabPlayers")
     pg.wait_for_timeout(400)
     card = pg.locator("#playerList .match-card").filter(has_text="山田").first
     txt = card.text_content() or ""
@@ -238,7 +240,7 @@ with sync_playwright() as p:
         pg.click("#confirmFinishBtn")
         pg.wait_for_timeout(500)
 
-    pg.click("#toPlayersBtn")
+    pg.click("#tabPlayers")
     pg.wait_for_timeout(300)
     pg.click("#tabStats")
     pg.wait_for_timeout(300)

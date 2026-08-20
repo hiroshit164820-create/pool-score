@@ -15,11 +15,10 @@ const HISTORY = (function () {
   function bindOnce() {
     if (bound) return;
     bound = true;
-    $("newMatchBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
-    $("backFromHistoryBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
-    $("exportBtn").addEventListener("click", UI.guard(exportJSON));
-    $("importBtn").addEventListener("click", function () { $("importInput").click(); });
-    $("importInput").addEventListener("change", onImportFile);
+    // 上下のボタン（新しい試合・プレーヤー・読み込み・書き出し・戻る）は
+    // 本人の指示（2026-08-21）で削除した。移動は下のタブでする。
+    // 書き出し／読み込みの処理そのものは残してあるので、必要になれば
+    // ボタンを戻すだけで使える
 
     // 表計算（CSV）への書き出し。いま絞り込んでいるぶんだけを出す
     $("csvHistoryBtn").addEventListener("click", UI.guard(function () {
@@ -128,6 +127,45 @@ const HISTORY = (function () {
     UI.toast(next.trim() ? "メモを保存しました。" : "メモを消しました。");
   }
 
+  /** 時刻だけ（開始・終了に使う） */
+  function fmtTime(iso) {
+    try {
+      const d = new Date(iso);
+      const p = function (n) { return String(n).padStart(2, "0"); };
+      return p(d.getHours()) + ":" + p(d.getMinutes());
+    } catch (e) {
+      return "";
+    }
+  }
+
+  /** 開始から終了までの長さ。読みやすい単位にする */
+  function fmtSpan(fromIso, toIso) {
+    try {
+      const ms = new Date(toIso) - new Date(fromIso);
+      if (!(ms > 0)) return "";
+      const min = Math.round(ms / 60000);
+      if (min < 1) return "1分未満";
+      if (min < 60) return min + "分";
+      return Math.floor(min / 60) + "時間" + (min % 60) + "分";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  /**
+   * 開始と終了の時刻の行（本人の指示 2026-08-21）。
+   * 終わっていない試合は開始だけ出す。
+   */
+  function timeLine(m) {
+    const parts = ["開始 " + fmtTime(m.createdAt)];
+    if (m.endedAt) {
+      parts.push("終了 " + fmtTime(m.endedAt));
+      const span = fmtSpan(m.createdAt, m.endedAt);
+      if (span) parts.push(span);
+    }
+    return UI.el("div", { class: "mc-time", text: parts.join("　/　") });
+  }
+
   function fmtDate(iso) {
     try {
       const d = new Date(iso);
@@ -188,10 +226,35 @@ const HISTORY = (function () {
       const card = UI.el("div", { class: "match-card" });
 
       const top = UI.el("div", { class: "mc-top" }, [
-        UI.el("span", { text: m.gameLabel }),
+        UI.el("span", { class: "mc-game", text: m.gameLabel }),
         UI.el("span", { text: fmtDate(m.createdAt) }),
       ]);
       card.appendChild(top);
+      card.appendChild(timeLine(m));
+
+      // ボウラードは1人でやる種目で、対戦形式ではない。
+      // 獲得スコア・ストライク・スペア・ミス・経過時間を出す（本人の指示 2026-08-21）
+      if (m.bowlard) {
+        const sc0 = m.scores || {};
+        // ボウラードの得点はスコア表から計算する値なので、集計側（result.bowlard）を見る
+        const total = m.bowlard.total != null ? m.bowlard.total : sc0.A;
+        const bits = ["獲得スコア " + (total === undefined || total === null ? "—" : total),
+                      "ストライク " + m.bowlard.strike,
+                      "スペア " + m.bowlard.spare,
+                      "ミス " + m.bowlard.miss];
+        const span = m.endedAt ? fmtSpan(m.createdAt, m.endedAt) : "";
+        if (span) bits.push("経過 " + span);
+        card.appendChild(UI.el("div", { class: "mc-solo" }, [
+          UI.el("span", { class: "mc-nm", text: m.names.A }),
+          UI.el("span", { class: "mc-solo-stats", text: bits.join("　/　") }),
+        ]));
+        if (!m.finished) {
+          card.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
+        }
+        appendFoot(card, m);
+        list.appendChild(card);
+        return;
+      }
 
       const scoreText = m.scores
         ? (m.racks && (m.racks.A || m.racks.B) && !m.scores.A && !m.scores.B
@@ -210,51 +273,92 @@ const HISTORY = (function () {
         if (sl[side] != null) {
           box.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
         }
-        // 勝敗はW-Lで出す（本人の指示 2026-08-20）
-        if (m.finished && m.winner) {
-          box.appendChild(
-            UI.el("span", {
-              class: "mc-wl " + (m.winner === side ? "is-w" : "is-l"),
-              text: m.winner === side ? "W" : "L",
-            })
-          );
-        }
         return box;
       }
 
-      const main = UI.el("div", { class: "mc-main" }, [
-        nameCell("A"),
-        UI.el("span", { class: "mc-score", text: scoreText }),
-        nameCell("B"),
-      ]);
-      // 進行中の印はプレーヤー名と同じ行の右端に出す（本人の指示）。
-      // 決着した試合は名前の横のW/Lで分かるので、印は重ねない
-      if (!m.finished) {
-        main.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
+      // 勝敗の W-L はスコアの左右に置く（本人の指示 2026-08-21）。
+      // 例: プレーヤーA　W 5-1 L　プレーヤーB
+      const center = UI.el("span", { class: "mc-score" });
+      if (m.finished && m.winner) {
+        center.appendChild(UI.el("span", {
+          class: "mc-wl " + (m.winner === "A" ? "is-w" : "is-l"),
+          text: m.winner === "A" ? "W" : "L",
+        }));
       }
+      center.appendChild(UI.el("span", { class: "mc-num", text: scoreText }));
+      if (m.finished && m.winner) {
+        center.appendChild(UI.el("span", {
+          class: "mc-wl " + (m.winner === "B" ? "is-w" : "is-l"),
+          text: m.winner === "B" ? "W" : "L",
+        }));
+      }
+
+      const main = UI.el("div", { class: "mc-main" }, [
+        nameCell("A"), center, nameCell("B"),
+      ]);
       card.appendChild(main);
 
-      // イニング数とセーフティ数。スコアだけでは分からない内容を1行足す
-      if (m.finished && m.innings !== null && m.innings !== undefined) {
-        // ボウラードはイニングに意味が無いので、代わりに3つの数を出す
-        const bits = m.bowlard
-          ? ["ストライク " + m.bowlard.strike, "スペア " + m.bowlard.spare,
-             "ミス " + m.bowlard.miss]
-          : ["イニング " + m.innings];
-        const sf = m.safety || {};
-        if ((sf.A || 0) + (sf.B || 0) > 0) {
-          bits.push("セーフティ " + ((sf.A || 0) + (sf.B || 0)));
-        }
-        const ms = m.masuwari || {};
-        if ((ms.A || 0) + (ms.B || 0) > 0) {
-          bits.push("マスワリ " + ((ms.A || 0) + (ms.B || 0)));
-        }
-        const jp = (m.jpa && m.jpa.teamPoints) || null;
-        if (jp) bits.push("JPA " + jp.A + "P - " + jp.B + "P");
-        card.appendChild(UI.el("div", { class: "mc-stats", text: bits.join("　・　") }));
+      if (!m.finished) {
+        card.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
       }
 
-      // 操作は1行に収める。勝敗の印は上の行へ移したので、ここはボタンだけ（本人の指示）
+      if (m.finished) {
+        // JPAポイント。「P」は付けず、上のスコアと列をそろえる（本人の指示 2026-08-21）
+        const jp = (m.jpa && m.jpa.teamPoints) || null;
+        if (jp) {
+          // 上のスコアと数字の位置をそろえるため、W/L と同じ幅の空きを左右に置く
+          card.appendChild(UI.el("div", { class: "mc-main mc-jpa" }, [
+            UI.el("span", { class: "mc-jpa-label", text: "JPAポイント" }),
+            UI.el("span", { class: "mc-score" }, [
+              UI.el("span", { class: "mc-wl is-blank" }),
+              UI.el("span", { class: "mc-num", text: jp.A + " - " + jp.B }),
+              UI.el("span", { class: "mc-wl is-blank" }),
+            ]),
+            UI.el("span", {}),
+          ]));
+        }
+
+        // マスワリ・セーフティは、出した人の名前の下に置く（本人の指示 2026-08-21）
+        const ms = m.masuwari || {};
+        const sf = m.safety || {};
+        function sideStats(side) {
+          const bits = [];
+          if (ms[side]) bits.push("マスワリ " + ms[side]);
+          if (sf[side]) bits.push("セーフティ " + sf[side]);
+          return UI.el("span", { class: "mc-side-stats", text: bits.join("　") });
+        }
+        if (ms.A || ms.B || sf.A || sf.B) {
+          card.appendChild(UI.el("div", { class: "mc-main mc-under" }, [
+            sideStats("A"),
+            UI.el("span", { class: "mc-score" }),
+            sideStats("B"),
+          ]));
+        }
+
+        if (m.innings !== null && m.innings !== undefined) {
+          card.appendChild(UI.el("div", { class: "mc-stats", text: "イニング " + m.innings }));
+        }
+      }
+
+      appendFoot(card, m);
+
+      // 書いてあるメモは開かなくても読めるようにする
+      const noteText0 = (m.note || "").trim();
+      if (noteText0) {
+        card.appendChild(UI.el("p", { class: "mc-note", text: noteText0 }));
+      }
+
+      list.appendChild(card);
+    });
+
+    renderMoneyResults(list);
+  }
+
+  /**
+   * カードの下のボタン（続きを記録・メモ・削除）。
+   * ボウラードのカードでも同じものを使うので関数にしてある。
+   */
+  function appendFoot(card, m) {
       const foot = UI.el("div", { class: "mc-foot" });
       if (!m.finished) {
         foot.appendChild(
@@ -297,17 +401,6 @@ const HISTORY = (function () {
         })
       );
       card.appendChild(foot);
-
-      // 書いてあるメモは開かなくても読めるようにする
-      const noteText = (m.note || "").trim();
-      if (noteText) {
-        card.appendChild(UI.el("p", { class: "mc-note", text: noteText }));
-      }
-
-      list.appendChild(card);
-    });
-
-    renderMoneyResults(list);
   }
 
   /**

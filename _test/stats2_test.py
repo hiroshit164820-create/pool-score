@@ -157,7 +157,11 @@ with sync_playwright() as p:
     check(len(sls) >= 2, "JPAの試合で名前のうしろにSLが出る", sls)
     stats_line = pg.eval_on_selector_all(".match-card .mc-stats", "e => e.map(x => x.textContent)")
     check(any("イニング" in s for s in stats_line), "履歴にイニング数が出る", stats_line)
-    check(any("JPA" in s for s in stats_line), "履歴にJPAポイントが出る", stats_line)
+    # JPAポイントは 2026-08-21 から専用の行（.mc-jpa）に、「P」を付けずに出す
+    jpa_line = pg.eval_on_selector_all(".match-card .mc-jpa", "e => e.map(x => x.textContent)")
+    check(len(jpa_line) >= 1, "履歴にJPAポイントが出る", jpa_line)
+    check(not any("P" in s.replace("JPAポイント", "") for s in jpa_line),
+          "JPAポイントに「P」を付けない", jpa_line)
 
     foot_rows = pg.eval_on_selector(".match-card .mc-foot",
                                     "e => new Set(Array.from(e.children)"
@@ -200,8 +204,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     btns = pg.eval_on_selector_all("#homeBody button", "e => e.map(x => x.textContent)")
     check(any("種目ごとの成績" in b for b in btns), "ホームにボタンがある", btns)
-    check(pg.eval_on_selector_all("#homeBody .home-new", "e => e.length") == 1,
-          "「新しい試合を始める」は1つのまま")
+    # 「新しい試合を始める」は本人の指示（2026-08-21）で削除した
+    check(pg.eval_on_selector_all("#homeBody .home-new", "e => e.length") == 0,
+          "「新しい試合を始める」は置かない")
     pg.locator("#homeBody button", has_text="種目ごとの成績を見る").click()
     pg.wait_for_timeout(400)
     check(pg.is_visible("#screenGameStats"), "種目ごとの成績が開く")

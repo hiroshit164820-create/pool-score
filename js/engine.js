@@ -787,7 +787,8 @@ function bowlardThrowsOf(match) {
  */
 function bowlardTally(throws, cfg) {
   const sc = buildBowlardScore(throws, cfg);
-  const out = { strike: 0, spare: 0, miss: 0 };
+  // total も一緒に返す。履歴に「獲得スコア」を出すのに使う（本人の指示 2026-08-21）
+  const out = { strike: 0, spare: 0, miss: 0, total: sc.total };
   sc.frames.forEach(function (f) {
     if (f.kind === "strike") out.strike += 1;
     else if (f.kind === "spare") out.spare += 1;

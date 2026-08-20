@@ -284,8 +284,13 @@ const SETUP = (function () {
   let goalValues = { A: 5, B: 5 };
   // 何セット先取で試合の勝ちにするか。既定は1（＝今までどおり1本勝負）
   let setsToWin = 1;
-  // JPA用。スキルレベルから持ち点を自動算出する
+  // JPA用。スキルレベルから持ち点を自動算出する。
+  // シングルスは skillLevels、ダブルスは memberSkills（2人ぶん）を使う。
+  // skillLevels にはダブルスでも合計を入れておく（記録とチームポイントの算出に使う）
   let skillLevels = { A: 5, B: 5 };
+  // JPA 9ボールダブルスは、2人のSLを縦横で見る表から先取点が決まる
+  // （本人提供のスコア表 2026-08-21。data/handicap_data.js の JPA_DOUBLES_9BALL）
+  let memberSkills = { A: [5, 5], B: [5, 5] };
   // 盤面の色分けに使うボールセット。
   // 選ぶ項目は画面から削除した（本人の指示 2026-08-20）。
   // 色そのものは残るので、既定（標準セット）を使い、試合記録にも書き残す
@@ -945,19 +950,18 @@ const SETUP = (function () {
     if (!v) return;
 
     if (g.playersPerSide === 2) {
-      // ダブルスは合計。両方の欄に登録済みの人が入っているときだけ自動計算する
+      // ダブルスは1人ずつ入れる（表が2人のSLを縦横で見る形のため）。
+      // 入っている人のぶんだけ反映し、片方だけでも構わない
       const n1 = readName("inName" + side, "");
       const n2 = readName("inName" + side + "2", "");
       const p1 = STORE.findPlayerByName(n1);
       const p2 = STORE.findPlayerByName(n2);
       const v1 = p1 && p1.skill ? p1.skill[kind] : null;
       const v2 = p2 && p2.skill ? p2.skill[kind] : null;
-      if (!v1 || !v2) return;
-      const sum = v1 + v2;
-      // 合計が表の範囲を超える場合は反映しない（誤った勝利条件を出さない）
-      const max = kind === "eight" ? 7 : 9;
-      if (sum < 2 || sum > max * 2) return;
-      skillLevels[side] = sum;
+      if (v1) memberSkills[side][0] = v1;
+      if (v2) memberSkills[side][1] = v2;
+      if (!v1 && !v2) return;
+      skillLevels[side] = memberSkills[side][0] + memberSkills[side][1];
     } else {
       skillLevels[side] = v;
     }
@@ -1453,36 +1457,56 @@ const SETUP = (function () {
     // 選べるスキルレベルの範囲（8ボールは2〜7、9ボールは1〜9）
     const range = is8 ? [2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-    ["A", "B"].forEach(function (side) {
-      const chips = UI.el("div", { class: "chips" });
+    /** SLを選ぶボタンの列を1つ作る */
+    function slRow(labelText, current, onPick) {
+      const chips = UI.el("div", { class: "chips sl-chips" });
       range.forEach(function (sl) {
         chips.appendChild(
           UI.el("button", {
             type: "button",
             class: "chip",
             text: "SL" + sl,
-            "aria-pressed": String(skillLevels[side] === sl),
-            onclick: function () {
-              skillLevels[side] = sl;
-              renderJpaGoalArea(g, wrap);
-            },
+            "aria-pressed": String(current === sl),
+            onclick: function () { onPick(sl); renderJpaGoalArea(g, wrap); },
           })
         );
       });
-      const label = isDoubles
-        ? (side === "A" ? "チームA" : "チームB") + " のスキルレベル（2人の合計）"
-        : (side === "A" ? "プレーヤーA" : "プレーヤーB") + " のスキルレベル";
-      const holder = UI.el("div", { class: "field" }, [UI.el("label", { text: label }), chips]);
-      wrap.appendChild(holder);
+      wrap.appendChild(
+        UI.el("div", { class: "field" }, [UI.el("label", { text: labelText }), chips])
+      );
+    }
+
+    ["A", "B"].forEach(function (side) {
+      const team = side === "A" ? "チームA" : "チームB";
+      if (isDoubles) {
+        // ダブルスは2人ぶん。合計ではなく1人ずつ選ぶ（本人提供の表が2次元のため）
+        [0, 1].forEach(function (i) {
+          const nm = readName("inName" + side + (i === 0 ? "" : "2"), "");
+          slRow(team + "　" + (nm || (i + 1) + "人目") + " のSL",
+                memberSkills[side][i],
+                function (sl) {
+                  memberSkills[side][i] = sl;
+                  skillLevels[side] = memberSkills[side][0] + memberSkills[side][1];
+                });
+        });
+      } else {
+        slRow((side === "A" ? "プレーヤーA" : "プレーヤーB") + " のスキルレベル",
+              skillLevels[side],
+              function (sl) { skillLevels[side] = sl; });
+      }
     });
 
     // 算出結果を表示する
     let targets = null;
     let err = null;
     try {
-      targets = is8
-        ? jpaGoal8Ball(skillLevels.A, skillLevels.B)
-        : jpaGoal9Ball(skillLevels.A, skillLevels.B, isDoubles);
+      if (is8) {
+        targets = jpaGoal8Ball(skillLevels.A, skillLevels.B);
+      } else if (isDoubles) {
+        targets = jpaGoal9BallDoubles(memberSkills.A, memberSkills.B);
+      } else {
+        targets = jpaGoal9Ball(skillLevels.A, skillLevels.B);
+      }
     } catch (e) {
       err = e && e.message ? e.message : "算出できません";
     }
@@ -1495,9 +1519,13 @@ const SETUP = (function () {
           UI.el("label", { text: "この組み合わせの勝利条件" }),
           UI.el("p", {
             class: "jpa-result",
-            // 1行に収めるため区切りは半角にする（本人の指示 2026-08-21）
-            text: "SL" + skillLevels.A + " → " + targets.A + unit + " ／ SL" +
-              skillLevels.B + " → " + targets.B + unit,
+            // 1行に収めるため区切りは半角にする（本人の指示 2026-08-21）。
+            // ダブルスは「2人のSL」を並べて出す
+            text: isDoubles
+              ? ("SL" + memberSkills.A.join("+") + " → " + targets.A + unit
+                 + " ／ SL" + memberSkills.B.join("+") + " → " + targets.B + unit)
+              : ("SL" + skillLevels.A + " → " + targets.A + unit + " ／ SL" +
+                 skillLevels.B + " → " + targets.B + unit),
           }),
         ])
       );
@@ -1517,7 +1545,7 @@ const SETUP = (function () {
       wrap.appendChild(
         UI.el("p", {
           class: "hint",
-          text: "ダブルスのスキルレベルは、2人のスキルレベルを足した数です。",
+          text: "2人のSLを縦横で見る公式表から決まります。合計15までです。",
         })
       );
     }
@@ -1740,7 +1768,12 @@ const SETUP = (function () {
       const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
       if (isJpa) {
         const unit = g.goal === "jpaSL8" ? "ゲーム先取" : "点先取";
-        add("スキルレベル", "SL" + skillLevels.A + " 対 SL" + skillLevels.B);
+        if (g.playersPerSide === 2) {
+          add("スキルレベル", "SL" + memberSkills.A.join("+")
+            + " 対 SL" + memberSkills.B.join("+"));
+        } else {
+          add("スキルレベル", "SL" + skillLevels.A + " 対 SL" + skillLevels.B);
+        }
         add("勝利条件", sideName("A") + " " + goalValues.A + unit
           + " ／ " + sideName("B") + " " + goalValues.B + unit);
       } else if (g.goalHidden) {

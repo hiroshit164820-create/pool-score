@@ -45,6 +45,8 @@
     <div class="setup-body">
       <!-- 中断した試合があれば、いちばん上で再開できるようにする -->
       <div id="resumeCard" class="resume-card" hidden>
+        <button id="resumeCloseBtn" class="rc-close" type="button"
+                aria-label="この中断中の試合を閉じる">×</button>
         <div class="rc-head">中断中の試合があります</div>
         <div class="rc-body" id="resumeInfo"></div>
         <div class="rc-actions">
@@ -466,8 +468,6 @@
       <h1>履歴</h1>
       <div>
         <button id="csvHistoryBtn" class="small ghost">表計算へ</button>
-        <button id="exportBtn" class="small ghost">書き出し</button>
-        <button id="backFromHistoryBtn" class="small ghost">戻る</button>
       </div>
     </div>
     <!-- 種目と対戦相手で絞り込む -->
@@ -483,12 +483,6 @@
       <button id="histFilterClear" class="small ghost">絞り込みを外す</button>
     </div>
     <div class="list" id="historyList"></div>
-    <div class="bottom-bar">
-      <button id="newMatchBtn" class="primary">新しい試合</button>
-      <button id="toPlayersBtn" class="ghost">プレーヤー</button>
-      <button id="importBtn" class="ghost">読み込み</button>
-      <input type="file" id="importInput" accept="application/json" hidden>
-    </div>
   </section>
 
   <!-- ================= 選手一覧 ================= -->
@@ -512,7 +506,7 @@
 
       <button id="toggleAddPlayerBtn" class="add-player-head" aria-expanded="false">
         <span class="aph-plus" aria-hidden="true">＋</span>
-        <span class="aph-label">対戦相手を登録する</span>
+        <span class="aph-label">選手を登録する</span>
       </button>
 
       <div id="addPlayerBody" class="add-player-body" hidden>

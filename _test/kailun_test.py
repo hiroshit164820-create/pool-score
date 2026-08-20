@@ -189,11 +189,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(250)
     check(score_of(pg, "みなみ") == str(int(before) + 1), "タップで1点入る",
           score_of(pg, "みなみ"))
+    # 通知が出ている間は画面が下にずれる（帯の下に場所を空けて出す作りのため）。
+    # 消えてから位置を測らないと、押している最中にボタンが動いて長押しが外れる
+    pg.wait_for_timeout(1500)
     box = pg.locator('#kailunScores .kl-score:has(.kl-name:text-is("みなみ"))')
     b = box.bounding_box()
     pg.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
     pg.mouse.down()
-    pg.wait_for_timeout(750)
+    pg.wait_for_timeout(900)
     pg.mouse.up()
     pg.wait_for_timeout(250)
     check(score_of(pg, "みなみ") == before, "長押しで1点戻る", score_of(pg, "みなみ"))

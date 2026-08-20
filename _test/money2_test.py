@@ -94,8 +94,9 @@ with sync_playwright() as p:
     section("C. 履歴のW-Lと獲得スコア")
     wl = pg.eval_on_selector_all(".match-card .mc-wl", "e => e.map(x => x.textContent)")
     check("W" in wl and "L" in wl, "履歴の名前のうしろにW/Lが出る", wl)
-    stats = pg.eval_on_selector_all(".match-card .mc-stats", "e => e.map(x => x.textContent)")
-    check(any("JPA" in s for s in stats), "履歴に獲得ポイントが出る", stats)
+    # JPAポイントは 2026-08-21 から専用の行（.mc-jpa）に出す
+    jpa_line = pg.eval_on_selector_all(".match-card .mc-jpa", "e => e.map(x => x.textContent)")
+    check(len(jpa_line) >= 1, "履歴に獲得ポイントが出る", jpa_line)
 
     # ================= C-1. 通知が上の帯を塞がない =================
     section("C. 通知が上の帯のボタンを覆わない")

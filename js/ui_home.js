@@ -63,6 +63,14 @@ const HOME = (function () {
     if (ongoing.length) {
       const m = ongoing[0];
       const card = UI.el("div", { class: "home-card resume" }, [
+        // × で閉じる。記録は保存しない（本人の指示 2026-08-21）
+        UI.el("button", {
+          class: "hc-close",
+          type: "button",
+          text: "×",
+          "aria-label": "この中断中の試合を閉じる",
+          onclick: UI.guard(function () { discardOngoing(m.id); }),
+        }),
         UI.el("div", { class: "hc-title", text: "中断している試合があります" }),
         UI.el("div", { class: "hc-main", text: m.names.A + " 対 " + m.names.B }),
         UI.el("div", { class: "hc-sub", text: m.gameLabel + "　" + fmtDate(m.createdAt) }),
@@ -167,21 +175,25 @@ const HOME = (function () {
       );
     }
 
-    // 新しい試合はどの状態でも始められるようにする
-    body.appendChild(
-      UI.el("button", {
-        class: "primary home-new",
-        text: "新しい試合を始める",
-        onclick: function () { UI.showScreen("screenSetup"); },
-      })
-    );
-
     const sub = $("homeSub");
     if (sub) {
       sub.textContent = me
         ? me.player.name + "　" + me.stats.matches + "試合"
         : (matches.length ? matches.length + "件の記録" : "");
     }
+  }
+
+  /**
+   * 中断中の試合を、保存せずに捨てる。
+   *
+   * 本人の指示（2026-08-21）で「×は記録を保存しない」ため、
+   * 履歴には残さずそのまま消す。
+   */
+  function discardOngoing(id) {
+    STORE.deleteMatch(id);
+    render();
+    window.dispatchEvent(new Event("pool-score:refresh-resume"));
+    UI.toast("中断中の試合を閉じました。記録は残していません。");
   }
 
   function stat(label, value) {

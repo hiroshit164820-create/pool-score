@@ -93,7 +93,7 @@ const GAMES = {
   },
 
   straight: {
-    label: "14-1",
+    label: "14-1（ストレートプール）",
     base: "straight", scoring: "straight", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "score",

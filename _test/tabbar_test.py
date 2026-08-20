@@ -112,7 +112,10 @@ with sync_playwright() as p:
     # 記録が無いときの案内
     body = pg.text_content("#homeBody") or ""
     check("まだ記録がありません" in body, "記録が無いときは案内を出す", body[:40])
-    check(pg.locator(".home-new").count() == 1, "記録が無くても試合を始められる")
+    # 「新しい試合を始める」は本人の指示（2026-08-21）で削除した。
+    # 下のタブの「種目」と役目が重なるため
+    check(pg.locator(".home-new").count() == 0, "「新しい試合を始める」は置かない")
+    check(pg.locator("#tabSetup").count() == 1, "代わりに下のタブの「種目」から始める")
 
     # 記録を作る
     play(pg, "山田", "佐藤", "A")

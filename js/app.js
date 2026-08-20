@@ -31,9 +31,6 @@
     UI.$("toPlayersBtn2").addEventListener("click", function () {
       PLAYERS.open();
     });
-    UI.$("toPlayersBtn").addEventListener("click", function () {
-      PLAYERS.open();
-    });
 
     renderResume();
   }
@@ -93,6 +90,17 @@
       }
       MATCH.open(m);
     });
+
+    // × は保存せずに閉じる（本人の指示 2026-08-21）。
+    // 隣の「この試合を終了して保存」とは別で、記録を残さない
+    const closeBtn = UI.$("resumeCloseBtn");
+    if (closeBtn) {
+      closeBtn.onclick = UI.guard(function () {
+        STORE.deleteMatch(ongoing.id);
+        renderResume();
+        UI.toast("中断中の試合を閉じました。記録は残していません。");
+      });
+    }
 
     UI.$("resumeDiscardBtn").onclick = UI.guard(function () {
       if (!window.confirm([
