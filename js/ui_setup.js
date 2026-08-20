@@ -217,6 +217,8 @@ const SETUP = (function () {
       label: "ハウスゲーム（店ごとのルール）",
       items: [
         { id: "kailun", doubles: null },
+        { id: "59", doubles: null },
+        { id: "510", doubles: null },
       ],
     },
   ];
@@ -421,6 +423,13 @@ const SETUP = (function () {
   }
 
   function selectGame(id) {
+    // 5-9 / 5-10 は人数もスコアの持ち方も違うため、専用画面へ回す。
+    // ここで止めないと、A/B前提の勝利条件やハンデの欄が続けて描かれる
+    const money = GAMES[id] && GAMES[id].moneyGame;
+    if (money && typeof MONEYUI !== "undefined") {
+      MONEYUI.open(money);
+      return;
+    }
     selectedGame = id;
     const gSel = GAMES[id];
     doublesOn = !!(gSel && gSel.playersPerSide === 2);

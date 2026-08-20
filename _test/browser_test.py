@@ -48,7 +48,7 @@ def run():
         check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
         # 種目はカテゴリに畳まれている。全部開いたときに選べる数
         # 通常8（ダブルス2つ含む）＋JPA3＋ハウス1（カイルン）＝12
-        check(helpers.count_selectable_games(page) == 12, "種目が12選べる（通常8＋JPA3＋ハウス1）",
+        check(helpers.count_selectable_games(page) == 14, "種目が14選べる（通常8＋JPA3＋ハウス3）",
               helpers.count_selectable_games(page))
         check(page.is_visible("#startMatchBtn"), "開始ボタンが見えている")
         page.screenshot(path=os.path.join(SHOT_DIR, "01_setup.png"), full_page=True)

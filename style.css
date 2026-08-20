@@ -3216,3 +3216,161 @@ body.match-active .app {
 #screenMatch.solo-mode .breakmark {
   display: none;
 }
+
+/* ==========================================================
+   5-9 / 5-10（ハウスゲーム）
+   3人以上で遊ぶため、既存のA/B2パネルとは別の画面を持つ
+   ========================================================== */
+.money-players {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.money-player-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.money-name {
+  flex: 1;
+  min-width: 0;
+  /* 台の脇で押すので、他の入力欄と同じ大きさを保つ */
+  min-height: 44px;
+  font-size: 16px;
+}
+.money-hc {
+  margin-bottom: 8px;
+}
+.money-start {
+  width: 100%;
+  margin-top: 14px;
+}
+
+/* 持ち点。人数ぶん並ぶので折り返す */
+.money-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.money-score {
+  padding: 10px 6px;
+  text-align: center;
+  border: var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+}
+.money-score.plus { border-color: var(--side-a); }
+.money-score.minus { border-color: var(--side-b); }
+.ms-name {
+  font-size: 13px;
+  font-weight: 800;
+  /* 名前が長くても持ち点の桁を潰さない */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-val {
+  font-family: var(--font-pixel);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.money-score.plus .ms-val { color: var(--side-a); }
+.money-score.minus .ms-val { color: var(--side-b); }
+
+/* 落とした人 */
+.money-shooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.money-pick {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 16px;
+  font-weight: 800;
+  border: var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+.money-pick[aria-pressed="true"] {
+  background: var(--side-a);
+  color: #fff;
+}
+
+/* 落とした球 */
+.money-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.money-ball {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  font-family: var(--font-pixel);
+}
+.mb-pt {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.money-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* チェックも指で押すので高さを確保する */
+  min-height: 44px;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+.money-side input {
+  width: 24px;
+  height: 24px;
+}
+
+.money-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.money-actions button {
+  flex: 1;
+  min-height: 44px;
+}
+
+.money-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.money-log-row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  border: var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+}
+.mlr-head {
+  flex: 0 0 auto;
+  font-weight: 900;
+}
+.mlr-body {
+  flex: 1;
+  min-width: 0;
+}

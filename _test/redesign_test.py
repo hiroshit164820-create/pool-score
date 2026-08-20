@@ -78,7 +78,7 @@ with sync_playwright() as p:
           pg.locator(".game-pick").count())
 
     # 畳んだ状態でも全種目選べる
-    check(helpers.count_selectable_games(pg) == 12, "全カテゴリ合わせて12種目選べる",
+    check(helpers.count_selectable_games(pg) == 14, "全カテゴリ合わせて14種目選べる",
           helpers.count_selectable_games(pg))
 
     # ダブルスは切替スイッチになっている（行数を増やさない）

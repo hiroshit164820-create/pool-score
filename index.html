@@ -321,6 +321,62 @@
   </section>
 
   <!-- ================= 練習配置 ================= -->
+  <!-- ================= 5-9 / 5-10（ハウスゲーム） =================
+       既存の8種目はA/Bの2サイド前提。5-9は3人以上で遊ぶため、
+       専用の画面と集計を別に持たせている（本人指示 2026-08-20） -->
+  <section id="screenMoneySetup" class="screen">
+    <div class="topbar">
+      <div>
+        <h1 id="moneySetupTitle">5-9</h1>
+        <div class="sub">参加する人とハンデを決めます</div>
+      </div>
+    </div>
+
+    <div class="section-title">参加する人</div>
+    <div id="moneyPlayers" class="money-players"></div>
+    <button id="moneyAddBtn" class="ghost">＋ 人を追加する</button>
+
+    <div class="section-title">ハンデボール</div>
+    <p class="hint">その人だけが得点できる球です。落とすと1点になります。</p>
+    <div id="moneyHandicaps" class="money-handicaps"></div>
+
+    <button id="moneyStartBtn" class="primary money-start">この人数で始める</button>
+  </section>
+
+  <section id="screenMoneyMatch" class="screen">
+    <div class="topbar">
+      <div>
+        <h1 id="moneyMatchTitle">5-9</h1>
+        <div class="sub" id="moneyMatchSub"></div>
+      </div>
+      <button id="moneyQuitBtn" class="small ghost">やめる</button>
+    </div>
+
+    <!-- 持ち点。人数ぶん並ぶ -->
+    <div id="moneyScores" class="money-scores"></div>
+
+    <!-- 誰が撞いたか -->
+    <div class="section-title">落とした人</div>
+    <div id="moneyShooter" class="money-shooter"></div>
+
+    <!-- 落とした球 -->
+    <div class="section-title">落とした球</div>
+    <div id="moneyBalls" class="money-balls"></div>
+
+    <!-- サイドポケットか -->
+    <label class="money-side">
+      <input type="checkbox" id="moneySideChk">
+      <span>サイドポケットに落とした（点が倍）</span>
+    </label>
+
+    <div class="money-actions">
+      <button id="moneyRackBtn" class="ghost">ラック終了</button>
+      <button id="moneyUndoBtn" class="ghost">元に戻す</button>
+    </div>
+
+    <div id="moneyLog" class="money-log"></div>
+  </section>
+
   <section id="screenLayout" class="screen">
     <div class="topbar">
       <div>
@@ -517,6 +573,8 @@
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
 <script src="js/ui_home.js"></script>
+<script src="js/money_game.js"></script>
+<script src="js/ui_money.js"></script>
 <script src="js/ui_layout.js"></script>
 <script src="js/app.js"></script>
 <script>

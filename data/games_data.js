@@ -129,6 +129,24 @@ const GAMES = {
     goalPresets: [{ label: "5点先取", v: 5 }],
   },
 
+  // 5-9 / 5-10（ハウスゲーム）。公式競技規程は無い。
+  // 3人以上で遊ぶため、既存のA/B2サイドの仕組みには乗せず、
+  // moneyGame の印を見て専用画面（ui_money.js）へ回す
+  "59": {
+    label: "5-9",
+    base: "nineball", scoring: "rack", goal: "free",
+    playersPerSide: 1, mode: "rack",
+    goalType: "score",
+    moneyGame: "59",
+  },
+  "510": {
+    label: "5-10",
+    base: "tenball", scoring: "rack", goal: "free",
+    playersPerSide: 1, mode: "rack",
+    goalType: "score",
+    moneyGame: "510",
+  },
+
   jpa_9ball: {
     label: "JPA 9ボール",
     base: "nineball", scoring: "jpa9", goal: "jpaSL",
