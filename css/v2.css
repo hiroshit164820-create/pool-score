@@ -1920,3 +1920,93 @@ button::after {
     font-size: 10px;
   }
 }
+
+/* ============ 選手のクラス（本人の指示 2026-08-21・C） ============
+   Be / C / B / A / SA / P の6種類。名前の横にアルファベットの札で出す。
+   ポップに見えるよう、8bitの書体・太い黒枠・段ごとに違う色にする */
+.cls-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  color: #1b1b1b;
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 1px 1px 0 var(--ink);
+  white-space: nowrap;
+}
+/* 段が上がるほど強い色にする（下から緑→水色→青→橙→赤→紫） */
+.cls-badge.cls-Be { background: #9ee37d; }
+.cls-badge.cls-C  { background: #7fd8f7; }
+.cls-badge.cls-B  { background: #6aa9ff; color: #ffffff; }
+.cls-badge.cls-A  { background: #ffb63d; }
+.cls-badge.cls-SA { background: #ff6b5e; color: #ffffff; }
+.cls-badge.cls-P  { background: #c079ff; color: #ffffff; }
+
+/* 選ぶときの札も同じ色にする（選んだものだけ色を出す） */
+.cls-chips .chip.cls-chip {
+  font-family: var(--font-pixel);
+  font-weight: 900;
+  min-width: 48px;
+}
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-Be { background: #9ee37d; }
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-C  { background: #7fd8f7; }
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-B  { background: #6aa9ff; color: #fff; }
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-A  { background: #ffb63d; }
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-SA { background: #ff6b5e; color: #fff; }
+.cls-chips .chip.cls-chip[aria-pressed="true"].cls-P  { background: #c079ff; color: #fff; }
+
+/* 名前と札を1行に並べる。名前が長いときは名前だけを詰める（札は消さない） */
+.pc-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pc-name .pc-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.stats-head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* プロフィール編集の入力欄（名前・所属店舗）。押せる大きさを確保する */
+.sl-edit .pf-field {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.sl-edit .pf-field > label {
+  flex: 0 0 auto;
+}
+.sl-edit .pf-field input {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 44px;
+}
+.sl-edit .pf-field button {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+/* 選手一覧と成績一覧のカードは「名前（＋クラス）」と「勝敗」の2つしか無い。
+   対戦カード用の3列（1fr auto 1fr）のままだと、空の3列目が幅を1fr取り、
+   名前が「フーチ…」まで縮む。2列にして名前に幅を回す */
+.player-card .mc-main,
+.stats-card .mc-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+}

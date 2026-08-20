@@ -152,7 +152,8 @@ with sync_playwright() as p:
     check("SL4" in line, "一覧に8ボールのSLが出る", line)
 
     # スキルレベルを後から変えられる
-    pg.click('.match-card:has-text("田中") button:text-is("スキルレベル")')
+    # ボタン名は 2026-08-21 に「プロフィール編集」へ変えた（本人の指示・C）
+    pg.click('.match-card:has-text("田中") button:text-is("プロフィール編集")')
     pg.wait_for_timeout(250)
     check(pg.locator(".sl-edit:visible").count() == 1, "編集欄が開く")
     pg.click('.sl-edit:visible .sl-field:has(label:text-is("9ボール のスキルレベル")) .chip:text-is("8")')

@@ -10,9 +10,10 @@ const PLAYERS = (function () {
   let bound = false;
   let statsTarget = null; // 表示中のプレーヤー
   let sortMode = "name"; // name | recent | wins
-  // スキルレベルの編集欄を開いている人のID（再描画しても開いたままにする）
+  // プロフィール編集欄を開いている人のID（再描画しても開いたままにする）
+  // 中身は 名前・クラス・所属店舗・スキルレベル（本人の指示 2026-08-21）
   let openSkillFor = null;
-  // 「名前を変更・削除」を開いている人のID
+  // 「自分の指定・削除」を開いている人のID
   let openEditFor = null;
 
   function bindOnce() {
@@ -63,6 +64,8 @@ const PLAYERS = (function () {
 
   // 新規登録フォームで選択中のスキルレベル
   let newSkill = { nine: null, eight: null };
+  // 新規登録フォームで選択中のクラス（任意・未選択は null）
+  let newClass = null;
 
   /** いま登録しようとしているのが自分か対戦相手か */
   let addMode = "other";
@@ -119,12 +122,14 @@ const PLAYERS = (function () {
       UI.toast("「" + name + "」はすでに登録されています。", "warn");
       return;
     }
-    const created = STORE.upsertPlayer(name, { nine: newSkill.nine, eight: newSkill.eight });
+    const created = STORE.upsertPlayer(
+      name, { nine: newSkill.nine, eight: newSkill.eight }, { cls: newClass });
     // 自分として登録したときだけ、自分の指定を差し替える
     const asSelf = (addMode === "self");
     if (asSelf && created) STORE.setSelf(created.id);
     input.value = "";
     newSkill = { nine: null, eight: null };
+    newClass = null;
     renderNewSkill();
     // 登録したら畳む。続けて登録したいときはもう一度開く
     $("addPlayerBody").hidden = true;
@@ -132,6 +137,56 @@ const PLAYERS = (function () {
     render();
     UI.toast("「" + name + "」を" + (asSelf ? "自分として" : "") + "登録しました。");
     if (asSelf && typeof HOME !== "undefined") HOME.render();
+  }
+
+  /**
+   * クラスの選択欄（本人の指示 2026-08-21）。
+   * Be / C / B / A / SA / P の6種類。未選択のままでも登録できる（任意項目）。
+   */
+  function classChips(current, onPick) {
+    const chips = UI.el("div", { class: "chips cls-chips" });
+    chips.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "chip small-chip",
+        "aria-pressed": String(!current),
+        text: "未設定",
+        onclick: function () { onPick(null); },
+      })
+    );
+    (STORE.PLAYER_CLASSES || []).forEach(function (c) {
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip small-chip cls-chip cls-" + c,
+          "aria-pressed": String(current === c),
+          title: c + "（" + ((STORE.CLASS_LABELS || {})[c] || c) + "）",
+          text: c,
+          onclick: function () { onPick(c); },
+        })
+      );
+    });
+    return chips;
+  }
+
+  /**
+   * 名前の横に出すクラスのバッジ。
+   * クラスが未設定の人には何も出さない（null を返す）。
+   */
+  function classBadge(cls) {
+    const c = cls || null;
+    if (!c) return null;
+    return UI.el("span", {
+      class: "cls-badge cls-" + c,
+      title: c + "（" + ((STORE.CLASS_LABELS || {})[c] || c) + "）",
+      text: c,
+    });
+  }
+
+  /** 名前からクラスのバッジを作る（履歴・成績で使う） */
+  function classBadgeOfName(name) {
+    if (!STORE.classOfName) return null;
+    return classBadge(STORE.classOfName(name));
   }
 
   /** JPAスキルレベルの選択欄。未選択のままでも登録できる（任意項目） */
@@ -198,6 +253,23 @@ const PLAYERS = (function () {
         ])
       );
     });
+
+    // クラス（一般種目で使う。JPAの試合ではスキルレベルだけを出す）
+    wrap.appendChild(
+      UI.el("p", {
+        class: "hint cls-prompt",
+        text: name + " のクラス（任意・あとから変えられます）",
+      })
+    );
+    wrap.appendChild(
+      UI.el("div", { class: "field cls-field" }, [
+        UI.el("label", { text: "クラス" }),
+        classChips(newClass, function (v) {
+          newClass = v;
+          renderNewSkill();
+        }),
+      ])
+    );
   }
 
   /** 一覧の並び替え。指定された順に並べたコピーを返す */
@@ -287,8 +359,14 @@ const PLAYERS = (function () {
         class: "match-card player-card" + (mine ? " is-self" : ""),
       });
 
+      // 名前の横にクラスのバッジを出す（本人の指示 2026-08-21）
+      const nameBox = UI.el("span", { class: "pc-name", style: "flex:1;min-width:0" }, [
+        UI.el("span", { class: "pc-name-text", text: p.name }),
+      ]);
+      const badge = classBadge(p.cls);
+      if (badge) nameBox.appendChild(badge);
       const nameRow = UI.el("div", { class: "mc-main" }, [
-        UI.el("span", { style: "flex:1;min-width:0", text: p.name }),
+        nameBox,
         UI.el("span", {
           class: "mc-score",
           text: st.matches ? st.wins + "勝" + st.losses + "敗" : "記録なし",
@@ -324,13 +402,88 @@ const PLAYERS = (function () {
         })
       );
 
+      // 所属店舗（設定してある人だけ出す）
+      if (p.shop) {
+        card.appendChild(UI.el("p", { class: "hint shop-line", text: "所属 " + p.shop }));
+      }
+
       // 開いている人は再描画後も開いたままにする
-      // （スキルレベルを押すと render() が走るため、閉じると連続で設定できない）
+      // （中の項目を押すと render() が走るため、閉じると連続で設定できない）
       const slEdit = UI.el("div", { class: "sl-edit" });
       if (openSkillFor !== p.id) slEdit.hidden = true;
       function renderSlEdit() {
         UI.clear(slEdit);
         const cur = STORE.findPlayerById(p.id) || p;
+
+        // 名前（本人の指示 2026-08-21：プロフィール編集で名前も直せるようにする）
+        const nameInput = UI.el("input", {
+          type: "text",
+          class: "pf-name",
+          value: cur.name,
+          maxlength: "20",
+          "aria-label": "名前",
+        });
+        slEdit.appendChild(
+          UI.el("div", { class: "field pf-field" }, [
+            UI.el("label", { text: "名前" }),
+            nameInput,
+            UI.el("button", {
+              class: "small",
+              text: "名前を保存",
+              onclick: function () {
+                const nv = (nameInput.value || "").trim();
+                if (!nv) { UI.toast("名前を入力してください。", "warn"); return; }
+                if (nv === cur.name) { UI.toast("名前は変わっていません。"); return; }
+                const other = STORE.findPlayerByName(nv);
+                if (other && other.id !== p.id) {
+                  UI.toast("「" + nv + "」はすでに登録されています。", "warn");
+                  return;
+                }
+                STORE.setPlayerProfile(p.id, { name: nv });
+                render();
+                UI.toast("名前を変更しました。");
+              },
+            }),
+          ])
+        );
+
+        // クラス（一般種目で使う）
+        slEdit.appendChild(
+          UI.el("div", { class: "field cls-field" }, [
+            UI.el("label", { text: "クラス" }),
+            classChips(cur.cls || null, function (v) {
+              STORE.setPlayerProfile(p.id, { cls: v });
+              render();
+            }),
+          ])
+        );
+
+        // 所属店舗
+        const shopInput = UI.el("input", {
+          type: "text",
+          class: "pf-shop",
+          value: cur.shop || "",
+          maxlength: "40",
+          placeholder: "例: ○○ビリヤード",
+          "aria-label": "所属店舗",
+        });
+        slEdit.appendChild(
+          UI.el("div", { class: "field pf-field" }, [
+            UI.el("label", { text: "所属店舗" }),
+            shopInput,
+            UI.el("button", {
+              class: "small",
+              text: "所属を保存",
+              onclick: function () {
+                STORE.setPlayerProfile(p.id, { shop: (shopInput.value || "").trim() || null });
+                render();
+                UI.toast("所属店舗を保存しました。");
+              },
+            }),
+          ])
+        );
+
+        // JPAスキルレベル
         [["nine", "9ボール"], ["eight", "8ボール"]].forEach(function (pair) {
           slEdit.appendChild(
             UI.el("div", { class: "field sl-field" }, [
@@ -350,7 +503,7 @@ const PLAYERS = (function () {
       card.appendChild(slEdit);
 
       // よく使う2つだけを常に出す。
-      // 「名前を変更」「削除」はめったに使わないので畳んで、
+      // 「自分の指定」「削除」はめったに使わないので畳んで、
       // 1人あたりの高さを抑える（一覧は縦に伸びやすいため）
       const foot = UI.el("div", { class: "pc-actions" });
       foot.appendChild(
@@ -364,7 +517,7 @@ const PLAYERS = (function () {
         UI.el("button", {
           class: "small ghost",
           "aria-pressed": String(openSkillFor === p.id),
-          text: "スキルレベル",
+          text: "プロフィール編集",
           onclick: function () {
             openSkillFor = openSkillFor === p.id ? null : p.id;
             openEditFor = null;
@@ -377,7 +530,7 @@ const PLAYERS = (function () {
           class: "small ghost pc-more",
           "aria-pressed": String(openEditFor === p.id),
           "aria-label": "その他の操作",
-          title: "名前の変更・削除",
+          title: "自分の指定・削除",
           text: "⋯",
           onclick: function () {
             openEditFor = openEditFor === p.id ? null : p.id;
@@ -408,20 +561,6 @@ const PLAYERS = (function () {
               openEditFor = null;
               render();
               if (typeof HOME !== "undefined") HOME.render();
-            },
-          })
-        );
-        more.appendChild(
-          UI.el("button", {
-            class: "small ghost",
-            text: "名前を変更",
-            onclick: function () {
-              const nv = window.prompt("新しい名前を入力してください。", p.name);
-              if (nv && nv.trim() && nv.trim() !== p.name) {
-                STORE.renamePlayer(p.id, nv);
-                render();
-                UI.toast("名前を変更しました。");
-              }
             },
           })
         );
@@ -487,13 +626,19 @@ const PLAYERS = (function () {
       body.appendChild(UI.el("p", { class: "hint", text: "名前を押すと詳しく見られます。" }));
       rows.forEach(function (r) {
         const card = UI.el("div", {
-          class: "match-card",
+          class: "match-card stats-card",
           style: "cursor:pointer",
           onclick: function () { openStats(r.p); },
         });
+        // 名前の横にクラスのバッジ（本人の指示 2026-08-21）
+        const nb = UI.el("span", { class: "pc-name", style: "flex:1;min-width:0" }, [
+          UI.el("span", { class: "pc-name-text", text: r.p.name }),
+        ]);
+        const bg = classBadge(r.p.cls);
+        if (bg) nb.appendChild(bg);
         card.appendChild(
           UI.el("div", { class: "mc-main" }, [
-            UI.el("span", { style: "flex:1;min-width:0", text: r.p.name }),
+            nb,
             UI.el("span", { class: "mc-score", text: r.st.matches ? pct(r.st.winRate) : "—" }),
           ])
         );
@@ -513,7 +658,12 @@ const PLAYERS = (function () {
 
     // 個人の詳細
     const st = STORE.playerStats(player.id);
-    body.appendChild(UI.el("h2", { style: "margin:0 0 12px;font-size:20px", text: player.name }));
+    const head = UI.el("h2", { class: "stats-head", style: "margin:0 0 12px;font-size:20px" }, [
+      UI.el("span", { class: "pc-name-text", text: player.name }),
+    ]);
+    const headBadge = classBadge(player.cls);
+    if (headBadge) head.appendChild(headBadge);
+    body.appendChild(head);
 
     if (!st.matches) {
       body.appendChild(
@@ -834,5 +984,7 @@ const PLAYERS = (function () {
   }
 
   return { open: open, openStats: openStats, render: render,
-    openSelfRegister: openSelfRegister };
+    openSelfRegister: openSelfRegister,
+    // 履歴・ホームからも同じ見た目のバッジを使えるようにする
+    classBadge: classBadge, classBadgeOfName: classBadgeOfName };
 })();

@@ -292,7 +292,9 @@ const HISTORY = (function () {
         : "—";
 
       // JPAは名前のうしろにスキルレベルを出す（本人の指示 2026-08-20）。
-      // 同じ相手でもSLが違えば別の試合なので、SLが無いと記録が読めない
+      // 同じ相手でもSLが違えば別の試合なので、SLが無いと記録が読めない。
+      // JPA以外（一般種目）は、代わりにクラスのバッジを出す
+      // （本人の指示 2026-08-21：クラスは一般種目で使い、JPAはSLの表示のみ）
       const sl = m.skillLevel || {};
       function nameCell(side) {
         const cls = "mc-nm" + (m.winner === side ? " win" : "");
@@ -301,6 +303,9 @@ const HISTORY = (function () {
         ]);
         if (sl[side] != null) {
           box.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
+        } else if (typeof PLAYERS !== "undefined" && PLAYERS.classBadgeOfName) {
+          const badge = PLAYERS.classBadgeOfName(m.names[side]);
+          if (badge) box.appendChild(badge);
         }
         return box;
       }
@@ -456,10 +461,14 @@ const HISTORY = (function () {
       // 得点の高い順に並べて保存してある。1位が勝ち（W）
       const rows = UI.el("div", { class: "money-result" });
       (m.players || []).forEach(function (p, i) {
+        // ハウスゲームは一般種目なので、名前の横にクラスのバッジを出す
+        const clsBadge = (typeof PLAYERS !== "undefined" && PLAYERS.classBadgeOfName)
+          ? PLAYERS.classBadgeOfName(p.name) : null;
         rows.appendChild(
           UI.el("div", { class: "mr-row" + (i === 0 ? " is-top" : "") }, [
             UI.el("span", { class: "mc-wl " + (i === 0 ? "is-w" : "is-l"), text: i === 0 ? "W" : "L" }),
             UI.el("span", { class: "mr-name", text: p.name }),
+            clsBadge,
             p.handicapBalls && p.handicapBalls.length
               ? UI.el("span", { class: "mc-sl", text: "ハンデ " + p.handicapBalls.join("・") })
               : null,

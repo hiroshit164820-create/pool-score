@@ -292,20 +292,26 @@ const STORE = (function () {
    * skill は JPA のスキルレベル。{ nine: 1..9, eight: 2..7 } の形で持つ。
    * 種目ごとに別の表を使うため、9ボールと8ボールで別々に保持する。
    */
-  function upsertPlayer(name, skill) {
+  function upsertPlayer(name, skill, meta) {
     const trimmed = (name || "").trim();
     if (!trimmed) return null;
     const players = listPlayers();
     const found = players.find(function (p) {
       return p.name === trimmed;
     });
+    const cls = meta ? pickClass(meta.cls) : null;
+    const shop = meta ? pickShop(meta.shop) : null;
     if (found) {
-      // 既存の人にスキルレベルだけ後から付けられるようにする。
-      // 渡されなかった種目の値は消さない
+      // 既存の人にスキルレベル・クラスだけ後から付けられるようにする。
+      // 渡されなかった値は消さない
+      let touched = false;
       if (skill) {
         found.skill = Object.assign({}, found.skill, pickSkill(skill));
-        writeJSON(KEY_PLAYERS, players);
+        touched = true;
       }
+      if (cls) { found.cls = cls; touched = true; }
+      if (shop) { found.shop = shop; touched = true; }
+      if (touched) writeJSON(KEY_PLAYERS, players);
       return found;
     }
     const p = {
@@ -313,9 +319,40 @@ const STORE = (function () {
       name: trimmed,
       skill: pickSkill(skill),
     };
+    // クラス・所属店舗は任意。未設定のときはキーごと持たせない
+    if (cls) p.cls = cls;
+    if (shop) p.shop = shop;
     players.push(p);
     writeJSON(KEY_PLAYERS, players);
     return p;
+  }
+
+  /**
+   * 選手のクラス（本人の指示 2026-08-21）。
+   * 上から順に強くなる。一般種目で使い、JPAの試合ではスキルレベルだけを出す。
+   */
+  const PLAYER_CLASSES = ["Be", "C", "B", "A", "SA", "P"];
+
+  /** クラスの表示名（一覧の説明に使う） */
+  const CLASS_LABELS = {
+    Be: "ビギナー",
+    C: "C級",
+    B: "B級",
+    A: "A級",
+    SA: "SA級",
+    P: "プロ",
+  };
+
+  /** 決めた6種類のどれかに絞る。それ以外・未指定は null（＝未設定） */
+  function pickClass(value) {
+    const v = (value === null || value === undefined) ? "" : String(value).trim();
+    return PLAYER_CLASSES.indexOf(v) >= 0 ? v : null;
+  }
+
+  /** 所属店舗。空文字は「未設定」として持たせない */
+  function pickShop(value) {
+    const v = (value === null || value === undefined) ? "" : String(value).trim();
+    return v ? v.slice(0, 40) : null;
   }
 
   /** スキルレベルを範囲内の整数だけに絞る（範囲外・未指定は持たせない） */
@@ -358,6 +395,41 @@ const STORE = (function () {
     if (kind === "nine") return v >= 1 && v <= 9 ? v : null;
     if (kind === "eight") return v >= 2 && v <= 7 ? v : null;
     return null;
+  }
+
+  /**
+   * プロフィール（名前・クラス・所属店舗）をまとめて更新する。
+   *
+   * 渡さなかった項目はそのまま残す。
+   * クラス・所属店舗に null を渡すと「未設定」に戻す（キーごと消す）。
+   * 名前は空にできない（空を渡したときは変えない）。
+   */
+  function setPlayerProfile(id, profile) {
+    const players = listPlayers();
+    const p = players.find(function (x) { return x.id === id; });
+    if (!p || !profile) return false;
+
+    if ("name" in profile) {
+      const nm = (profile.name || "").trim();
+      if (nm) p.name = nm;
+    }
+    if ("cls" in profile) {
+      const c = pickClass(profile.cls);
+      if (c) p.cls = c;
+      else delete p.cls;
+    }
+    if ("shop" in profile) {
+      const sh = pickShop(profile.shop);
+      if (sh) p.shop = sh;
+      else delete p.shop;
+    }
+    return writeJSON(KEY_PLAYERS, players);
+  }
+
+  /** 名前からクラスを引く（履歴・成績で名前の横に出すため）。無ければ null */
+  function classOfName(name) {
+    const p = findPlayerByName(name);
+    return p && p.cls ? p.cls : null;
   }
 
   /** プレーヤーをIDで引く */
@@ -908,6 +980,10 @@ const STORE = (function () {
     findPlayerById: findPlayerById,
     touchPlayer: touchPlayer,
     setPlayerSkill: setPlayerSkill,
+    setPlayerProfile: setPlayerProfile,
+    classOfName: classOfName,
+    PLAYER_CLASSES: PLAYER_CLASSES,
+    CLASS_LABELS: CLASS_LABELS,
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,
     playerStats: playerStats,

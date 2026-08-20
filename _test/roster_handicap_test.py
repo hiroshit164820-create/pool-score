@@ -126,7 +126,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
 
     # スキルレベルの編集欄は開いたままになる（連続で設定できる）
-    pg.click('.player-card:has-text("鈴木") button:text-is("スキルレベル")')
+    # ボタン名は 2026-08-21 に「プロフィール編集」へ変えた（本人の指示・C）
+    pg.click('.player-card:has-text("鈴木") button:text-is("プロフィール編集")')
     pg.wait_for_timeout(250)
     check(pg.locator(".sl-edit:visible").count() == 1, "スキルレベルの編集欄が開く")
     pg.click('.sl-edit:visible .sl-field:has(label:text-is("9ボール のスキルレベル")) .chip:text-is("5")')

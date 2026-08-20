@@ -8,7 +8,7 @@
  *   CACHE_VERSION を上げると古いキャッシュを捨てて入れ替える。
  *   ファイルを変更したときは必ずこの数字を上げること。
  */
-const CACHE_VERSION = "v31";
+const CACHE_VERSION = "v32";
 const CACHE_NAME = "pool-score-" + CACHE_VERSION;
 
 const ASSETS = [
