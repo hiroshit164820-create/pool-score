@@ -529,16 +529,25 @@ const PLAYERS = (function () {
     // 主要な数字
     const main = [
       ["試合数", st.matches + "試合"],
+      // 勝敗はW-Lでも書く（本人の指示 2026-08-20）
+      ["W-L", st.wins + " - " + st.losses],
       ["勝率", pct(st.winRate) + "（" + st.wins + "勝" + st.losses + "敗）"],
       ["ラック取得率", pct(st.rackWinRate)],
       ["マスワリ", st.masuwari + "回" + (st.masuwariRate !== null ? "（" + pct(st.masuwariRate) + "）" : "")],
       ["ブレイクエース", st.breakAce + "回"],
       ["セーフティ", st.safety + "回"],
       ["ファウル", st.fouls + "回"],
+      ["獲得スコア（合計）", st.score + "点"],
       ["イニング数（合計）", st.innings + "イニング"],
       ["1試合あたりのイニング数",
         st.matches ? String(Math.round((st.innings / st.matches) * 10) / 10) : "—"],
     ];
+    // JPAのチームポイントは、やった人にだけ意味がある数字なので条件付きで出す
+    if (st.jpaMatches) {
+      main.push(["JPA獲得ポイント",
+        st.jpaPoints + "P（" + st.jpaMatches + "試合・1試合平均 "
+        + (Math.round((st.jpaPoints / st.jpaMatches) * 10) / 10) + "P）"]);
+    }
     body.appendChild(statTable("成績", main));
 
     // ショットクロックの平均タイム

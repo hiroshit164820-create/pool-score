@@ -1572,13 +1572,20 @@ const MATCH = (function () {
    */
   function jpaPointsNow(st) {
     const g = GAMES[match.gameId];
-    if (!g || g.goal !== "jpaSL" || !st.winner) return null;
+    if (!g || !st.winner) return null;
     const loser = st.winner === "A" ? "B" : "A";
-    const meta = match.goal && match.goal.meta;
-    const sl = meta && meta.skillLevel && meta.skillLevel[loser];
-    if (sl == null) return null;
     try {
-      const tp = jpaTeamPoints(sl, st.score[loser]);
+      let tp = null;
+      if (g.goal === "jpaSL8") {
+        // 8ボールは「何対何で勝ったか」の3段階（3-0 / 2-1 / 2-0）
+        tp = jpaTeamPoints8(st.racks[loser], match.goal.targets[loser]);
+      } else if (g.goal === "jpaSL") {
+        const meta = match.goal && match.goal.meta;
+        const sl = meta && meta.skillLevel && meta.skillLevel[loser];
+        if (sl == null) return null;
+        tp = jpaTeamPoints(sl, st.score[loser]);
+      }
+      if (!tp) return null;
       return st.winner === "A"
         ? { A: tp.winner, B: tp.loser }
         : { A: tp.loser, B: tp.winner };
@@ -1627,10 +1634,20 @@ const MATCH = (function () {
         + " ／ " + sideName("B") + " " + msB + "）"]);
     }
 
-    // JPA 9ボールは公式のポイント早見表で20点を分け合う
+    // 勝敗（W-L）と、その試合で取った点。本人の指示（2026-08-20）で必ず出す
+    if (st.winner) {
+      lines.unshift(["勝敗（W-L）",
+        sideName("A") + " " + (st.winner === "A" ? "W" : "L")
+        + " ／ " + sideName("B") + " " + (st.winner === "B" ? "W" : "L")]);
+    }
+    lines.unshift(["獲得スコア",
+      sideName("A") + " " + cur.A + unit + " ／ " + sideName("B") + " " + cur.B + unit]);
+
+    // JPAは公式の換算でチームポイントが決まる。
+    // 9ボールは敗者のSL×得点の早見表、8ボールは何対何で勝ったかの3段階
     const jp = jpaPointsNow(st);
     if (jp) {
-      lines.push(["JPAポイント", sideName("A") + " " + jp.A + "P ／ "
+      lines.push(["獲得ポイント（JPA）", sideName("A") + " " + jp.A + "P ／ "
         + sideName("B") + " " + jp.B + "P"]);
     }
 
@@ -1646,11 +1663,15 @@ const MATCH = (function () {
     box.appendChild(table);
 
     if (jp) {
+      const g2 = GAMES[match.gameId];
       box.appendChild(
         UI.el("p", {
           class: "hint",
-          text: "JPA公式のポイント早見表（敗者のスキルレベル × 敗者の獲得点数）で"
-            + "20ポイントを分け合います。",
+          text: g2.goal === "jpaSL8"
+            ? "8ボールは「何対何で勝ったか」で決まります。"
+              + "スコンク（相手0ラック）は3-0、相手がリーチまで来ていたら2-1、それ以外は2-0です。"
+            : "JPA公式のポイント早見表（敗者のスキルレベル × 敗者の獲得点数）で"
+              + "20ポイントを分け合います。",
         })
       );
     }

@@ -67,9 +67,23 @@ const MONEY = (function () {
   }
 
   /**
+   * 1回の記録が動かす「相手1人あたりの点数」。
+   *
+   * 画面の入力は「+1 / +2 / +4 / +8 / +16」「-1 / -2」のボタンになったので、
+   * 新しい記録は pts をそのまま持つ（本人の指示 2026-08-20）。
+   * 球番号で記録した古いデータも読めるよう、pts が無ければ球から換算する。
+   */
+  function shotPoints(game, s, handicaps) {
+    if (typeof s.pts === "number") return s.pts;
+    const hb = (handicaps && handicaps[s.by]) || [];
+    return pointPerOpponent(game, s.ball, hb, !!s.side);
+  }
+
+  /**
    * 記録から各プレーヤーの持ち点を計算する。
    *
-   * shots: [{ by: playerId, ball: n, side: bool, voided: bool }]
+   * shots: [{ by: playerId, pts: n, voided: bool }]
+   *        （古い記録は { by, ball, side } の形。shotPoints が吸収する）
    * rackEnds: [{ at: shotIndex, runoutBy: playerId|null }]
    *   マスワリはラックの区切りで確定するため、別に持つ。
    *
@@ -92,8 +106,7 @@ const MONEY = (function () {
       for (let i = rk.from; i < rk.to; i++) {
         const s = shots[i];
         if (!s || s.voided) continue;
-        const hb = (handicaps && handicaps[s.by]) || [];
-        const per = pointPerOpponent(game, s.ball, hb, !!s.side);
+        const per = shotPoints(game, s, handicaps);
         if (per) gained[s.by] += per;
       }
 
@@ -140,10 +153,27 @@ const MONEY = (function () {
     return out.sort(function (a, b) { return a - b; });
   }
 
+  /**
+   * 得点ボタンに並べる点数（本人の指示 2026-08-20）。
+   *
+   *   +1  5番／ハンデ球
+   *   +2  9番（5-10なら10番）、または5番をサイド
+   *   +4  9番をサイド、または5番のマスワリ相当
+   *   +8  9番サイド＋マスワリ
+   *   +16 それがさらに重なったとき
+   * 倍々になる並びなので、実際に動く額はこの5つで足りる。
+   */
+  const PLUS_POINTS = [1, 2, 4, 8, 16];
+  /** 打ち間違いや反則の戻しに使う */
+  const MINUS_POINTS = [-1, -2];
+
   return {
     GAMES: MONEY_GAMES,
+    PLUS_POINTS: PLUS_POINTS,
+    MINUS_POINTS: MINUS_POINTS,
     basePoint: basePoint,
     pointPerOpponent: pointPerOpponent,
+    shotPoints: shotPoints,
     tally: tally,
     scoringBalls: scoringBalls,
     rackBounds: rackBounds,

@@ -71,10 +71,28 @@ const UI = (function () {
     clear(wrap);
     const t = el("div", { class: "toast" + (kind ? " " + kind : ""), text: message });
     wrap.appendChild(t);
+    // いま出ている画面の帯の「下」に出す。
+    // 帯に重ねると「中断」「戻る」などのボタンが隠れて押せなくなる（本人の指摘 2026-08-20）。
+    // 帯の高さは画面によって違うので、固定値ではなく実測した位置に置く
+    positionToast(wrap);
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
       clear(wrap);
     }, 2600);
+  }
+
+  /**
+   * 通知の出る位置を、いま表示している画面の帯の下に合わせる。
+   *
+   * 下部に出す案は取らない。下部には「交代」「取り消し」「訂正」「試合終了」が
+   * 並んでおり、そちらを塞ぐことになるため。
+   */
+  function positionToast(wrap) {
+    if (!wrap) return;
+    const screen = document.querySelector("section.screen.active");
+    const bar = screen ? screen.querySelector(".topbar") : null;
+    const bottom = bar ? bar.getBoundingClientRect().bottom : 0;
+    wrap.style.top = Math.max(8, Math.round(bottom) + 8) + "px";
   }
 
   // どの画面から来たかを覚えておく（常時出る「戻る」で1つ前に戻すため）
@@ -809,15 +827,60 @@ const SETUP = (function () {
     return out;
   }
 
+  /**
+   * 選手の並べ方（本人の指示 2026-08-20）。
+   *
+   * ボタンで出すのは「自分」と「最近使った5人」だけ。
+   * 登録が増えるとボタンが何十個も並んで探せなくなるため、
+   * 残りはプルダウンにあいうえお順で入れる。
+   *
+   * @returns {{quick: Array, rest: Array}}
+   */
+  function splitPlayers(all) {
+    const selfId = STORE.getSelfId ? STORE.getSelfId() : null;
+    const quick = [];
+    const seen = {};
+
+    // 自分はいちばん先頭。いちばん多く使うため
+    const me = all.find(function (p) { return selfId && p.id === selfId; });
+    if (me) { quick.push(me); seen[me.id] = true; }
+
+    // 最近使った順に5人まで
+    all.slice()
+      .filter(function (p) { return !seen[p.id] && p.lastUsedAt; })
+      .sort(function (a, b) { return (b.lastUsedAt || "").localeCompare(a.lastUsedAt || ""); })
+      .slice(0, 5)
+      .forEach(function (p) { quick.push(p); seen[p.id] = true; });
+
+    // まだ5人に足りなければ、登録の新しい順で埋める。
+    // 登録したばかりで一度も試合していない人が1人もボタンに出ないと、
+    // 登録した直後に名前を選べなくなるため（配列の末尾が最新の登録）
+    for (let i = all.length - 1; i >= 0 && quick.length < 6; i--) {
+      const p = all[i];
+      if (seen[p.id]) continue;
+      quick.push(p);
+      seen[p.id] = true;
+    }
+
+    // 残りはあいうえお順（ブラウザの日本語照合に任せる）
+    const rest = all
+      .filter(function (p) { return !seen[p.id]; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name, "ja"); });
+
+    return { quick: quick, rest: rest };
+  }
+
   function playerPicker(targetId, side) {
-    const players = STORE.listPlayers();
-    if (!players.length) return null;
+    const all = STORE.listPlayers();
+    if (!all.length) return null;
 
     const wrap = UI.el("div", { class: "picker-wrap" });
     wrap.appendChild(UI.el("div", { class: "picker-label", text: "登録した人から選ぶ" }));
 
     const taken = takenNames(targetId);
     const chosen = currentName(targetId);
+    const split = splitPlayers(all);
+    const players = split.quick;
 
     const chips = UI.el("div", { class: "chips picker" });
     players.forEach(function (p) {
@@ -851,7 +914,30 @@ const SETUP = (function () {
         ])
       );
     });
-    wrap.appendChild(chips);
+    if (chips.children.length) wrap.appendChild(chips);
+
+    // ボタンに出していない人はプルダウンから選ぶ（あいうえお順）
+    const rest = split.rest.filter(function (p) { return taken.indexOf(p.name) < 0; });
+    if (rest.length) {
+      const sel = UI.el("select", { class: "picker-select" });
+      sel.appendChild(UI.el("option", { value: "", text: "ほかの人から選ぶ（" + rest.length + "人）" }));
+      rest.forEach(function (p) {
+        sel.appendChild(UI.el("option", { value: p.id, text: p.name }));
+      });
+      sel.addEventListener("change", function () {
+        const p = rest.find(function (x) { return x.id === sel.value; });
+        if (!p) return;
+        const node = $(targetId);
+        if (node) node.value = p.name;
+        applyPlayerSkill(p, side);
+        const g2 = GAMES[selectedGame];
+        if (g2.playersPerSide === 2 && targetId === "inName" + side) {
+          secondOpen[side] = true;
+        }
+        renderPlayerFields();
+      });
+      wrap.appendChild(sel);
+    }
     return wrap;
   }
 

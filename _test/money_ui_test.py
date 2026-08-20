@@ -59,11 +59,16 @@ def pick_shooter(pg, name):
     pg.wait_for_timeout(200)
 
 
-def drop(pg, ball, side=False):
-    if side:
-        pg.check("#moneySideChk")
-        pg.wait_for_timeout(120)
-    pg.click('.money-ball[data-ball="%s"]' % ball)
+def add_pts(pg, pts):
+    """点を入れる。球のタップから点数ボタンに変わった（本人の指示 2026-08-20）"""
+    sel = "#moneyMinus" if pts < 0 else "#moneyPlus"
+    pg.click('%s button[data-pts="%d"]' % (sel, pts))
+    pg.wait_for_timeout(250)
+
+
+def turn_on_handicap(pg, index):
+    """index番目の人のハンデを「あり」にする"""
+    pg.locator(".money-hc").nth(index).locator("button", has_text="ハンデあり").click()
     pg.wait_for_timeout(250)
 
 
@@ -126,12 +131,14 @@ with sync_playwright() as p:
     # ハンデ球の欄が人数ぶん出る
     check(pg.locator(".money-hc").count() == 3, "ハンデ欄が人数ぶん出る",
           pg.locator(".money-hc").count())
-    # 5番と9番はハンデにできない（全員の得点球のため）
+    # 既定は「ハンデなし」で、番号は出さない（本人の指示 2026-08-20）
+    check(pg.locator(".money-hc .bh-chips").count() == 0, "既定では番号を出さない")
+    turn_on_handicap(pg, 0)
     chips = pg.evaluate("""() => Array.from(
       document.querySelectorAll('.money-hc')[0].querySelectorAll('.chip'))
       .map(c => c.textContent.trim())""")
     check("5" not in chips, "5番はハンデに選べない", chips)
-    check("9" not in chips, "9番はハンデに選べない", chips)
+    check("9" not in chips, "9番はハンデに選べない（5-9は9番以降を出さない）", chips)
 
     # ============================================================
     section("3. 2人でゼロサムに動く")
@@ -144,30 +151,35 @@ with sync_playwright() as p:
     check(pg.is_visible("#screenMoneyMatch"), "試合画面が開く")
 
     pick_shooter(pg, "あ")
-    drop(pg, 9)
+    add_pts(pg, 2)
     sc = scores(pg)
-    check(sc.get("あ") == 2, "9番コーナーで+2", sc)
+    check(sc.get("あ") == 2, "9番コーナーぶん（+2）で+2", sc)
     check(sc.get("い") == -2, "相手は-2", sc)
     check(sc.get("あ") + sc.get("い") == 0, "合計は0（ゼロサム）", sc)
 
-    drop(pg, 5)
+    add_pts(pg, 1)
     sc = scores(pg)
-    check(sc.get("あ") == 3, "5番で+1され合計+3", sc)
+    check(sc.get("あ") == 3, "5番ぶん（+1）で合計+3", sc)
 
     # ============================================================
-    section("4. サイドポケットは倍")
-    drop(pg, 9, side=True)
+    section("4. サイドポケットぶんは+4で入れる")
+    add_pts(pg, 4)
     sc = scores(pg)
-    check(sc.get("あ") == 7, "9番サイドは4点入って+7", sc)
-    # サイドの印は毎回戻る（倍が続かない）
-    check(not pg.is_checked("#moneySideChk"), "サイドの印は1回で戻る")
+    check(sc.get("あ") == 7, "9番サイドぶん（+4）で+7", sc)
+    check(pg.locator("#moneySideChk").count() == 0, "サイドのチェックボックスは無い")
+    add_pts(pg, -1)
+    sc = scores(pg)
+    check(sc.get("あ") == 6, "マイナスのボタンで戻せる", sc)
 
     # ============================================================
     section("5. 取り消しができる")
-    pg.click("#moneyUndoBtn")
+    pg.click("#moneyUndoBtn")   # -1 を取り消す
+    pg.wait_for_timeout(300)
+    check(scores(pg).get("あ") == 7, "1回取り消すと+7に戻る", scores(pg))
+    pg.click("#moneyUndoBtn")   # +4 を取り消す
     pg.wait_for_timeout(300)
     sc = scores(pg)
-    check(sc.get("あ") == 3, "取り消すと元に戻る", sc)
+    check(sc.get("あ") == 3, "もう1回取り消すと+3に戻る", sc)
 
     # ============================================================
     section("6. ハンデ球は本人だけ得点する")
@@ -176,28 +188,23 @@ with sync_playwright() as p:
     open_game(pg, "5-9")
     set_names(pg, ["あ", "い"])
     # 「あ」に7番を割り当てる
+    turn_on_handicap(pg, 0)
     pg.locator(".money-hc").nth(0).locator('.chip:text-is("7")').click()
     pg.wait_for_timeout(250)
     # 同じ球は相手側で選べない
+    turn_on_handicap(pg, 1)
     dis = pg.locator(".money-hc").nth(1).locator('.chip:text-is("7")').is_disabled()
     check(dis, "同じ球を2人で持てない")
     pg.click("#moneyStartBtn")
     pg.wait_for_timeout(500)
 
-    # 「あ」の球には7番が出る
+    # 誰が何番を持っているかはスコアボードに出る（本人の指示 2026-08-20）
+    board = pg.inner_text("#moneyScores")
+    check("ハンデ 7番" in board, "スコアボードにハンデ球の番号が出る", board.replace(chr(10), " "))
     pick_shooter(pg, "あ")
-    balls_a = pg.evaluate("""() => Array.from(document.querySelectorAll('.money-ball'))
-      .map(b => b.dataset.ball)""")
-    check("7" in balls_a, "ハンデを持つ人には7番が出る", balls_a)
-    drop(pg, 7)
+    add_pts(pg, 1)
     sc = scores(pg)
-    check(sc.get("あ") == 1, "ハンデ球で+1", sc)
-
-    # 「い」には7番が出ない（持っていないので得点にならない）
-    pick_shooter(pg, "い")
-    balls_b = pg.evaluate("""() => Array.from(document.querySelectorAll('.money-ball'))
-      .map(b => b.dataset.ball)""")
-    check("7" not in balls_b, "持っていない人には7番が出ない", balls_b)
+    check(sc.get("あ") == 1, "ハンデ球ぶん（+1）で+1", sc)
 
     # ============================================================
     section("7. 3人なら全員からもらう")
@@ -210,9 +217,9 @@ with sync_playwright() as p:
     check(pg.locator(".money-score").count() == 3, "持ち点が3人ぶん出る")
 
     pick_shooter(pg, "あ")
-    drop(pg, 9)
+    add_pts(pg, 2)
     sc = scores(pg)
-    check(sc.get("あ") == 4, "9番=2点を2人からもらって+4", sc)
+    check(sc.get("あ") == 4, "+2を2人からもらって+4", sc)
     check(sc.get("い") == -2 and sc.get("う") == -2, "ほかの2人は-2ずつ", sc)
     check(sc.get("あ") + sc.get("い") + sc.get("う") == 0, "合計は0", sc)
 
@@ -233,15 +240,19 @@ with sync_playwright() as p:
     check(pg.is_visible("#screenMoneySetup"), "5-10の準備画面が開く")
     check("5-10" in (pg.text_content("#moneySetupTitle") or ""), "見出しが5-10")
     set_names(pg, ["あ", "い"])
+    # 5-10は10番以降をハンデに選べない（9番までは選べる）
+    turn_on_handicap(pg, 0)
+    chips10 = pg.evaluate("""() => Array.from(
+      document.querySelectorAll('.money-hc')[0].querySelectorAll('.chip'))
+      .map(c => c.textContent.trim())""")
+    check("9" in chips10, "5-10では9番をハンデにできる", chips10)
+    check("10" not in chips10, "10番はハンデに選べない", chips10)
     pg.click("#moneyStartBtn")
     pg.wait_for_timeout(500)
     pick_shooter(pg, "あ")
-    balls = pg.evaluate("""() => Array.from(document.querySelectorAll('.money-ball'))
-      .map(b => b.dataset.ball)""")
-    check(balls == ["5", "10"], "5番と10番が出る（9番は出ない）", balls)
-    drop(pg, 10)
+    add_pts(pg, 2)
     sc = scores(pg)
-    check(sc.get("あ") == 2, "10番で+2", sc)
+    check(sc.get("あ") == 2, "10番ぶん（+2）で+2", sc)
 
     check(not errs, "JavaScriptエラーが出ていない", errs[:3])
     b.close()

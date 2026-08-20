@@ -11,6 +11,7 @@ const STORE = (function () {
   const KEY_PLAYERS = "pool_players";
   const KEY_SETTINGS = "pool_settings";
   const KEY_LAYOUTS = "pool_layouts"; // 練習配置
+  const KEY_MONEY = "pool_money_results"; // 5-9 / 5-10 の結果
 
   function readJSON(key, fallback) {
     try {
@@ -206,6 +207,58 @@ const STORE = (function () {
     return writeJSON(KEY_LAYOUTS, all);
   }
 
+  /* ---- 5-9 / 5-10 の結果 ---- */
+  /*
+   * 5-9系は3人以上で遊ぶゲームで、A/B2サイド前提の試合記録には収まらない。
+   * 記録するのは「その試合の最終結果だけ」（本人の指示 2026-08-20）なので、
+   * 1球ずつの記録は保存せず、参加者と最終得点だけを別の場所に置く。
+   */
+
+  /** 新しい順に返す */
+  function listMoneyResults() {
+    return readJSON(KEY_MONEY, []).filter(function (m) { return !m.deletedAt; });
+  }
+
+  /**
+   * @param {{gameId:string, gameLabel:string, players:Array<{name:string, score:number,
+   *          handicapBalls:number[]}>, racks:number}} rec
+   */
+  function saveMoneyResult(rec) {
+    const all = readJSON(KEY_MONEY, []);
+    const now = new Date().toISOString();
+    const item = {
+      id: rec.id || ("M_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+      gameId: rec.gameId,
+      gameLabel: rec.gameLabel,
+      // 順位が読めるよう、得点の高い順に並べて持つ
+      players: (rec.players || [])
+        .map(function (p) {
+          return {
+            name: String(p.name || ""),
+            score: Number(p.score) || 0,
+            handicapBalls: p.handicapBalls || [],
+          };
+        })
+        .sort(function (a, b) { return b.score - a.score; }),
+      racks: Number(rec.racks) || 0,
+      createdAt: rec.createdAt || now,
+      endedAt: now,
+      deletedAt: null,
+    };
+    const at = all.findIndex(function (m) { return m.id === item.id; });
+    if (at >= 0) all[at] = item;
+    else all.unshift(item);
+    return writeJSON(KEY_MONEY, all) ? item : null;
+  }
+
+  function deleteMoneyResult(id) {
+    const all = readJSON(KEY_MONEY, []);
+    const at = all.findIndex(function (m) { return m.id === id; });
+    if (at < 0) return false;
+    all[at].deletedAt = new Date().toISOString();
+    return writeJSON(KEY_MONEY, all);
+  }
+
   /* ---- プレーヤー ---- */
   function listPlayers() {
     return readJSON(KEY_PLAYERS, []);
@@ -345,6 +398,8 @@ const STORE = (function () {
       masuwari: 0, breakAce: 0, safety: 0, fouls: 0,
       breaks: 0, breakWins: 0,
       innings: 0, score: 0,
+      // JPAのチームポイント（9ボールは早見表、8ボールは3-0/2-1/2-0）
+      jpaPoints: 0, jpaMatches: 0,
       shotClockMatches: 0, shotClockShots: 0, shotClockTotalSec: 0,
       shotClockViolations: 0, shotClockExtensions: 0,
       byGame: {},
@@ -385,6 +440,12 @@ const STORE = (function () {
         out.shotClockMatches++;
         out.shotClockShots += st.shotClockShots;
         out.shotClockTotalSec += st.shotClockTotalSec || 0;
+      }
+
+      // JPAのチームポイント
+      if (r.jpa && r.jpa.teamPoints && r.jpa.teamPoints[side] !== undefined) {
+        out.jpaPoints += r.jpa.teamPoints[side];
+        out.jpaMatches++;
       }
 
       // 種目別
@@ -608,6 +669,9 @@ const STORE = (function () {
     loadMatch: loadMatch,
     deleteMatch: deleteMatch,
     setMatchNote: setMatchNote,
+    listMoneyResults: listMoneyResults,
+    saveMoneyResult: saveMoneyResult,
+    deleteMoneyResult: deleteMoneyResult,
     listLayouts: listLayouts,
     saveLayout: saveLayout,
     loadLayout: loadLayout,

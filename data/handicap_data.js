@@ -105,6 +105,31 @@ function jpaTeamPoints(loserSL, loserScore) {
   return { winner: w, loser: 20 - w };
 }
 
+/**
+ * JPA 8ボールのチームポイント。
+ *
+ * 9ボールのような点数の早見表ではなく、「何対何で勝ったか」の3段階で決まる。
+ * 出典: 本人（2026-08-20）。JPA公式資料での直接確認は取れていない。
+ *
+ *   3 - 0（スコンク）: 相手に1ラックも取らせずに勝った
+ *   2 - 1            : 相手をリーチ（あと1ラックで勝ち）まで来させてから勝った
+ *   2 - 0            : それ以外
+ *
+ * 敗者はリーチまで届かなければ0ポイント。
+ *
+ * @param {number} loserRacks  敗者が取ったラック数
+ * @param {number} loserTarget 敗者の先取ゲーム数（対戦表から決まる）
+ * @returns {{winner:number, loser:number}}
+ */
+function jpaTeamPoints8(loserRacks, loserTarget) {
+  const got = Math.max(0, Number(loserRacks) || 0);
+  const need = Number(loserTarget) || 0;
+  if (got === 0) return { winner: 3, loser: 0 };
+  // リーチ = あと1ラックで勝ちだった
+  if (need > 1 && got === need - 1) return { winner: 2, loser: 1 };
+  return { winner: 2, loser: 0 };
+}
+
 /** JPA 9ボール: SLから両者の目標点を出す（ダブルスはペアスキル合計） */
 function jpaGoal9Ball(slA, slB, isDoubles) {
   const table = isDoubles ? JPA_SL_9BALL_DOUBLES : JPA_SL_9BALL;

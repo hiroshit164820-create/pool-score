@@ -112,6 +112,22 @@ const CSVOUT = (function () {
         m.note || "",
       ]);
     });
+    // 5-9 / 5-10 は3人以上で遊ぶため列の形が違う。同じ表の下に続けて書く
+    const money = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
+    if (money.length) {
+      rows.push([]);
+      rows.push(["5-9 / 5-10 の記録"]);
+      rows.push(["日時", "種目", "ラック数", "順位", "W-L", "プレーヤー", "獲得スコア", "ハンデ球"]);
+      money.forEach(function (m) {
+        (m.players || []).forEach(function (p, i) {
+          rows.push([
+            fmtDate(m.createdAt), m.gameLabel, m.racks,
+            i + 1, i === 0 ? "W" : "L", p.name, p.score,
+            (p.handicapBalls || []).join("・"),
+          ]);
+        });
+      });
+    }
     return rows;
   }
 
@@ -119,21 +135,21 @@ const CSVOUT = (function () {
 
   function playerRows() {
     const rows = [[
-      "選手", "試合数", "勝ち", "負け", "勝率(%)",
+      "選手", "試合数", "W-L", "勝ち", "負け", "勝率(%)",
       "取ったラック", "ラック率(%)",
       "マスワリ", "ブレイク", "マスワリ率(%)",
       "セーフティ", "ファウル", "イニング合計", "得点合計",
-      "平均ショット時間(秒)",
+      "JPA獲得ポイント", "平均ショット時間(秒)",
     ]];
     STORE.listPlayers().forEach(function (p) {
       const s = STORE.playerStats(p.id);
       if (!s.matches) return; // 1試合もしていない人は出さない
       rows.push([
-        p.name, s.matches, s.wins, s.losses, pct(s.winRate),
+        p.name, s.matches, s.wins + "-" + s.losses, s.wins, s.losses, pct(s.winRate),
         s.rackWins, pct(s.rackWinRate),
         s.masuwari, s.breaks, pct(s.masuwariRate),
         s.safety, s.fouls, s.innings, s.score,
-        num1(s.avgShotSec),
+        s.jpaMatches ? s.jpaPoints : "", num1(s.avgShotSec),
       ]);
     });
     return rows;

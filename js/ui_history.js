@@ -158,12 +158,17 @@ const HISTORY = (function () {
     }
 
     if (!all.length) {
-      list.appendChild(
-        UI.el("div", { class: "empty" }, [
-          UI.el("p", { text: "まだ試合の記録がありません。" }),
-          UI.el("p", { text: "「新しい試合」から始めてください。" }),
-        ])
-      );
+      const money = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
+      if (!money.length) {
+        list.appendChild(
+          UI.el("div", { class: "empty" }, [
+            UI.el("p", { text: "まだ試合の記録がありません。" }),
+            UI.el("p", { text: "「新しい試合」から始めてください。" }),
+          ])
+        );
+        return;
+      }
+      renderMoneyResults(list);
       return;
     }
 
@@ -205,6 +210,15 @@ const HISTORY = (function () {
         if (sl[side] != null) {
           box.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
         }
+        // 勝敗はW-Lで出す（本人の指示 2026-08-20）
+        if (m.finished && m.winner) {
+          box.appendChild(
+            UI.el("span", {
+              class: "mc-wl " + (m.winner === side ? "is-w" : "is-l"),
+              text: m.winner === side ? "W" : "L",
+            })
+          );
+        }
         return box;
       }
 
@@ -213,11 +227,10 @@ const HISTORY = (function () {
         UI.el("span", { class: "mc-score", text: scoreText }),
         nameCell("B"),
       ]);
-      // 進行中・決着の印はプレーヤー名と同じ行の右端に出す（本人の指示）
+      // 進行中の印はプレーヤー名と同じ行の右端に出す（本人の指示）。
+      // 決着した試合は名前の横のW/Lで分かるので、印は重ねない
       if (!m.finished) {
         main.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
-      } else if (m.winner) {
-        main.appendChild(UI.el("span", { class: "badge mc-badge win-badge", text: "勝ち" }));
       }
       card.appendChild(main);
 
@@ -287,6 +300,84 @@ const HISTORY = (function () {
         card.appendChild(UI.el("p", { class: "mc-note", text: noteText }));
       }
 
+      list.appendChild(card);
+    });
+
+    renderMoneyResults(list);
+  }
+
+  /**
+   * 5-9 / 5-10 の結果。
+   *
+   * 3人以上で遊ぶゲームでA/B2サイドの試合記録に収まらないため、
+   * 別の場所（STORE.listMoneyResults）に最終結果だけを保存している。
+   * 絞り込みは種目だけ効かせる（対戦相手は「相手」という概念が無いため）。
+   */
+  function renderMoneyResults(list) {
+    if (!STORE.listMoneyResults) return;
+    let items = STORE.listMoneyResults();
+    if (filter.gameId) {
+      items = items.filter(function (m) { return m.gameId === filter.gameId; });
+    }
+    // 対戦相手で絞っているときは、その人が出ている試合だけ
+    if (filter.opponent) {
+      items = items.filter(function (m) {
+        return (m.players || []).some(function (p) { return p.name === filter.opponent; });
+      });
+    }
+    if (!items.length) return;
+
+    list.appendChild(UI.el("div", { class: "section-title", text: "5-9 / 5-10 の記録" }));
+
+    items.forEach(function (m) {
+      const card = UI.el("div", { class: "match-card" });
+      card.appendChild(
+        UI.el("div", { class: "mc-top" }, [
+          UI.el("span", { text: m.gameLabel }),
+          UI.el("span", { text: fmtDate(m.createdAt) }),
+        ])
+      );
+
+      // 得点の高い順に並べて保存してある。1位が勝ち（W）
+      const rows = UI.el("div", { class: "money-result" });
+      (m.players || []).forEach(function (p, i) {
+        rows.appendChild(
+          UI.el("div", { class: "mr-row" + (i === 0 ? " is-top" : "") }, [
+            UI.el("span", { class: "mc-wl " + (i === 0 ? "is-w" : "is-l"), text: i === 0 ? "W" : "L" }),
+            UI.el("span", { class: "mr-name", text: p.name }),
+            p.handicapBalls && p.handicapBalls.length
+              ? UI.el("span", { class: "mc-sl", text: "ハンデ " + p.handicapBalls.join("・") })
+              : null,
+            UI.el("span", { class: "mr-score", text: (p.score > 0 ? "+" : "") + p.score }),
+          ])
+        );
+      });
+      card.appendChild(rows);
+      card.appendChild(
+        UI.el("div", { class: "mc-stats", text: m.racks + "ラック" })
+      );
+
+      const foot = UI.el("div", { class: "mc-foot" });
+      foot.appendChild(
+        UI.el("button", {
+          class: "small ghost",
+          text: "削除",
+          onclick: function () {
+            const who = (m.players || []).map(function (p) { return p.name; }).join("・");
+            if (!window.confirm([
+              "この記録を削除します。",
+              "",
+              m.gameLabel + "／" + who,
+              "",
+              "削除すると元に戻せません。よろしいですか？",
+            ].join(String.fromCharCode(10)))) return;
+            STORE.deleteMoneyResult(m.id);
+            render();
+            UI.toast("削除しました。");
+          },
+        })
+      );
+      card.appendChild(foot);
       list.appendChild(card);
     });
   }

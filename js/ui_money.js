@@ -16,12 +16,17 @@ const MONEYUI = (function () {
   let players = [];
   /** ハンデ球 { playerId: [番号] } */
   let handicaps = {};
-  /** 落球の記録 [{ by, ball, side, voided }] */
+  /** ハンデを使うか { playerId: bool }。既定は使わない（本人の指示 2026-08-20） */
+  let handicapOn = {};
+  /** 得点の記録 [{ by, pts, voided }]（相手1人あたりの点） */
   let shots = [];
   /** ラックの区切り [{ at, runoutBy }] */
   let racks = [];
   /** いま選んでいる「落とした人」 */
   let shooter = null;
+  /** 保存する結果のID。同じ試合を何度保存しても1件にまとまるよう持つ */
+  let matchId = null;
+  let startedAt = null;
 
   let bound = false;
 
@@ -45,6 +50,7 @@ const MONEYUI = (function () {
     if (!players.length) {
       players = [newPlayer(""), newPlayer("")];
       handicaps = {};
+      handicapOn = {};
     }
     shots = [];
     racks = [];
@@ -74,7 +80,105 @@ const MONEYUI = (function () {
     }
     players = players.filter(function (p) { return p.id !== id; });
     delete handicaps[id];
+    delete handicapOn[id];
     renderSetup();
+  }
+
+  /**
+   * 名前の候補を3つに分ける（本人の指示 2026-08-20）。
+   *
+   *   self   自分
+   *   recent 最近この種目（5-9系）をやった人を5人まで
+   *   rest   それ以外。あいうえお順でプルダウンに入れる
+   *
+   * ボタンに全員を並べると、登録が増えたときに探せなくなる。
+   */
+  function nameChoices() {
+    const self = STORE.getSelf ? STORE.getSelf() : null;
+    const selfName = self ? self.name : null;
+
+    // 5-9系の記録から、新しい順に名前を拾う
+    const recent = [];
+    const seen = {};
+    if (selfName) seen[selfName] = true;
+    (STORE.listMoneyResults ? STORE.listMoneyResults() : []).forEach(function (m) {
+      (m.players || []).forEach(function (p) {
+        if (!p.name || seen[p.name] || recent.length >= 5) return;
+        seen[p.name] = true;
+        recent.push(p.name);
+      });
+    });
+
+    // まだ5人に足りなければ、登録の新しい順で埋める。
+    // 5-9をやったことが無いうちは履歴が空で、ボタンが1つも出なくなるため
+    const registered = STORE.listPlayers();
+    for (let i = registered.length - 1; i >= 0 && recent.length < 5; i--) {
+      const n = registered[i].name;
+      if (!n || seen[n]) continue;
+      seen[n] = true;
+      recent.push(n);
+    }
+
+    // 残りは登録済みの選手から。あいうえお順
+    const rest = registered
+      .map(function (p) { return p.name; })
+      .filter(function (n) { return n && !seen[n]; })
+      .sort(function (a, b) { return a.localeCompare(b, "ja"); });
+
+    return { self: selfName, recent: recent, rest: rest };
+  }
+
+  /** すでに他の欄に入っている名前（同じ人を2回選ばせない） */
+  function takenNames(exceptId) {
+    return players
+      .filter(function (p) { return p.id !== exceptId && p.name.trim(); })
+      .map(function (p) { return p.name.trim(); });
+  }
+
+  /** 名前を選ぶ欄（ボタン＋プルダウン）を1人ぶん作る */
+  function namePicker(p) {
+    const choices = nameChoices();
+    const taken = takenNames(p.id);
+    const box = UI.el("div", { class: "money-name-pick" });
+
+    const quick = [];
+    if (choices.self) quick.push({ name: choices.self, self: true });
+    choices.recent.forEach(function (n) { quick.push({ name: n, self: false }); });
+
+    const chips = UI.el("div", { class: "chips picker" });
+    quick.forEach(function (q) {
+      if (taken.indexOf(q.name) >= 0) return;
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip small-chip picker-chip"
+            + (p.name.trim() === q.name ? " is-chosen" : ""),
+          "aria-pressed": String(p.name.trim() === q.name),
+          onclick: function () {
+            p.name = q.name;
+            renderSetup();
+          },
+        }, [
+          UI.el("span", { class: "pc-name", text: q.name }),
+          q.self ? UI.el("span", { class: "pc-sl", text: "自分" }) : null,
+        ])
+      );
+    });
+    if (chips.children.length) box.appendChild(chips);
+
+    const rest = choices.rest.filter(function (n) { return taken.indexOf(n) < 0; });
+    if (rest.length) {
+      const sel = UI.el("select", { class: "picker-select" });
+      sel.appendChild(UI.el("option", { value: "", text: "ほかの人から選ぶ（" + rest.length + "人）" }));
+      rest.forEach(function (n) { sel.appendChild(UI.el("option", { value: n, text: n })); });
+      sel.addEventListener("change", function () {
+        if (!sel.value) return;
+        p.name = sel.value;
+        renderSetup();
+      });
+      box.appendChild(sel);
+    }
+    return box.children.length ? box : null;
   }
 
   function renderSetup() {
@@ -83,6 +187,7 @@ const MONEYUI = (function () {
     UI.clear(wrap);
 
     players.forEach(function (p, i) {
+      const holder = UI.el("div", { class: "money-player" });
       const row = UI.el("div", { class: "money-player-row" });
       const input = UI.el("input", {
         type: "text",
@@ -107,16 +212,38 @@ const MONEYUI = (function () {
           onclick: function () { removePlayer(p.id); },
         })
       );
-      wrap.appendChild(row);
+      holder.appendChild(row);
+      const pick = namePicker(p);
+      if (pick) holder.appendChild(pick);
+      wrap.appendChild(holder);
     });
 
     renderHandicapSetup();
   }
 
   /**
+   * ハンデ球にできる番号（本人の指示 2026-08-20）。
+   *
+   * 5-9 なら9番以降、5-10 なら10番以降は出さない。
+   * それらは全員の得点球（またはその先の球）で、
+   * 「その人だけの球」にはできないため。
+   * 5番も全員の得点球なので外す。
+   */
+  function handicapCandidates() {
+    const out = [];
+    for (let n = 1; n < game.keyBall; n++) {
+      if (n === 5) continue;
+      out.push(n);
+    }
+    return out;
+  }
+
+  /**
    * ハンデ球の割り当て。
-   * 5番とキーボールは全員の得点球なので選ばせない
-   * （選べると「自分だけの球」の意味が壊れる）。
+   *
+   * まず人ごとに「ハンデなし／あり」を選ぶ。既定はなし（本人の指示 2026-08-20）。
+   * 「あり」にしたときだけ番号のボタンを出す。
+   * 使わない人にまで15個の番号を並べると、何を設定する欄なのか分からなくなるため。
    */
   function renderHandicapSetup() {
     const wrap = $("moneyHandicaps");
@@ -125,39 +252,63 @@ const MONEYUI = (function () {
 
     const taken = {};
     Object.keys(handicaps).forEach(function (pid) {
+      if (!handicapOn[pid]) return;
       (handicaps[pid] || []).forEach(function (b) { taken[b] = pid; });
     });
 
     players.forEach(function (p, i) {
+      const on = !!handicapOn[p.id];
       const mine = handicaps[p.id] || [];
-      const chips = UI.el("div", { class: "chips bh-chips" });
-      for (let n = 1; n <= 15; n++) {
-        // 全員の得点球はハンデにできない
-        if (n === 5 || n === game.keyBall) continue;
-        const owner = taken[n];
-        const isMine = mine.indexOf(n) >= 0;
-        // ほかの人が持っている球は選べない（1つの球を2人で持てない）
-        const disabled = !!owner && !isMine;
-        const btn = UI.el("button", {
-          type: "button",
-          class: "chip small-chip",
-          "aria-pressed": String(isMine),
-          text: String(n),
-          onclick: function () { toggleHandicap(p.id, n); },
+
+      const toggle = UI.el("div", { class: "toggle-group money-hc-toggle" }, [
+        UI.el("button", {
+          type: "button", "data-v": "off", "aria-pressed": String(!on), text: "ハンデなし",
+          onclick: function () { setHandicapOn(p.id, false); },
+        }),
+        UI.el("button", {
+          type: "button", "data-v": "on", "aria-pressed": String(on), text: "ハンデあり",
+          onclick: function () { setHandicapOn(p.id, true); },
+        }),
+      ]);
+
+      const field = UI.el("div", { class: "field money-hc", "data-pid": p.id }, [
+        UI.el("label", {
+          class: "money-hc-label",
+          text: (p.name || (i + 1) + "人目") + " のハンデ球",
+        }),
+        toggle,
+      ]);
+
+      // 「あり」のときだけ番号を出す
+      if (on) {
+        const chips = UI.el("div", { class: "chips bh-chips" });
+        handicapCandidates().forEach(function (n) {
+          const owner = taken[n];
+          const isMine = mine.indexOf(n) >= 0;
+          // ほかの人が持っている球は選べない（1つの球を2人で持てない）
+          const disabled = !!owner && !isMine;
+          const btn = UI.el("button", {
+            type: "button",
+            class: "chip small-chip",
+            "aria-pressed": String(isMine),
+            text: String(n),
+            onclick: function () { toggleHandicap(p.id, n); },
+          });
+          if (disabled) btn.disabled = true;
+          chips.appendChild(btn);
         });
-        if (disabled) btn.disabled = true;
-        chips.appendChild(btn);
+        field.appendChild(chips);
       }
-      wrap.appendChild(
-        UI.el("div", { class: "field money-hc", "data-pid": p.id }, [
-          UI.el("label", {
-            class: "money-hc-label",
-            text: (p.name || (i + 1) + "人目") + " のハンデ球",
-          }),
-          chips,
-        ])
-      );
+      wrap.appendChild(field);
     });
+  }
+
+  function setHandicapOn(pid, on) {
+    handicapOn[pid] = !!on;
+    // 「なし」に戻したら番号も外す。設定だけ残ると、
+    // 次に「あり」にしたとき身に覚えのない球が付いてくる
+    if (!on) handicaps[pid] = [];
+    renderHandicapSetup();
   }
 
   /** 名前を打っている最中に見出しだけ追随させる */
@@ -192,6 +343,8 @@ const MONEYUI = (function () {
     shots = [];
     racks = [];
     shooter = players[0].id;
+    matchId = null;
+    startedAt = new Date().toISOString();
     $("moneyMatchTitle").textContent = game.label;
     renderMatch();
     UI.showScreen("screenMoneyMatch");
@@ -200,7 +353,7 @@ const MONEYUI = (function () {
   function renderMatch() {
     renderScores();
     renderShooter();
-    renderBalls();
+    renderPointButtons();
     renderLog();
     const sub = $("moneyMatchSub");
     if (sub) {
@@ -225,6 +378,14 @@ const MONEYUI = (function () {
         UI.el("div", { class: "ms-name", text: p.name }),
         UI.el("div", { class: "ms-val", text: (v > 0 ? "+" : "") + v }),
       ]);
+      // 誰が何番を持っているかはここに出す（本人の指示 2026-08-20）。
+      // 台の脇で見るのはこの1か所で足りるので、別の欄は置かない
+      const hb = (handicapOn[p.id] && handicaps[p.id]) || [];
+      if (hb.length) {
+        card.appendChild(
+          UI.el("div", { class: "ms-hc", text: "ハンデ " + hb.join("・") + "番" })
+        );
+      }
       wrap.appendChild(card);
     });
   }
@@ -248,34 +409,32 @@ const MONEYUI = (function () {
     });
   }
 
-  /** 落とした球のボタン。いま選んでいる人が得点できる球だけ出す */
-  function renderBalls() {
-    const wrap = $("moneyBalls");
-    if (!wrap) return;
-    UI.clear(wrap);
-    const hb = handicaps[shooter] || [];
-    const balls = MONEY.scoringBalls(game, hb);
-    const setId = currentBallSet();
-
-    balls.forEach(function (n) {
-      const ap = ballAppearance(setId, n);
-      const per = MONEY.basePoint(game, n, hb);
-      const btn = UI.el("button", {
-        type: "button",
-        class: "money-ball",
-        "data-ball": String(n),
-        title: n + "番（" + per + "点）",
-        onclick: function () { record(n); },
+  /**
+   * 得点のボタン。球をタップする方式から、点を直接入れる方式に変えた
+   * （本人の指示 2026-08-20）。
+   *
+   * サイドで倍、マスワリで倍と倍々に増えるゲームなので、
+   * 動く額は +1 / +2 / +4 / +8 / +16 で足りる。
+   * 打ち間違いの戻しに -1 / -2 を別の行で置く。
+   */
+  function renderPointButtons() {
+    [["moneyPlus", MONEY.PLUS_POINTS], ["moneyMinus", MONEY.MINUS_POINTS]]
+      .forEach(function (pair) {
+        const wrap = $(pair[0]);
+        if (!wrap) return;
+        UI.clear(wrap);
+        pair[1].forEach(function (v) {
+          wrap.appendChild(
+            UI.el("button", {
+              type: "button",
+              class: "money-pt" + (v < 0 ? " minus" : ""),
+              "data-pts": String(v),
+              text: (v > 0 ? "+" : "") + v,
+              onclick: function () { record(v); },
+            })
+          );
+        });
       });
-      btn.style.background = ap.band
-        ? "linear-gradient(180deg," + ap.base + " 0 22%," + ap.band
-          + " 22% 78%," + ap.base + " 78% 100%)"
-        : ap.base;
-      btn.style.color = ap.ink;
-      btn.appendChild(UI.el("span", { class: "bb-num shape-" + ap.shape, text: String(n) }));
-      btn.appendChild(UI.el("span", { class: "mb-pt", text: per + "点" }));
-      wrap.appendChild(btn);
-    });
   }
 
   function currentBallSet() {
@@ -286,20 +445,16 @@ const MONEYUI = (function () {
     return "standard";
   }
 
-  function record(ball) {
+  function record(pts) {
     if (!shooter) {
       UI.toast("先に落とした人を選んでください。", "warn");
       return;
     }
-    const side = !!($("moneySideChk") || {}).checked;
-    shots.push({ by: shooter, ball: ball, side: side, voided: false });
-    // サイドの印は1回ごとに戻す。付けっぱなしで倍が続くのを防ぐ
-    if ($("moneySideChk")) $("moneySideChk").checked = false;
+    shots.push({ by: shooter, pts: pts, voided: false });
     renderMatch();
-    const who = nameOf(shooter);
-    const per = MONEY.pointPerOpponent(game, ball, handicaps[shooter] || [], side);
-    UI.toast(who + " が " + ball + "番" + (side ? "（サイド）" : "")
-      + "　1人あたり" + per + "点");
+    const others = players.length - 1;
+    UI.toast(nameOf(shooter) + " に " + (pts > 0 ? "+" : "") + pts
+      + "点（" + others + "人ぶんで " + (pts > 0 ? "+" : "") + (pts * others) + "点）");
   }
 
   /**
@@ -341,7 +496,7 @@ const MONEYUI = (function () {
     renderMatch();
     UI.toast(runoutBy
       ? nameOf(runoutBy) + " のマスワリ。このラックの得点が倍になりました。"
-      : "ラックを終了しました。");
+      : "次のラックへ進みました。");
   }
 
   function undo() {
@@ -360,7 +515,10 @@ const MONEYUI = (function () {
     // 区切りが宙に浮かないよう、記録より後ろの区切りは詰める
     racks = racks.filter(function (r) { return r.at <= shots.length; });
     renderMatch();
-    UI.toast(nameOf(s.by) + " の " + s.ball + "番を取り消しました。");
+    const label = typeof s.pts === "number"
+      ? ((s.pts > 0 ? "+" : "") + s.pts + "点")
+      : (s.ball + "番");
+    UI.toast(nameOf(s.by) + " の " + label + " を取り消しました。");
   }
 
   function nameOf(id) {
@@ -380,7 +538,8 @@ const MONEYUI = (function () {
       for (let k = rk.from; k < rk.to; k++) {
         const s = shots[k];
         if (!s) continue;
-        items.push(nameOf(s.by) + " " + s.ball + "番" + (s.side ? "(サイド)" : ""));
+        const v = MONEY.shotPoints(game, s, handicaps);
+        items.push(nameOf(s.by) + " " + (v > 0 ? "+" : "") + v);
       }
       if (!items.length) return;
       wrap.appendChild(
@@ -395,13 +554,49 @@ const MONEYUI = (function () {
     });
   }
 
+  /**
+   * いまの最終結果を保存する。
+   *
+   * 記録するのは「その試合の最終結果だけ」（本人の指示 2026-08-20）。
+   * 1球ずつの記録は保存しない。誰が何点で終わったかが残れば足りる。
+   */
+  function saveResult() {
+    if (!shots.length) return null;
+    const r = MONEY.tally(game, players, shots, handicaps, racks);
+    const saved = STORE.saveMoneyResult({
+      id: matchId,
+      gameId: game.id,
+      gameLabel: game.label,
+      createdAt: startedAt,
+      racks: racks.length + (shots.length > (racks.length ? racks[racks.length - 1].at : 0) ? 1 : 0),
+      players: players.map(function (p) {
+        return {
+          name: p.name,
+          score: r.totals[p.id] || 0,
+          handicapBalls: (handicapOn[p.id] && handicaps[p.id]) || [],
+        };
+      }),
+    });
+    // 同じ試合を何度保存しても1件にまとまるようIDを覚える
+    if (saved) matchId = saved.id;
+    return saved;
+  }
+
+  /**
+   * やめる。記録は自動で保存する（本人の指示 2026-08-20）。
+   * 以前は「保存されません」と断ってから捨てていたが、
+   * 台の脇で押したときに戻せないため保存に変えた。
+   */
   function quit() {
-    if (shots.length && !window.confirm("記録は保存されません。やめますか？")) return;
+    const saved = saveResult();
     players = [];
     handicaps = {};
+    handicapOn = {};
     shots = [];
     racks = [];
+    matchId = null;
     UI.showScreen("screenSetup");
+    UI.toast(saved ? "この試合の結果を保存しました。" : "記録が無いので保存していません。");
   }
 
   return { open: open, render: renderMatch };

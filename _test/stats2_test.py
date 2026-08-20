@@ -140,9 +140,12 @@ with sync_playwright() as p:
     print("   終了画面: " + ftxt.replace("\n", " / ")[:220])
     check("イニング数" in ftxt, "結果にイニング数が出る", ftxt[:100])
     check("セーフティ数" in ftxt, "結果にセーフティ数が出る", ftxt[:100])
-    check("JPAポイント" in ftxt, "結果にJPAポイントが出る（得点換算表）", ftxt[:150])
-    if "JPAポイント" in ftxt:
-        tail = ftxt.split("JPAポイント")[1]
+    # 見出しは「獲得ポイント（JPA）」に変えた（本人の指示 2026-08-20 第2便）
+    check("獲得ポイント（JPA）" in ftxt, "結果にJPAポイントが出る（得点換算表）", ftxt[:180])
+    check("勝敗（W-L）" in ftxt, "結果にW-Lが出る", ftxt[:180])
+    check("獲得スコア" in ftxt, "結果に獲得スコアが出る", ftxt[:180])
+    if "獲得ポイント（JPA）" in ftxt:
+        tail = ftxt.split("獲得ポイント（JPA）")[1]
         check("P" in tail, "ポイントの数字が入っている", tail[:60])
     pg.click("#confirmFinishBtn")
     pg.wait_for_timeout(700)
@@ -161,8 +164,10 @@ with sync_playwright() as p:
                                     ".map(c => Math.round(c.getBoundingClientRect().top))).size")
     check(foot_rows == 1, "操作ボタンが1行に収まっている", foot_rows)
 
-    badge_in_main = pg.eval_on_selector_all(".match-card .mc-main .mc-badge", "e => e.length")
-    check(badge_in_main >= 1, "勝敗/進行中の印が名前と同じ行にある", badge_in_main)
+    # 決着した試合は名前のうしろのW/Lで分かるようにした（第2便）。
+    # 進行中の印だけが右端のバッジとして残る
+    wl_in_main = pg.eval_on_selector_all(".match-card .mc-main .mc-wl", "e => e.map(x => x.textContent)")
+    check("W" in wl_in_main and "L" in wl_in_main, "勝敗が名前と同じ行にW/Lで出る", wl_in_main)
 
     check(pg.is_visible("#histGameFilter"), "種目の絞り込みがある")
     check(pg.is_visible("#histOppFilter"), "対戦相手の絞り込みがある")

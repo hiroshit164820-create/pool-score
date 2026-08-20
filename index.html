@@ -351,7 +351,8 @@
     <button id="moneyAddBtn" class="ghost">＋ 人を追加する</button>
 
     <div class="section-title">ハンデボール</div>
-    <p class="hint">その人だけが得点できる球です。落とすと1点になります。</p>
+    <p class="hint">その人だけが得点できる球です。落とすと1点になります。
+      使わない人は「ハンデなし」のままで構いません。</p>
     <div id="moneyHandicaps" class="money-handicaps"></div>
 
     <button id="moneyStartBtn" class="primary money-start">この人数で始める</button>
@@ -373,18 +374,14 @@
     <div class="section-title">落とした人</div>
     <div id="moneyShooter" class="money-shooter"></div>
 
-    <!-- 落とした球 -->
-    <div class="section-title">落とした球</div>
-    <div id="moneyBalls" class="money-balls"></div>
-
-    <!-- サイドポケットか -->
-    <label class="money-side">
-      <input type="checkbox" id="moneySideChk">
-      <span>サイドポケットに落とした（点が倍）</span>
-    </label>
+    <!-- 点を直接入れる。球をタップする方式から変更（本人の指示 2026-08-20）。
+         サイドで倍、マスワリで倍と倍々になるので、+1/+2/+4/+8/+16 で足りる -->
+    <div class="section-title">点を入れる（相手1人あたり）</div>
+    <div id="moneyPlus" class="money-pts"></div>
+    <div id="moneyMinus" class="money-pts is-minus"></div>
 
     <div class="money-actions">
-      <button id="moneyRackBtn" class="ghost">ラック終了</button>
+      <button id="moneyRackBtn" class="ghost">次のラックへ</button>
       <button id="moneyUndoBtn" class="ghost">元に戻す</button>
     </div>
 

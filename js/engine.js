@@ -678,6 +678,20 @@ function buildResult(match, now) {
     },
   };
 
+  // JPA 8ボールは「何対何で勝ったか」の3段階でポイントが決まる
+  if (r.game.goal === "jpaSL8" && st.winner) {
+    const loser8 = other(st.winner);
+    const tp8 = jpaTeamPoints8(st.racks[loser8], match.goal.targets[loser8]);
+    result.jpa = {
+      teamPoints:
+        st.winner === "A"
+          ? { A: tp8.winner, B: tp8.loser }
+          : { A: tp8.loser, B: tp8.winner },
+      loserRacks: st.racks[loser8],
+      loserTarget: match.goal.targets[loser8],
+    };
+  }
+
   // JPAはチームポイントも確定させる
   if (r.game.goal === "jpaSL" && st.winner) {
     const loser = other(st.winner);

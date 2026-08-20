@@ -104,6 +104,118 @@
   color: var(--muted, #6b6255);
 }
 
+/* ============ 5-9 / 5-10 ============ */
+
+/* 点を入れるボタン。+1/+2/+4/+8/+16 と -1/-2 をそれぞれ1行に並べる */
+.money-pts {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.money-pt {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 56px;
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface, #fffdf6);
+  border: 2px solid var(--ink, #241a12);
+  color: var(--ink, #241a12);
+  box-shadow: var(--shadow-sm);
+}
+.money-pt.minus {
+  background: var(--surface-2, #f1e7cf);
+  color: #8a3b00;
+}
+.money-pt:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* スコアボードのハンデ球番号 */
+.money-score .ms-hc {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim, #6b6255);
+  margin-top: 2px;
+}
+
+/* 名前を選ぶ欄 */
+.money-player {
+  margin-bottom: 12px;
+}
+.money-name-pick {
+  margin-top: 6px;
+}
+.money-hc-toggle {
+  margin-bottom: 6px;
+}
+
+/* 登録が増えたときの受け皿。設定画面と5-9で共通 */
+.picker-select {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 44px;
+  font-size: 16px;
+  padding: 4px 8px;
+  border: 2px solid var(--ink, #241a12);
+  background: var(--surface, #fffdf6);
+  color: var(--ink, #241a12);
+}
+
+/* 5-9 / 5-10 の結果カード */
+.money-result {
+  margin-top: 4px;
+}
+.mr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.mr-row + .mr-row {
+  border-top: 1px dashed rgba(0, 0, 0, 0.18);
+}
+.mr-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-score {
+  flex: 0 0 auto;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mr-row.is-top .mr-score {
+  color: var(--accent-2, #d86a10);
+}
+
+/* ============ 通知（トースト） ============ */
+/* 位置は UI.toast() が画面ごとの帯の高さを測って入れる。
+   ここでは「絶対に操作を塞がない」ことだけを保証する */
+.toast-wrap,
+.toast-wrap .toast {
+  pointer-events: none;
+}
+/* 帯の下に出すぶん、下の内容（スコア）に重なる。
+   覆う面積を減らすため、文字幅ぶんだけの小さな札にする */
+.toast-wrap {
+  display: flex;
+  justify-content: center;
+}
+.toast-wrap .toast {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* ============ 試合履歴 ============ */
 
 /* 種目と対戦相手での絞り込み */
@@ -164,6 +276,25 @@
   background: var(--surface-2, #f1e7cf);
   color: var(--ink, #241a12);
 }
+/* 勝敗のW-L。名前のうしろに小さく付ける */
+.match-card .mc-wl {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 900;
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 4px;
+  border: 2px solid var(--ink, #241a12);
+}
+.match-card .mc-wl.is-w {
+  background: var(--accent-2, #d86a10);
+  color: #fff;
+}
+.match-card .mc-wl.is-l {
+  background: var(--surface, #fffdf6);
+  color: var(--text-dim, #6b6255);
+}
+
 .match-card .mc-badge {
   flex: 0 0 auto;
   margin-left: 4px;
