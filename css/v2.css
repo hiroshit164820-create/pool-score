@@ -1415,3 +1415,112 @@ button::after {
   flex: 1 1 auto;
   min-height: 44px;
 }
+
+/* ============ 種目別でさらに詳しく（本人の指示 2026-08-21） ============ */
+/* 項目が多いので既定では閉じる。押した見出し（summary）で開く */
+.detail-card > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* 指で押す見出しなので、他のボタンと同じ高さを確保する */
+  min-height: 44px;
+  margin: 0;
+}
+.detail-card > summary::-webkit-details-marker {
+  display: none;
+}
+/* 開閉の向きを示す。閉じているときは下向き、開いたら上向き */
+.detail-card > summary::after {
+  content: "▼";
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+.detail-card[open] > summary::after {
+  content: "▲";
+}
+/* 種目の名前。表と表の切れ目が分かるようにする */
+.detail-card .dc-game {
+  margin: 14px 0 4px;
+  padding-top: 8px;
+  border-top: 2px dashed rgba(0, 0, 0, 0.25);
+  font-size: 17px;
+  font-weight: 900;
+}
+.detail-card .dc-game:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+/* 項目名の欄が潰れて1文字ずつ縦に割れていたので、幅の取り合いを決めておく。
+   値が長い行（獲得得点の履歴・SL別）は折り返して全部読ませる */
+.detail-card .stat-row {
+  align-items: flex-start;
+  gap: 10px;
+}
+.detail-card .stat-key {
+  flex: 1 1 60%;
+  min-width: 0;
+}
+.detail-card .stat-val {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ============ 長い名前がW-Lの札に重なる（本人の指摘 2026-08-21） ============ */
+/* 履歴の1行は grid（名前｜スコア｜名前）。1fr の最小幅は既定で「中身の幅」なので、
+   名前が長いと欄が広がってスコアの札に食い込む。
+   最小を0にして、名前の側だけを縮めて「…」で切る */
+.match-card .mc-main {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+}
+/* .mc-nm は inline-flex なので、そこに text-overflow を付けても効かない。
+   中の文字の入った span を切る */
+.match-card .mc-nm > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* スコアの札は縮めない（数字とW-Lは必ず読ませる） */
+.match-card .mc-score {
+  flex: 0 0 auto;
+}
+
+/* ============ 中断中カードの × が横いっぱいに伸びる（本人の指摘 2026-08-21） ============ */
+/* style.css の `.home-card button { width: 100% }` に負けていたため、
+   同じだけ細かい書き方にして 44px 角に戻す */
+.home-card.resume .hc-close,
+.resume-card .rc-close {
+  width: 44px;
+  max-width: 44px;
+  flex: 0 0 auto;
+}
+
+/* grid で justify-self: start / end を付けると、その欄は「中身の幅」になり、
+   割り当てられた列（90px）をはみ出して隣の札に重なる（本人の指摘 2026-08-21）。
+   欄いっぱいに伸ばしたうえで、中身の寄せ方だけを左右で変える */
+.match-card .mc-main .mc-nm:first-child,
+.match-card .mc-main .mc-nm:last-child {
+  justify-self: stretch;
+  max-width: 100%;
+}
+.match-card .mc-main .mc-nm:first-child {
+  justify-content: flex-start;
+  text-align: left;
+}
+.match-card .mc-main .mc-nm:last-child {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* ×の下に文字が潜り込まないよう、見出しだけでなく名前の行にも余白を取る
+   （名前が長いと2行になり、2行目が×に被っていた。本人の指摘 2026-08-21） */
+.home-card.resume .hc-main,
+.resume-card .rc-main {
+  padding-right: 52px;
+}

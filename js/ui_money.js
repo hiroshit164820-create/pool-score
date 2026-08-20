@@ -492,10 +492,19 @@ const MONEYUI = (function () {
         runoutBy = hit.id;
       }
     }
-    racks.push({ at: shots.length, runoutBy: runoutBy });
+    // ブレイクエース（ブレイクで直接キーボールを入れた）かどうか。
+    // 撞き切った人がいるときだけ聞く（本人の指示 2026-08-21・種目別の成績で使う）
+    let breakAce = false;
+    if (runoutBy) {
+      breakAce = window.confirm(
+        nameOf(runoutBy) + " のブレイクエース（ブレイクで直接入れた）でしたか？"
+      );
+    }
+    racks.push({ at: shots.length, runoutBy: runoutBy, breakAce: breakAce });
     renderMatch();
     UI.toast(runoutBy
-      ? nameOf(runoutBy) + " のマスワリ。このラックの得点が倍になりました。"
+      ? nameOf(runoutBy) + (breakAce ? " のブレイクエース。" : " のマスワリ。")
+        + "このラックの得点が倍になりました。"
       : "次のラックへ進みました。");
   }
 
@@ -570,9 +579,14 @@ const MONEYUI = (function () {
       createdAt: startedAt,
       racks: racks.length + (shots.length > (racks.length ? racks[racks.length - 1].at : 0) ? 1 : 0),
       players: players.map(function (p) {
+        // マスワリ・ブレイクエースの回数。ラックの区切りに残してある
+        // （本人の指示 2026-08-21・種目別の成績で使う）
+        const mine = racks.filter(function (rk) { return rk.runoutBy === p.id; });
         return {
           name: p.name,
           score: r.totals[p.id] || 0,
+          masuwari: mine.length,
+          breakAce: mine.filter(function (rk) { return !!rk.breakAce; }).length,
           handicapBalls: (handicapOn[p.id] && handicaps[p.id]) || [],
         };
       }),

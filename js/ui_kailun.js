@@ -61,7 +61,13 @@ const KAILUNUI = (function () {
   function reduce() {
     const scores = {};
     const step = {};
-    players.forEach(function (p) { scores[p.id] = 0; step[p.id] = 1; });
+    // 最大連続得点（本人の指示 2026-08-21）。
+    // 「一度の手番で続けて取った点」の最大。交代・反則で切れる
+    const run = {};
+    const maxRun = {};
+    players.forEach(function (p) {
+      scores[p.id] = 0; step[p.id] = 1; run[p.id] = 0; maxRun[p.id] = 0;
+    });
 
     let idx = 0;
     const n = players.length || 1;
@@ -73,6 +79,8 @@ const KAILUNUI = (function () {
           // 3段階そろったので1点。段階は最初に戻す
           scores[cur] += 1;
           step[cur] = 1;
+          run[cur] += 1;
+          if (run[cur] > maxRun[cur]) maxRun[cur] = run[cur];
         } else {
           step[cur] += 1;
         }
@@ -83,10 +91,12 @@ const KAILUNUI = (function () {
           scores[cur] -= 1;
         }
         step[cur] = 1;
+        run[cur] = 0;
         idx = (idx + 1) % n;
       } else if (ev.t === "turn" && cur) {
         // 交代すると段階は最初に戻る（本人の指示 2026-08-21）
         step[cur] = 1;
+        run[cur] = 0;
         idx = (idx + 1) % n;
       } else if (ev.t === "adjust" && scores[ev.pid] !== undefined) {
         scores[ev.pid] += ev.d;
@@ -98,7 +108,7 @@ const KAILUNUI = (function () {
       if (winner === null && scores[p.id] >= goal) winner = p.id;
     });
 
-    return { scores: scores, step: step, idx: idx, winner: winner };
+    return { scores: scores, step: step, idx: idx, winner: winner, maxRun: maxRun };
   }
 
   function nameOf(pid) {
@@ -451,7 +461,13 @@ const KAILUNUI = (function () {
       createdAt: startedAt,
       racks: 0,
       players: players.map(function (p) {
-        return { name: p.name, score: st.scores[p.id] || 0, handicapBalls: [] };
+        return {
+          name: p.name,
+          score: st.scores[p.id] || 0,
+          handicapBalls: [],
+          // 最大連続得点。種目別の成績で使う（本人の指示 2026-08-21）
+          maxRun: (st.maxRun && st.maxRun[p.id]) || 0,
+        };
       }),
     });
     if (saved) matchId = saved.id;

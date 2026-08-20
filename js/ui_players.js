@@ -589,6 +589,9 @@ const PLAYERS = (function () {
     });
     if (byGame.length) body.appendChild(statTable("種目別", byGame));
 
+    // 種目別でさらに詳しく（本人の指示 2026-08-21）。既定は閉じておく
+    appendGameDetail(body, player);
+
     // パートナー別（ダブルスで組んだ相手）
     const byPartner = Object.keys(st.partners).map(function (k) {
       const pt = st.partners[k];
@@ -614,6 +617,205 @@ const PLAYERS = (function () {
     );
 
     UI.showScreen("screenStats");
+  }
+
+  /* ---------- 種目別でさらに詳しく ---------- */
+
+  /** 小数1桁。数えるものが無ければ「—」 */
+  function avg(v, n) {
+    if (!n) return "—";
+    return String(Math.round((v / n) * 10) / 10);
+  }
+
+  /** 回数と率をひとまとめに書く（例: 3回（25.0%）） */
+  function cntRate(n, base) {
+    const t = n + "回";
+    if (!base) return t;
+    return t + "（" + pct(n / base) + "）";
+  }
+
+  /** 種目のまとまり。出す項目が種目ごとに違うので、ここで振り分ける */
+  function detailRows(g) {
+    const id = g.gameId;
+    const rows = [];
+    const wl = g.wins + "勝" + g.losses + "敗";
+    const rate = g.matches ? pct(g.wins / g.matches) : "—";
+
+    function safetyRows() {
+      rows.push(["1ラックあたりの平均セーフティ数", avg(g.safety, g.racks)]);
+      rows.push(["1試合あたりの平均セーフティ数", avg(g.safety, g.matches)]);
+    }
+    function inningRow() {
+      rows.push(["1ラックあたりの平均イニング数", avg(g.innings, g.racks)]);
+    }
+    function shotClockRows() {
+      rows.push(["ショットクロック平均タイム",
+        g.scShots ? sec(g.scSec / g.scShots) : "—"]);
+      rows.push(["1試合あたりのエクステンション使用回数", avg(g.scExt, g.matches)]);
+    }
+
+    // ---- ボウラード（1人でやる種目） ----
+    if (id === "bowlard") {
+      [10, 30, 50].forEach(function (n) {
+        const take = g.bowlardTotals.slice(0, n);
+        rows.push(["平均スコア（過去" + n + "回）",
+          take.length
+            ? Math.round((take.reduce(function (a, b) { return a + b; }, 0) / take.length) * 10) / 10
+              + "点（" + take.length + "回ぶん）"
+            : "—"]);
+      });
+      rows.push(["最高スコア", g.bwBest === null ? "—" : g.bwBest + "点"]);
+      rows.push(["累計ストライク数", g.bwStrike + "回"]);
+      rows.push(["累計スペア数", g.bwSpare + "回"]);
+      rows.push(["累計ミス数", g.bwMiss + "回"]);
+      return rows;
+    }
+
+    // ---- ローテーション ----
+    if (id === "rotation") {
+      const goals = Object.keys(g.byGoal).sort(function (a, b) { return a - b; });
+      if (goals.length) {
+        goals.forEach(function (t) {
+          const b = g.byGoal[t];
+          rows.push([t + "点の勝敗数", b.wins + "勝" + b.losses + "敗"]);
+        });
+        goals.forEach(function (t) {
+          const b = g.byGoal[t];
+          rows.push([t + "点の勝率", b.matches ? pct(b.wins / b.matches) : "—"]);
+        });
+      } else {
+        rows.push(["勝敗数", wl]);
+        rows.push(["勝率", rate]);
+      }
+      // 率の分母は項目名の側に書く。値が長くなると項目名の欄が潰れて
+      // 「A ハ イ ラ ン」と縦に割れるため
+      rows.push(["Aハイラン数／率（自分がブレイクした" + g.brokeFirst + "試合中）",
+        cntRate(g.aHighRun, g.brokeFirst)]);
+      rows.push(["Bハイラン数／率（相手がブレイクした" + g.oppBrokeFirst + "試合中）",
+        cntRate(g.bHighRun, g.oppBrokeFirst)]);
+      safetyRows();
+      inningRow();
+      shotClockRows();
+      return rows;
+    }
+
+    // ---- 14-1 ----
+    if (id === "straight") {
+      rows.push(["勝敗数", wl]);
+      rows.push(["勝率", rate]);
+      rows.push(["ハイラン", g.highRun + "点"]);
+      shotClockRows();
+      return rows;
+    }
+
+    // ---- JPA ----
+    if (id.indexOf("jpa_") === 0) {
+      const doubles = id.indexOf("doubles") >= 0;
+      rows.push(["勝敗数", wl]);
+      rows.push(["勝率", rate]);
+      if (!doubles) {
+        rows.push(["累計獲得ポイント数", g.jpaPoints + "P"]);
+        rows.push(["1試合あたりの平均獲得ポイント数",
+          g.jpaMatches ? avg(g.jpaPoints, g.jpaMatches) + "P" : "—"]);
+        rows.push(["1試合あたりの平均獲得ポイント率",
+          g.jpaFull ? pct(g.jpaPoints / g.jpaFull) : "—"]);
+      }
+      rows.push(["マスワリ数／率", cntRate(g.masuwari, g.breaks)]);
+      rows.push(["ブレイクエース数／率", cntRate(g.breakAce, g.breaks)]);
+      safetyRows();
+      inningRow();
+      if (!doubles) {
+        rows.push(["あがりまでの最小イニング数",
+          g.winInnMin === null ? "—" : g.winInnMin + "イニング"]);
+        rows.push(["あがりまでの最大イニング数",
+          g.winInnMax === null ? "—" : g.winInnMax + "イニング"]);
+        rows.push(["対戦相手のスキルレベル平均",
+          g.oppSlCount ? "SL " + avg(g.oppSlSum, g.oppSlCount) : "—"]);
+        const sls = Object.keys(g.bySl).sort(function (a, b) { return a - b; });
+        sls.forEach(function (n) {
+          const b = g.bySl[n];
+          rows.push(["相手SL" + n + " の勝敗数／勝率",
+            b.wins + "勝" + b.losses + "敗（" + pct(b.wins / b.matches) + "）"]);
+        });
+      }
+      return rows;
+    }
+
+    // ---- 一般種目（9ボール・10ボール・8ボール、ダブルス含む） ----
+    rows.push(["勝敗数", wl]);
+    rows.push(["勝率", rate]);
+    rows.push(["マスワリ数／率", cntRate(g.masuwari, g.breaks)]);
+    if (id.indexOf("9ball") === 0) {
+      rows.push(["ブレイクエース", g.breakAce + "回"]);
+    }
+    safetyRows();
+    inningRow();
+    shotClockRows();
+    return rows;
+  }
+
+  /** ハウスゲーム（5-9 / 5-10 / カイルン）の項目 */
+  function houseRows(h) {
+    const rows = [];
+    rows.push(["回数", h.plays + "回"]);
+    if (h.gameId === "kailun") {
+      rows.push(["最大連続得点",
+        h.maxRun === null ? "記録がありません（2026-08-21以降の試合から）" : h.maxRun + "点"]);
+    } else {
+      rows.push(["マスワリ数／率", cntRate(h.masuwari, h.racks)]);
+      rows.push(["ブレイクエース数／率", cntRate(h.breakAce, h.racks)]);
+    }
+    // 各種目の獲得得点履歴（新しい順・多いときは直近20回まで）
+    const list = h.scores.slice(0, 20).map(function (x) {
+      return (x.score > 0 ? "+" : "") + x.score;
+    });
+    rows.push(["獲得得点の履歴（新しい順）",
+      list.length ? list.join("　") + (h.scores.length > 20 ? "　…" : "") : "—"]);
+    return rows;
+  }
+
+  /**
+   * 「種目別でさらに詳しく」のカード。
+   *
+   * 項目が多いので既定では閉じておく（本人の指示 2026-08-21）。
+   * details/summary を使って、押したときだけ開くようにする。
+   */
+  function appendGameDetail(body, player) {
+    if (!STORE.gameDetail) return;
+    const d = STORE.gameDetail(player.id);
+    const ids = Object.keys(d.byGame);
+    const houseIds = Object.keys(d.byHouse);
+    if (!ids.length && !houseIds.length) return;
+
+    const box = UI.el("details", { class: "match-card detail-card" });
+    box.appendChild(UI.el("summary", { class: "stat-title", text: "種目別でさらに詳しく" }));
+
+    ids.forEach(function (id) {
+      const g = d.byGame[id];
+      box.appendChild(UI.el("div", { class: "dc-game", text: g.label }));
+      box.appendChild(detailTable(detailRows(g)));
+    });
+    houseIds.forEach(function (id) {
+      const h = d.byHouse[id];
+      box.appendChild(UI.el("div", { class: "dc-game", text: h.label }));
+      box.appendChild(detailTable(houseRows(h)));
+    });
+
+    body.appendChild(box);
+  }
+
+  function detailTable(rows) {
+    // 見た目は他の表（statTable）と同じ組みにそろえる
+    const table = UI.el("div", { class: "dc-rows" });
+    rows.forEach(function (r) {
+      table.appendChild(
+        UI.el("div", { class: "stat-row" }, [
+          UI.el("span", { class: "stat-key", text: r[0] }),
+          UI.el("span", { class: "stat-val", text: String(r[1]) }),
+        ])
+      );
+    });
+    return table;
   }
 
   function statTable(title, rows) {

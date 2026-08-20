@@ -255,6 +255,11 @@ const STORE = (function () {
             name: String(p.name || ""),
             score: Number(p.score) || 0,
             handicapBalls: p.handicapBalls || [],
+            // 種目別の成績で使う（本人の指示 2026-08-21）。
+            // 古い記録には無いので、読むときは 0 として扱う
+            masuwari: Number(p.masuwari) || 0,
+            breakAce: Number(p.breakAce) || 0,
+            maxRun: Number(p.maxRun) || 0,
           };
         })
         .sort(function (a, b) { return b.score - a.score; }),
@@ -520,6 +525,171 @@ const STORE = (function () {
     return out;
   }
 
+  /**
+   * 種目ごとのくわしい成績（本人の指示 2026-08-21）。
+   *
+   * playerStats は「その人の全体」を出すもので、種目ごとの細かい数字
+   * （マスワリ率・ハイラン・相手のスキルレベル別など）は持っていない。
+   * 画面に出す形をそのまま作ると集計が散らかるので、ここで一度にまとめる。
+   *
+   * 返すのは { byGame: { <gameId>: {...} }, byHouse: { <gameId>: {...} } }。
+   * ハウスゲーム（5-9 / 5-10 / カイルン）は別の入れ物に保存しているため分けてある。
+   */
+  function gameDetail(playerId) {
+    const me = findPlayerById(playerId);
+    const myName = me ? me.name : null;
+    const byGame = {};
+    const byHouse = {};
+
+    function slot(id, label) {
+      if (!byGame[id]) {
+        byGame[id] = {
+          gameId: id, label: label,
+          matches: 0, wins: 0, losses: 0,
+          racks: 0, innings: 0,
+          safety: 0, masuwari: 0, breakAce: 0, breaks: 0, fouls: 0,
+          highRun: 0,
+          scMatches: 0, scShots: 0, scSec: 0, scExt: 0,
+          jpaMatches: 0, jpaPoints: 0, jpaFull: 0,
+          winInnMin: null, winInnMax: null,
+          oppSlSum: 0, oppSlCount: 0, bySl: {},
+          byGoal: {},
+          // ローテーションのハイラン（Aは自分のブレイクから、Bは相手のブレイクの次から）
+          aHighRun: 0, bHighRun: 0, brokeFirst: 0, oppBrokeFirst: 0,
+          // ボウラード。新しい順に積む
+          bowlardTotals: [], bwStrike: 0, bwSpare: 0, bwMiss: 0, bwBest: null,
+        };
+      }
+      return byGame[id];
+    }
+
+    listMatches().forEach(function (idx) {
+      if (!idx.finished) return;
+      const m = loadMatch(idx.id);
+      if (!m || !m.result) return;
+
+      let side = null;
+      if (m.sides[0].playerIds && m.sides[0].playerIds.indexOf(playerId) >= 0) side = "A";
+      else if (m.sides[1].playerIds && m.sides[1].playerIds.indexOf(playerId) >= 0) side = "B";
+      if (!side) return;
+      const opp = side === "A" ? "B" : "A";
+
+      const r = m.result;
+      const st = (r.perSide && r.perSide[side]) || {};
+      const g = slot(m.gameId, idx.gameLabel);
+
+      g.matches++;
+      if (r.winner === side) g.wins++;
+      else if (r.winner) g.losses++;
+
+      g.racks += r.racks ? (r.racks.A + r.racks.B) : 0;
+      const inn = r.inningsPlayed != null ? r.inningsPlayed : (r.innings || 0) + 1;
+      g.innings += inn;
+
+      ["safety", "masuwari", "breakAce", "breaks", "fouls"].forEach(function (k) {
+        g[k] += st[k] || 0;
+      });
+      if ((st.highRun || 0) > g.highRun) g.highRun = st.highRun;
+
+      // ショットクロック。使った試合だけ平均に入れる
+      if (st.shotClockShots) {
+        g.scMatches++;
+        g.scShots += st.shotClockShots;
+        g.scSec += st.shotClockTotalSec || 0;
+      }
+      g.scExt += st.shotClockExtensions || 0;
+
+      // JPAのチームポイント。率はその試合で動いた全ポイントに対する割合
+      if (r.jpa && r.jpa.teamPoints && r.jpa.teamPoints[side] !== undefined) {
+        g.jpaMatches++;
+        g.jpaPoints += r.jpa.teamPoints[side];
+        g.jpaFull += (r.jpa.teamPoints.A || 0) + (r.jpa.teamPoints.B || 0);
+      }
+
+      // あがりまでのイニング数（勝った試合だけ）
+      if (r.winner === side) {
+        if (g.winInnMin === null || inn < g.winInnMin) g.winInnMin = inn;
+        if (g.winInnMax === null || inn > g.winInnMax) g.winInnMax = inn;
+      }
+
+      // 相手のスキルレベル
+      const meta = (m.goal && m.goal.meta) || {};
+      const sl = meta.skillLevel ? meta.skillLevel[opp] : null;
+      if (sl !== null && sl !== undefined) {
+        g.oppSlSum += sl;
+        g.oppSlCount++;
+        const b = g.bySl[sl] || { matches: 0, wins: 0, losses: 0 };
+        b.matches++;
+        if (r.winner === side) b.wins++;
+        else if (r.winner) b.losses++;
+        g.bySl[sl] = b;
+      }
+
+      // 目標点ごとの勝敗（ローテーション）
+      const target = (m.goal && m.goal.targets) ? m.goal.targets[side] : null;
+      if (target) {
+        const t = g.byGoal[target] || { matches: 0, wins: 0, losses: 0 };
+        t.matches++;
+        if (r.winner === side) t.wins++;
+        else if (r.winner) t.losses++;
+        g.byGoal[target] = t;
+      }
+
+      // ハイラン（ローテーション）。
+      // Aハイラン=自分のブレイクから上がりまで撞き切る（相手はバンキングのみ）
+      // Bハイラン=相手のブレイクのあと、自分の最初の番で上がりまで撞き切る
+      // どちらも「相手が0点」「自分の最高連続得点が目標点以上」で判定できる
+      // （2026-08-21に実データで確認済み。新しい記録は要らない）
+      const ev0 = (m.events || [])[0];
+      const firstSide = (ev0 && ev0.d && ev0.d.firstSide) || "A";
+      if (firstSide === side) g.brokeFirst++;
+      else g.oppBrokeFirst++;
+      if (target && r.winner === side
+          && (r.scores ? r.scores[opp] : 1) === 0
+          && (st.highRun || 0) >= target) {
+        if (firstSide === side) g.aHighRun++;
+        else g.bHighRun++;
+      }
+
+      // ボウラード（1人でやる種目）
+      if (r.bowlard) {
+        const tot = r.bowlard.total;
+        if (tot !== null && tot !== undefined) {
+          g.bowlardTotals.push(tot);
+          if (g.bwBest === null || tot > g.bwBest) g.bwBest = tot;
+        }
+        g.bwStrike += r.bowlard.strike || 0;
+        g.bwSpare += r.bowlard.spare || 0;
+        g.bwMiss += r.bowlard.miss || 0;
+      }
+    });
+
+    // ハウスゲーム（5-9 / 5-10 / カイルン）。名前で突き合わせる
+    if (myName) {
+      listMoneyResults().forEach(function (mr) {
+        const mine = (mr.players || []).find(function (x) { return x.name === myName; });
+        if (!mine) return;
+        const h = byHouse[mr.gameId] || {
+          gameId: mr.gameId, label: mr.gameLabel || mr.gameId,
+          plays: 0, scores: [], racks: 0,
+          masuwari: 0, breakAce: 0, maxRun: null,
+        };
+        h.plays++;
+        // 獲得得点の履歴（新しい順）
+        h.scores.push({ at: mr.createdAt, score: mine.score });
+        h.racks += Number(mr.racks) || 0;
+        h.masuwari += Number(mine.masuwari) || 0;
+        h.breakAce += Number(mine.breakAce) || 0;
+        if (mine.maxRun !== null && mine.maxRun !== undefined) {
+          if (h.maxRun === null || mine.maxRun > h.maxRun) h.maxRun = mine.maxRun;
+        }
+        byHouse[mr.gameId] = h;
+      });
+    }
+
+    return { byGame: byGame, byHouse: byHouse };
+  }
+
   /* ---- 「自分」 ---- */
   /*
    * 自分は設定に id を1つ持つ形で覚える。
@@ -737,6 +907,7 @@ const STORE = (function () {
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,
     playerStats: playerStats,
+    gameDetail: gameDetail,
     gameStats: gameStats,
     getSelf: getSelf,
     getSelfId: getSelfId,
