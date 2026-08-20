@@ -44,7 +44,7 @@ with sync_playwright() as p:
 
     check(pg.title() == "ビリヤードスコア記録", "タイトルが出る", pg.title())
     check(pg.is_visible("#startMatchBtn"), "試合作成画面が表示される")
-    check(helpers.count_selectable_games(pg) == 11, "種目が11選べる",
+    check(helpers.count_selectable_games(pg) == 14, "種目が14選べる",
           helpers.count_selectable_games(pg))
     labels = helpers.all_game_labels(pg)
     check("14-1" in labels, "14-1が公開版に入っている", labels)
