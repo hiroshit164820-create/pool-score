@@ -27,17 +27,13 @@ const PLAYERS = (function () {
     $("newPlayerName").addEventListener("input", renderNewSkill);
     $("backFromPlayersBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
 
-    // 登録フォームの開閉。ふだんは畳んでおき、一覧を主役にする
+    // 登録フォームの開閉。ふだんは畳んでおき、一覧を主役にする。
+    // 自分と対戦相手で同じ欄を使い、どちらを登録中かだけを持つ
     $("toggleAddPlayerBtn").addEventListener("click", function () {
-      const body = $("addPlayerBody");
-      const opening = body.hidden;
-      body.hidden = !opening;
-      $("toggleAddPlayerBtn").setAttribute("aria-expanded", String(opening));
-      if (opening) {
-        renderNewSkill();
-        const nameInput = $("newPlayerName");
-        if (nameInput) nameInput.focus();
-      }
+      toggleForm("other");
+    });
+    $("toggleSelfBtn").addEventListener("click", function () {
+      toggleForm("self");
     });
 
     // 絞り込みと並び替え
@@ -61,6 +57,50 @@ const PLAYERS = (function () {
   // 新規登録フォームで選択中のスキルレベル
   let newSkill = { nine: null, eight: null };
 
+  /** いま登録しようとしているのが自分か対戦相手か */
+  let addMode = "other";
+
+  /**
+   * 登録フォームを開け閉めする。
+   * 同じ欄を使い回すので、押されたボタンと今の状態から開閉を決める。
+   */
+  function toggleForm(mode) {
+    const body = $("addPlayerBody");
+    // 閉じているか、別の種類を押したときは開く（種類だけ切り替える）
+    const opening = body.hidden || addMode !== mode;
+    addMode = mode;
+    body.hidden = !opening;
+    syncFormLabels(opening);
+    if (opening) {
+      renderNewSkill();
+      const nameInput = $("newPlayerName");
+      if (nameInput) nameInput.focus();
+    }
+  }
+
+  /** 開いている欄がどちらの登録なのかを見て分かるようにする */
+  function syncFormLabels(open) {
+    const self = addMode === "self";
+    $("toggleSelfBtn").setAttribute("aria-expanded", String(!!open && self));
+    $("toggleAddPlayerBtn").setAttribute("aria-expanded", String(!!open && !self));
+    const label = $("newPlayerLabel");
+    if (label) label.textContent = self ? "自分の名前" : "対戦相手の名前";
+    const input = $("newPlayerName");
+    if (input) {
+      input.placeholder = self ? "自分の名前を入力" : "相手の名前を入力";
+    }
+    const btn = $("addPlayerBtn");
+    if (btn) btn.textContent = self ? "自分として登録" : "登録";
+  }
+
+  /** ホームから「自分を登録する」で呼ばれる */
+  function openSelfRegister() {
+    open();
+    const body = $("addPlayerBody");
+    if (body) body.hidden = true;
+    toggleForm("self");
+  }
+
   function addPlayer() {
     const input = $("newPlayerName");
     const name = (input.value || "").trim();
@@ -72,15 +112,19 @@ const PLAYERS = (function () {
       UI.toast("「" + name + "」はすでに登録されています。", "warn");
       return;
     }
-    STORE.upsertPlayer(name, { nine: newSkill.nine, eight: newSkill.eight });
+    const created = STORE.upsertPlayer(name, { nine: newSkill.nine, eight: newSkill.eight });
+    // 自分として登録したときだけ、自分の指定を差し替える
+    const asSelf = (addMode === "self");
+    if (asSelf && created) STORE.setSelf(created.id);
     input.value = "";
     newSkill = { nine: null, eight: null };
     renderNewSkill();
     // 登録したら畳む。続けて登録したいときはもう一度開く
     $("addPlayerBody").hidden = true;
-    $("toggleAddPlayerBtn").setAttribute("aria-expanded", "false");
+    syncFormLabels(false);
     render();
-    UI.toast("「" + name + "」を登録しました。");
+    UI.toast("「" + name + "」を" + (asSelf ? "自分として" : "") + "登録しました。");
+    if (asSelf && typeof HOME !== "undefined") HOME.render();
   }
 
   /** JPAスキルレベルの選択欄。未選択のままでも登録できる（任意項目） */
@@ -231,17 +275,26 @@ const PLAYERS = (function () {
     sortPlayers(filtered, sortMode).forEach(function (row) {
       const p = row.p;
       const st = row.st;
-      const card = UI.el("div", { class: "match-card player-card" });
+      const mine = STORE.isSelf(p.id);
+      const card = UI.el("div", {
+        class: "match-card player-card" + (mine ? " is-self" : ""),
+      });
 
-      card.appendChild(
-        UI.el("div", { class: "mc-main" }, [
-          UI.el("span", { style: "flex:1;min-width:0", text: p.name }),
-          UI.el("span", {
-            class: "mc-score",
-            text: st.matches ? st.wins + "勝" + st.losses + "敗" : "記録なし",
-          }),
-        ])
-      );
+      const nameRow = UI.el("div", { class: "mc-main" }, [
+        UI.el("span", { style: "flex:1;min-width:0", text: p.name }),
+        UI.el("span", {
+          class: "mc-score",
+          text: st.matches ? st.wins + "勝" + st.losses + "敗" : "記録なし",
+        }),
+      ]);
+      // 自分には印を付ける。どれが成績に出ている人か一目で分かるようにする
+      if (mine) {
+        nameRow.insertBefore(
+          UI.el("span", { class: "self-badge", text: "自分" }),
+          nameRow.firstChild
+        );
+      }
+      card.appendChild(nameRow);
 
       if (st.matches) {
         card.appendChild(
@@ -331,6 +384,26 @@ const PLAYERS = (function () {
       // 「⋯」を押したときだけ出す操作
       if (openEditFor === p.id) {
         const more = UI.el("div", { class: "pc-more-body" });
+        // 以前から登録してある人を自分にできるようにする。
+        // 自分の指定を後から付け替える道もここに置く
+        more.appendChild(
+          UI.el("button", {
+            class: "small ghost",
+            text: mine ? "自分の指定を外す" : "この人を自分にする",
+            onclick: function () {
+              if (mine) {
+                STORE.setSelf(null);
+                UI.toast("自分の指定を外しました。");
+              } else {
+                STORE.setSelf(p.id);
+                UI.toast("「" + p.name + "」を自分にしました。");
+              }
+              openEditFor = null;
+              render();
+              if (typeof HOME !== "undefined") HOME.render();
+            },
+          })
+        );
         more.appendChild(
           UI.el("button", {
             class: "small ghost",
@@ -517,5 +590,6 @@ const PLAYERS = (function () {
     return wrap;
   }
 
-  return { open: open, openStats: openStats, render: render };
+  return { open: open, openStats: openStats, render: render,
+    openSelfRegister: openSelfRegister };
 })();

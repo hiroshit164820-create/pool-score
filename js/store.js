@@ -287,6 +287,12 @@ const STORE = (function () {
   /** プレーヤーを削除する（過去の試合記録は消さない） */
   function deletePlayer(id) {
     const players = listPlayers().filter(function (p) { return p.id !== id; });
+    // 自分を消したら設定側の指定も外す（消えた人を指したままにしない）
+    const s = getSettings() || {};
+    if (s.selfPlayerId === id) {
+      delete s.selfPlayerId;
+      saveSettings(s);
+    }
     return writeJSON(KEY_PLAYERS, players);
   }
 
@@ -377,6 +383,43 @@ const STORE = (function () {
     return out;
   }
 
+  /* ---- 「自分」 ---- */
+  /*
+   * 自分は設定に id を1つ持つ形で覚える。
+   * 各プレーヤーに旗を立てる形にすると、旗が2つ立った状態を
+   * 作れてしまうため、持てる場所を1か所に絞っている。
+   */
+
+  /** 自分として登録されている人。未登録・登録した人が消えていれば null */
+  function getSelf() {
+    const id = (getSettings() || {}).selfPlayerId;
+    if (!id) return null;
+    return findPlayerById(id) || null;
+  }
+
+  /** 自分の id。登録されていなければ null */
+  function getSelfId() {
+    const p = getSelf();
+    return p ? p.id : null;
+  }
+
+  /**
+   * 自分を決める。null を渡すと解除する。
+   * 自分は1人だけなので、設定を上書きするだけでよい。
+   */
+  function setSelf(id) {
+    const s = getSettings() || {};
+    if (!id) delete s.selfPlayerId;
+    else s.selfPlayerId = id;
+    saveSettings(s);
+    return true;
+  }
+
+  /** その人が自分か */
+  function isSelf(id) {
+    return !!id && getSelfId() === id;
+  }
+
   /* ---- 設定 ---- */
   function getSettings() {
     return readJSON(KEY_SETTINGS, {});
@@ -456,6 +499,10 @@ const STORE = (function () {
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,
     playerStats: playerStats,
+    getSelf: getSelf,
+    getSelfId: getSelfId,
+    setSelf: setSelf,
+    isSelf: isSelf,
     getSettings: getSettings,
     saveSettings: saveSettings,
     exportAll: exportAll,

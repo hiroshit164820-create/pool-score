@@ -119,10 +119,25 @@ with sync_playwright() as p:
     play(pg, "山田", "鈴木", "A")
     play(pg, "山田", "佐藤", "B")
 
+    # 自分は推測しなくなったので（本人指示 2026-08-20）、
+    # 誰が自分かを登録しないと成績は出ない。
+    # まず未登録のうちは登録の案内が出ることを確認する
+    pg.click("#tabHome")
+    pg.wait_for_timeout(600)
+    pre = pg.locator(".home-card .hc-title").all_text_contents()
+    check(any("自分を登録" in t for t in pre), "自分が未登録なら登録を促す", pre)
+
+    # 山田を自分にする
+    pg.evaluate("""() => {
+      const p = STORE.listPlayers().find(x => x.name === '山田');
+      STORE.setSelf(p.id);
+    }""")
+    pg.click("#tabSetup")
+    pg.wait_for_timeout(200)
     pg.click("#tabHome")
     pg.wait_for_timeout(600)
     titles = pg.locator(".home-card .hc-title").all_text_contents()
-    check(any("成績" in t for t in titles), "自分の成績が出る", titles)
+    check(any("山田 の成績" in t for t in titles), "自分の成績が出る", titles)
     check(any("直近の試合" in t for t in titles), "直近の試合が出る", titles)
 
     vals = pg.locator(".home-stat .hs-val").all_text_contents()

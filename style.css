@@ -1534,6 +1534,24 @@ body {
   font-weight: 900;
 }
 
+/* 「自分」の印。ホームの成績に出ているのが誰かを一目で分かるようにする */
+.player-card.is-self {
+  border-color: var(--side-a);
+}
+.self-badge {
+  flex: 0 0 auto;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--side-a);
+  color: #fff;
+  font-family: var(--font-pixel);
+  /* 本文16pxの制約は本文向け。ここは名前に添える札なので一回り小さくする */
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.6;
+}
+
 /* ---------- ボールハンデ ---------- */
 .bh-chips .chip[aria-pressed="true"] {
   background: var(--side-a);

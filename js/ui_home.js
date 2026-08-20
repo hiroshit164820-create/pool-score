@@ -26,24 +26,17 @@ const HOME = (function () {
   }
 
   /**
-   * 「自分」として扱うプレーヤー。
+   * 「自分」として登録されているプレーヤー。
    *
-   * 明示的な設定は持たせていないので、いちばん試合数の多い人を自分とみなす。
-   * 1人で使う道具なので、これで実用上は足りる。
+   * 以前は試合数がいちばん多い人を自分と推測していたが、
+   * 本人の指示（2026-08-20）で登録時に自分を明示できるようにしたため、
+   * 推測はやめて登録された人だけを見る。
+   * 登録していなければ null を返し、画面では登録を促す。
    */
   function mainPlayer() {
-    const players = STORE.listPlayers();
-    if (!players.length) return null;
-    let best = null;
-    let bestN = -1;
-    players.forEach(function (p) {
-      const st = STORE.playerStats(p.id);
-      if (st.matches > bestN) {
-        bestN = st.matches;
-        best = { player: p, stats: st };
-      }
-    });
-    return best && best.stats.matches > 0 ? best : null;
+    const p = STORE.getSelf();
+    if (!p) return null;
+    return { player: p, stats: STORE.playerStats(p.id) };
   }
 
   function fmtDate(iso) {
@@ -133,6 +126,21 @@ const HOME = (function () {
           onclick: function () { HISTORY.open(); },
         })
       );
+      body.appendChild(card);
+    }
+
+    // ---- 自分が未登録のとき ----
+    // 成績はこの登録が無いと出せないので、ここから登録できるようにする
+    if (!me) {
+      const card = UI.el("div", { class: "home-card" }, [
+        UI.el("div", { class: "hc-title", text: "自分を登録すると成績が出ます" }),
+        UI.el("div", { class: "hc-sub", text: "いつも記録する自分の名前を登録してください。" }),
+        UI.el("button", {
+          class: "primary",
+          text: "自分を登録する",
+          onclick: function () { PLAYERS.openSelfRegister(); },
+        }),
+      ]);
       body.appendChild(card);
     }
 

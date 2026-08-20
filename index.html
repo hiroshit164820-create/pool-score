@@ -384,14 +384,21 @@
 
     <div class="list">
       <!-- 登録フォーム。ふだんは畳んでおき、一覧を主役にする -->
+      <!-- 自分と対戦相手を分けて登録する（本人指示 2026-08-20）。
+           自分はホームの成績に使うため、1人だけ別枠にしている -->
+      <button id="toggleSelfBtn" class="add-player-head" aria-expanded="false">
+        <span class="aph-plus" aria-hidden="true">★</span>
+        <span class="aph-label">自分を登録する</span>
+      </button>
+
       <button id="toggleAddPlayerBtn" class="add-player-head" aria-expanded="false">
         <span class="aph-plus" aria-hidden="true">＋</span>
-        <span class="aph-label">選手を登録する</span>
+        <span class="aph-label">対戦相手を登録する</span>
       </button>
 
       <div id="addPlayerBody" class="add-player-body" hidden>
         <div class="field">
-          <label for="newPlayerName">名前</label>
+          <label for="newPlayerName" id="newPlayerLabel">名前</label>
           <div class="row">
             <input type="text" id="newPlayerName" placeholder="名前を入力"
                    autocomplete="off" autocapitalize="off" spellcheck="false">
