@@ -140,12 +140,12 @@ with sync_playwright() as p:
     print("   終了画面: " + ftxt.replace("\n", " / ")[:220])
     check("イニング数" in ftxt, "結果にイニング数が出る", ftxt[:100])
     check("セーフティ数" in ftxt, "結果にセーフティ数が出る", ftxt[:100])
-    # 見出しは「獲得ポイント（JPA）」に変えた（本人の指示 2026-08-20 第2便）
-    check("獲得ポイント（JPA）" in ftxt, "結果にJPAポイントが出る（得点換算表）", ftxt[:180])
+    # 見出しは1行に収めるため「JPAポイント」に短くした（本人の指示 2026-08-20 第3便）
+    check("JPAポイント" in ftxt, "結果にJPAポイントが出る（得点換算表）", ftxt[:180])
     check("勝敗（W-L）" in ftxt, "結果にW-Lが出る", ftxt[:180])
     check("獲得スコア" in ftxt, "結果に獲得スコアが出る", ftxt[:180])
-    if "獲得ポイント（JPA）" in ftxt:
-        tail = ftxt.split("獲得ポイント（JPA）")[1]
+    if "JPAポイント" in ftxt:
+        tail = ftxt.split("JPAポイント")[1]
         check("P" in tail, "ポイントの数字が入っている", tail[:60])
     pg.click("#confirmFinishBtn")
     pg.wait_for_timeout(700)

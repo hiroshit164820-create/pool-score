@@ -6,6 +6,8 @@ helpers.py — 検証スクリプトで共通に使う操作
 各テストに同じ手順を書き写すと、UIを変えたときに全部直すことになるため
 ここに1か所だけ置く。
 """
+import re
+
 
 # 種目IDと、それが入っているカテゴリの対応。
 # ui_setup.js の GAME_GROUPS と揃える
@@ -154,8 +156,8 @@ def set_goal(page, value, side=None):
     """
     勝利条件を設定する。
 
-    3〜7先はボタン、それ以外はプルダウンから選ぶ作りなので、
-    値に応じて押し分ける。
+    ボタンに出ている値（ラック先取は3〜7先、点数先取は種目ごとの既定値）は
+    ボタンを押し、それ以外はプルダウンから選ぶ。
     side を渡すとハンデありのときの片側だけを設定する
     （A なら1つ目、B なら2つ目の goal-picker）。
     """
@@ -166,10 +168,15 @@ def set_goal(page, value, side=None):
         idx = 0 if side == "A" else 1
         picker = page.locator("#goalArea .goal-picker").nth(idx)
 
-    if 3 <= value <= 7:
-        picker.locator('.chip:text-is("%d先")' % value).click()
-    else:
-        picker.locator("select.goal-more").select_option(str(value))
+    # ボタンの文字はラック先取なら「5先」、点数先取なら「50点先取」。
+    # どちらも出ていない値はプルダウンから選ぶ
+    for label in ('%d先' % value, '%d点先取' % value):
+        btn = picker.locator('.chip:text-is("%s")' % label)
+        if btn.count():
+            btn.click()
+            page.wait_for_timeout(200)
+            return
+    picker.locator("select.goal-more").select_option(str(value))
     page.wait_for_timeout(200)
 
 
@@ -188,7 +195,9 @@ def goal_value(page, side=None):
     picker = page.locator("#goalArea .goal-picker").nth(idx)
     pressed = picker.locator('.chip[aria-pressed="true"]')
     if pressed.count():
-        return int((pressed.first.text_content() or "").replace("先", ""))
+        # 「5先」「50点先取」のどちらの書き方でも数字だけ取り出す
+        m = re.search(r"\d+", pressed.first.text_content() or "")
+        return int(m.group()) if m else None
     sel = picker.locator("select.goal-more")
     v = sel.input_value()
     return int(v) if v else None

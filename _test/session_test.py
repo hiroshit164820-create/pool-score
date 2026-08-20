@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""session_test.py — 中断と再開・戻るボタン・ボールセット・ボウラードの検証
+"""session_test.py — 中断と再開・戻るボタン・盤面の配色・ボウラードの検証
 
 対象:
   1. 試合を中断して続きから再開できる
   2. どこからでも戻れるボタン
-  3. ボールセットの選択と盤面の色
+  3. 使うボールの項目が消えていることと、既定の配色で盤面が描かれること
   4. ボウラードのスコア表
   5. ダブルタップ拡大の抑止
 
@@ -116,29 +116,16 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
 
     # ================================================================
-    section("3 ボールセットの選択")
+    section("3 使うボールの配色（項目は削除済み）")
+    # 「使うボール」を選ぶ項目は本人の指示（2026-08-20 第2便）で画面から削除した。
+    # 配色そのものは残るので、既定（標準セット）で盤面が描かれることを確かめる。
     helpers.pick_game(pg, "rotation")
     pg.wait_for_timeout(300)
-    check(pg.is_visible("#ballSetSection"), "ローテーションでボールセットを選べる")
-    sets = pg.locator(".ballset-chip").count()
-    # チタニウムは本人の指示（2026-08-20）で削除した。残り3種類
-    check(sets == 3, "3種類から選べる", sets)
-    labels = pg.locator(".ballset-chip .bs-name").all_text_contents()
-    check(any("プラチナム" in x for x in labels), "プラチナムがある", labels)
-    check(not any("チタニウム" in x for x in labels), "チタニウムは消えている", labels)
-    check(any("ブラック" in x for x in labels), "アラミス ブラックがある", labels)
+    check(pg.locator("#ballSetSection").count() == 0, "「使うボール」の欄は画面に無い")
+    check(pg.locator(".ballset-chip").count() == 0, "ボールセットのボタンも無い")
+    check("ボールセット" not in pg.inner_text("#startSummary"),
+          "「この内容で始めます」にも出さない", pg.inner_text("#startSummary")[:120])
 
-    # 9ボールでは出さない（盤面を使わないため）
-    helpers.pick_game(pg, "9ball")
-    pg.wait_for_timeout(250)
-    check(pg.locator("#ballSetSection").get_attribute("hidden") is not None,
-          "盤面を使わない種目では出さない")
-
-    # プラチナムを選ぶと盤面の色が変わる
-    helpers.pick_game(pg, "rotation")
-    pg.wait_for_timeout(250)
-    pg.click('.ballset-chip[data-set="platinum"]')
-    pg.wait_for_timeout(250)
     pg.fill("#inNameA", "田中")
     pg.fill("#inNameB", "鈴木")
     pg.click("#startMatchBtn")
@@ -149,24 +136,24 @@ with sync_playwright() as p:
             "(n) => getComputedStyle(document.querySelector('#ballGrid .ball-btn[data-ball=\"' + n + '\"]')).backgroundColor",
             str(n))
 
-    # プラチナムは7番がターコイズ（通常は茶）、6番がグレー（通常は緑）
+    # 標準（パラジウム）は7番がえんじ、6番が緑（data/balls_data.js の standard）
     c7 = ball_bg(7)
-    check(c7 == "rgb(63, 184, 184)", "7番がターコイズになる", c7)
+    check(c7 == "rgb(123, 45, 38)", "7番が標準のえんじ色", c7)
     c6 = ball_bg(6)
-    check(c6 == "rgb(185, 181, 173)", "6番がグレーになる", c6)
+    check(c6 == "rgb(30, 122, 60)", "6番が標準の緑", c6)
 
     # 番号が読める（色地の上に白い丸で置いている）
     check(pg.locator("#ballGrid .bb-num").count() == 15, "全部の球に番号が付く",
           pg.locator("#ballGrid .bb-num").count())
-    pg.screenshot(path=os.path.join(SHOTS, "81_platinum.png"))
+    pg.screenshot(path=os.path.join(SHOTS, "81_standard.png"))
 
-    # 選んだセットは試合に保存される
+    # 記録には既定のセットが残る（あとから色を再現できるようにするため）
     saved = pg.evaluate("""() => {
       const idx = JSON.parse(localStorage.getItem('pool_matches_index') || '[]');
       const m = JSON.parse(localStorage.getItem('pool_match_' + idx[0].id));
       return m.options.ballSet;
     }""")
-    check(saved == "platinum", "使ったボールが記録に残る", saved)
+    check(saved == "standard", "使ったボールが記録に残る", saved)
 
     pg.click("#quitMatchBtn")
     pg.wait_for_timeout(400)

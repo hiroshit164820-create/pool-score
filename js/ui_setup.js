@@ -66,19 +66,42 @@ const UI = (function () {
    * 連続で操作すると通知が積み上がって、その下にある時計や
    * 操作ボタンが隠れてしまうため（台の脇で使う道具なので致命的）。
    */
+  // 通知を「重ねずに場所を空けて」出す画面。
+  // 試合中はスコアや名前を隠されると困るので、この2画面は押しのけ方式にする
+  const TOAST_INFLOW_SCREENS = ["screenMatch", "screenMoneyMatch"];
+
+  /** 通知を出しておく時間（ミリ秒）。2.6秒は長いという指摘で短くした（2026-08-20） */
+  const TOAST_MS = 1300;
+
   function toast(message, kind) {
     const wrap = $("toastWrap");
     clear(wrap);
+
+    // 試合画面ではスコアの上に重ねない。帯のすぐ下に差し込んで、
+    // その高さぶんスコア側を縮める（本人の指摘 2026-08-20）
+    const screen = document.querySelector("section.screen.active");
+    const inFlow = !!(screen && TOAST_INFLOW_SCREENS.indexOf(screen.id) >= 0);
+    wrap.classList.toggle("inflow", inFlow);
+    if (inFlow) {
+      const bar = screen.querySelector(".topbar");
+      if (bar && bar.parentNode) bar.parentNode.insertBefore(wrap, bar.nextSibling);
+    } else if (wrap.parentNode !== document.body) {
+      // 試合画面から離れたら、画面に固定して出す元の置き場所へ戻す
+      document.body.appendChild(wrap);
+    }
+
     const t = el("div", { class: "toast" + (kind ? " " + kind : ""), text: message });
     wrap.appendChild(t);
-    // いま出ている画面の帯の「下」に出す。
+
+    // 固定で出す画面は、いま出ている画面の帯の「下」に置く。
     // 帯に重ねると「中断」「戻る」などのボタンが隠れて押せなくなる（本人の指摘 2026-08-20）。
     // 帯の高さは画面によって違うので、固定値ではなく実測した位置に置く
-    positionToast(wrap);
+    if (!inFlow) positionToast(wrap);
+
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
       clear(wrap);
-    }, 2600);
+    }, TOAST_MS);
   }
 
   /**
@@ -261,7 +284,9 @@ const SETUP = (function () {
   let goalValues = { A: 5, B: 5 };
   // JPA用。スキルレベルから持ち点を自動算出する
   let skillLevels = { A: 5, B: 5 };
-  // 使うボールセット（盤面の色分けに使う）。前回選んだものを覚える
+  // 盤面の色分けに使うボールセット。
+  // 選ぶ項目は画面から削除した（本人の指示 2026-08-20）。
+  // 色そのものは残るので、既定（標準セット）を使い、試合記録にも書き残す
   let ballSet = (STORE.getSettings() || {}).ballSet || "standard";
 
   /**
@@ -497,10 +522,17 @@ const SETUP = (function () {
     // ブレイク方式の既定値。種目側の指定（JPAのウィナーズ固定）を優先する
     UI.setToggle($("breakTypeToggle"), g.defaultBreakType || base.defaultBreakType);
 
+    // 1人でやる種目（ボウラード）は相手がいないのでブレイクの取り決めが無い。
+    // 見出しごと消す（本人の指示 2026-08-20）
+    const breakTitle = $("breakTitle");
+    const firstField = $("firstSideField");
+    if (breakTitle) breakTitle.hidden = !!g.solo;
+    if (firstField) firstField.hidden = !!g.solo;
+
     // ローテーションやJPAのようにブレイク方式が決まっている種目では
     // 選択肢を出さない（選べるように見せて engine が無視するのは不誠実なため）
     const btField = $("breakTypeToggle").closest(".field");
-    if (g.breakTypeFixed || base.breakTypeFixed) {
+    if (g.solo || g.breakTypeFixed || base.breakTypeFixed) {
       if (btField) btField.hidden = true;
       $("breakTypeNote").textContent = "";
     } else {
@@ -728,65 +760,6 @@ const SETUP = (function () {
     }
   }
 
-  /**
-   * 使うボールの選択。
-   * 盤面で番号を色分けする種目（ローテーション）でだけ出す。
-   * セットによって6番7番の色が通常と違うため、実際に使う球に合わせる。
-   */
-  function renderBallSet() {
-    const section = $("ballSetSection");
-    const wrap = $("ballSetArea");
-    if (!section || !wrap) return;
-    UI.clear(wrap);
-
-    const g = GAMES[selectedGame];
-    const usesGrid = SCORING[g.scoring].kind === "ballScore"
-      && !!SCORING[g.scoring].scoreOf && !!BASE_RULES[g.base].rackTotal;
-    section.hidden = !usesGrid;
-    if (!usesGrid) return;
-
-    const chips = UI.el("div", { class: "chips ballset-chips" });
-    BALL_SET_ORDER.forEach(function (id) {
-      const set = BALL_SETS[id];
-      const btn = UI.el("button", {
-        type: "button",
-        class: "chip ballset-chip",
-        "data-set": id,
-        "aria-pressed": String(ballSet === id),
-        onclick: function () {
-          ballSet = id;
-          const st = STORE.getSettings() || {};
-          st.ballSet = id;
-          STORE.saveSettings(st);
-          renderBallSet();
-        },
-      }, [UI.el("span", { class: "bs-name", text: set.label })]);
-
-      // 見本を並べる。6番7番が違うセットがあるので見比べられるようにする
-      const swatch = UI.el("span", { class: "bs-swatch" });
-      [1, 4, 6, 7].forEach(function (n) {
-        const ap = ballAppearance(id, n);
-        swatch.appendChild(
-          UI.el("i", {
-            class: "bs-dot",
-            style: "background:" + ap.base
-              + (ap.band ? ";box-shadow: inset 0 0 0 3px " + ap.band : ""),
-            title: n + "番",
-          })
-        );
-      });
-      btn.appendChild(swatch);
-      chips.appendChild(btn);
-    });
-    wrap.appendChild(chips);
-
-    wrap.appendChild(
-      UI.el("p", {
-        class: "hint",
-        text: "色は商品画像に寄せた近似です（メーカーは色の数値を公開していません）。",
-      })
-    );
-  }
 
   /** 設定画面での側の呼び名。名前が入っていればそれを使う */
   function nameForSide(side) {
@@ -1104,12 +1077,34 @@ const SETUP = (function () {
    */
   const QUICK_RACES = [3, 4, 5, 6, 7];
 
+  /**
+   * ボタンに出す勝利条件の値。
+   *
+   * ラック先取の種目は 3〜7先。
+   * 点数で決める種目（14-1・カイルン）に「3先」は存在しないので出さない
+   * （本人の指示 2026-08-20）。代わりに、その種目で実際に使う点数を出す。
+   */
+  function quickGoalValues(unit) {
+    if (unit !== "点") return QUICK_RACES;
+    const g = GAMES[selectedGame];
+    const ps = (g && g.goalPresets) || [];
+    return ps.map(function (x) { return x.v; });
+  }
+
+  /** ボタンに書く文字。ラックは「5先」、点数は「50点先取」 */
+  function quickGoalLabel(unit, v) {
+    return unit === "点" ? v + "点先取" : v + "先";
+  }
+
   /** プルダウンに入れる値。種目の単位（ラック/点）で刻みを変える */
   function moreGoalValues(unit) {
     if (unit === "点") {
       // 点数制は桁が大きいので粗く刻む。
-      // 5点刻みの小さい値も入れる（カイルンの5点先取など）
-      const out = [5];
+      // ただし1〜9も1点刻みで入れる。点数で決める種目からは
+      // 「3先」などのボタンを外したので（本人の指示 2026-08-20）、
+      // ここに無いと少ない点数の勝負やハンデ戦が組めなくなる
+      const out = [];
+      for (let v = 1; v <= 9; v++) out.push(v);
       for (let v = 10; v <= 100; v += 10) out.push(v);
       for (let v = 120; v <= 200; v += 20) out.push(v);
       return out;
@@ -1131,24 +1126,27 @@ const SETUP = (function () {
   function goalPicker(unit, value, onPick) {
     const holder = UI.el("div", { class: "goal-picker" });
 
-    const chips = UI.el("div", { class: "chips" });
-    QUICK_RACES.forEach(function (v) {
-      chips.appendChild(
-        UI.el("button", {
-          type: "button",
-          class: "chip",
-          "aria-pressed": String(value === v),
-          text: v + "先",
-          onclick: function () { onPick(v); },
-        })
-      );
-    });
-    holder.appendChild(chips);
+    const quick = quickGoalValues(unit);
+    if (quick.length) {
+      const chips = UI.el("div", { class: "chips" });
+      quick.forEach(function (v) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(value === v),
+            text: quickGoalLabel(unit, v),
+            onclick: function () { onPick(v); },
+          })
+        );
+      });
+      holder.appendChild(chips);
+    }
 
-    // 3〜7先以外はプルダウンで選ぶ
+    // ボタンに出していない値はプルダウンで選ぶ
     const more = moreGoalValues(unit);
     const sel = UI.el("select", { class: "goal-more" });
-    const isQuick = QUICK_RACES.indexOf(value) >= 0;
+    const isQuick = quick.indexOf(value) >= 0;
     sel.appendChild(
       UI.el("option", { value: "", text: isQuick ? "その他…" : "選択中: " + value + unit })
     );
@@ -1277,7 +1275,6 @@ const SETUP = (function () {
       if (goalTitle) goalTitle.hidden = true;
       wrap.hidden = true;
       renderBallHandicap();
-      renderBallSet();
       return;
     }
     if (goalTitle) goalTitle.hidden = false;
@@ -1287,7 +1284,6 @@ const SETUP = (function () {
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
       renderBallHandicap();
-      renderBallSet();
       return;
     }
 
@@ -1349,7 +1345,6 @@ const SETUP = (function () {
       });
 
       renderBallHandicap();
-      renderBallSet();
       return;
     }
 
@@ -1362,7 +1357,6 @@ const SETUP = (function () {
         })
       );
       renderBallHandicap();
-      renderBallSet();
       return;
     }
 
@@ -1397,7 +1391,6 @@ const SETUP = (function () {
 
     // ハンデの有無に連動してボールハンデの欄も出し入れする
     renderBallHandicap();
-    renderBallSet();
   }
 
   /**
@@ -1747,10 +1740,6 @@ const SETUP = (function () {
       const first = UI.toggleValue($("firstSideToggle")) || "A";
       add("先にブレイクする人", sideName(first));
     }
-
-    // 使う球
-    const bs = BALL_SETS[ballSet];
-    if (bs) add("ボールセット", bs.label);
 
     // 時計
     const ct = clockType();

@@ -1608,13 +1608,6 @@ const MATCH = (function () {
           : "まだ決着がついていません。この時点で記録を確定します。",
       })
     );
-    box.appendChild(
-      UI.el("p", {
-        class: "hint",
-        text: sideName("A") + " " + cur.A + unit + " 対 " + sideName("B") + " " + cur.B + unit,
-      })
-    );
-
     // イニング数とセーフティ数の合計。スコアだけでは分からない内容なので
     // 保存前にこの場で確かめられるようにする（本人の指示 2026-08-20）
     const r0 = resolveGame(match.gameId);
@@ -1645,36 +1638,35 @@ const MATCH = (function () {
 
     // JPAは公式の換算でチームポイントが決まる。
     // 9ボールは敗者のSL×得点の早見表、8ボールは何対何で勝ったかの3段階
+    // 見出しは「獲得ポイント（JPA）」だと1行に収まらなかったので短くした
+    // （本人の指示 2026-08-20）。値は人ごとに区切って、名前の途中では折り返さない
     const jp = jpaPointsNow(st);
     if (jp) {
-      lines.push(["獲得ポイント（JPA）", sideName("A") + " " + jp.A + "P ／ "
-        + sideName("B") + " " + jp.B + "P"]);
+      lines.push(["JPAポイント",
+        [sideName("A") + " " + jp.A + "P", sideName("B") + " " + jp.B + "P"]]);
     }
 
     const table = UI.el("div", { class: "finish-stats" });
     lines.forEach(function (pair) {
+      const val = UI.el("span", { class: "ss-val" });
+      if (Array.isArray(pair[1])) {
+        // 「たいら 17P」「たかのぶ 3P」のような塊ごとに区切る。
+        // 塊の中では折り返さないので、名前や数字が途中で切れない
+        pair[1].forEach(function (part, i) {
+          if (i > 0) val.appendChild(UI.el("span", { class: "ss-sep", text: " ／ " }));
+          val.appendChild(UI.el("span", { class: "ss-part", text: part }));
+        });
+      } else {
+        val.textContent = pair[1];
+      }
       table.appendChild(
         UI.el("div", { class: "ss-row" }, [
           UI.el("span", { class: "ss-key", text: pair[0] + "：" }),
-          UI.el("span", { class: "ss-val", text: pair[1] }),
+          val,
         ])
       );
     });
     box.appendChild(table);
-
-    if (jp) {
-      const g2 = GAMES[match.gameId];
-      box.appendChild(
-        UI.el("p", {
-          class: "hint",
-          text: g2.goal === "jpaSL8"
-            ? "8ボールは「何対何で勝ったか」で決まります。"
-              + "スコンク（相手0ラック）は3-0、相手がリーチまで来ていたら2-1、それ以外は2-0です。"
-            : "JPA公式のポイント早見表（敗者のスキルレベル × 敗者の獲得点数）で"
-              + "20ポイントを分け合います。",
-        })
-      );
-    }
 
     // すでに書いてあるメモがあれば引き継ぐ（中断→再開でも消えない）
     const noteBox = $("finishNote");

@@ -17,10 +17,13 @@
   content: none;
 }
 
-/* 盤面を大きくする。
-   幅でも頭打ちにしないと、左右のボタン列とぶつかって台がはみ出す */
+/* 盤面をできる限り大きくする（本人の指示 2026-08-20）。
+   幅でも頭打ちにしないと、左右のボタン列とぶつかって台がはみ出す。
+   引き算している 148px の内訳は
+   「左右のボタン列 60px×2 ＋ 間の余白 6px×2 ＋ 外側の余白 16px」。
+   ここを変えるときは .lay-side の幅と .lay-stage の外側余白も合わせること */
 .pool-table {
-  height: min(56vh, calc((100vw - 172px) * 2));
+  height: min(62vh, calc((100vw - 148px) * 2));
 }
 
 /* 台・左右のボタン列を横に並べる舞台 */
@@ -30,6 +33,9 @@
   justify-content: center;
   gap: 6px;
   margin-bottom: 10px;
+  /* 台に回す幅を稼ぐため、左右の余白ぶんだけ外へ広げる */
+  margin-left: -6px;
+  margin-right: -6px;
 }
 .lay-stage .table-wrap {
   margin-bottom: 0;
@@ -40,14 +46,15 @@
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-  flex: 0 0 76px;
-  width: 76px;
+  /* 台を大きくするぶん、ボタン列は細くする（指の当たる高さは 56px を保つ） */
+  flex: 0 0 60px;
+  width: 60px;
 }
 .lay-side button {
   width: 100%;
   min-height: 56px;
   padding: 6px 2px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.25;
   /* 日本語が折り返せないと列からはみ出すので、折り返しは止めない */
   white-space: normal;
@@ -508,4 +515,75 @@
   width: 26px;
   height: 26px;
   font-size: 13px;
+}
+
+
+/* ============ 2026-08-20（2便目）の指示ぶん ============ */
+
+/* hidden を付けても消えない欄があった。
+   .section-title などに display を指定してあると、
+   ブラウザ既定の [hidden]{display:none} が負けるため。
+   「隠す」と書いたら必ず消えるようにする
+   （ボウラードで勝利条件・ブレイクの見出しが残っていた） */
+[hidden] {
+  display: none !important;
+}
+
+/* 球の上下に横線が入っていたのを直す（本人の指摘 2026-08-20）。
+   ボタンは 8bit 風の立体感を出すため ::after で上下に明暗の線を敷いているが、
+   四角のまま円い球にも乗っていた。角の丸みをボタンから受け継がせて、
+   線ではなく球の陰影として見えるようにする */
+button::after {
+  border-radius: inherit;
+}
+
+/* 台に対して球が大きすぎたので少し小さくする（本人の指示 2026-08-20）。
+   指で掴む的なので、これ以上は小さくしない */
+.tb-ball {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  margin: -20px 0 0 -20px;
+}
+/* 球が小さくなったぶん、番号の札も詰める。
+   文字の大きさは 15px 以上を保つ（読めなくなるため下げない） */
+.tb-ball .bb-num {
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+}
+.tb-ball .bb-num.shape-triangle {
+  width: 27px;
+  height: 24px;
+}
+.tb-ball .bb-num.shape-diamond {
+  width: 27px;
+  height: 27px;
+}
+
+/* 通知を「重ねずに場所を空けて」出す（試合画面）。
+   スコアや名前の上に 2.6 秒かぶるのが気になるという指摘への対応。
+   時間も 1.3 秒に縮めてある（js/ui_setup.js の TOAST_MS） */
+.toast-wrap.inflow {
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: none;
+  margin: 6px 14px 0;
+  flex: 0 0 auto;
+}
+/* 出ていないときは場所を取らない */
+.toast-wrap:empty {
+  display: none;
+}
+
+/* 試合終了のまとめ。名前や数字の途中で折り返さない（本人の指示 2026-08-20） */
+.finish-stats .ss-val {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.finish-stats .ss-part,
+.finish-stats .ss-sep {
+  white-space: nowrap;
 }

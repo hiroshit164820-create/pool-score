@@ -83,7 +83,7 @@ with sync_playwright() as p:
         pg.wait_for_timeout(180)
     ftxt = pg.inner_text("#finishSummary")
     print("   終了画面: " + ftxt.replace("\n", " / ")[:230])
-    check("獲得ポイント（JPA）" in ftxt, "8ボールでもJPAポイントが出る", ftxt[:150])
+    check("JPAポイント" in ftxt, "8ボールでもJPAポイントが出る", ftxt[:150])
     check("3P" in ftxt, "スコンクなので勝者3P", ftxt[-200:])
     check("勝敗（W-L）" in ftxt, "W-Lが出る", ftxt[:150])
     check("獲得スコア" in ftxt, "獲得スコアが出る", ftxt[:150])
