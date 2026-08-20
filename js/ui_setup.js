@@ -68,7 +68,7 @@ const UI = (function () {
    */
   // 通知を「重ねずに場所を空けて」出す画面。
   // 試合中はスコアや名前を隠されると困るので、この2画面は押しのけ方式にする
-  const TOAST_INFLOW_SCREENS = ["screenMatch", "screenMoneyMatch"];
+  const TOAST_INFLOW_SCREENS = ["screenMatch", "screenMoneyMatch", "screenKailunMatch"];
 
   /** 通知を出しておく時間（ミリ秒）。2.6秒は長いという指摘で短くした（2026-08-20） */
   const TOAST_MS = 1300;
@@ -282,6 +282,8 @@ const SETUP = (function () {
   let selectedGame = "9ball";
   let goalMode = "same"; // same | handicap
   let goalValues = { A: 5, B: 5 };
+  // 何セット先取で試合の勝ちにするか。既定は1（＝今までどおり1本勝負）
+  let setsToWin = 1;
   // JPA用。スキルレベルから持ち点を自動算出する
   let skillLevels = { A: 5, B: 5 };
   // 盤面の色分けに使うボールセット。
@@ -506,6 +508,11 @@ const SETUP = (function () {
     const money = GAMES[id] && GAMES[id].moneyGame;
     if (money && typeof MONEYUI !== "undefined") {
       MONEYUI.open(money);
+      return;
+    }
+    // カイルンも3人以上で遊べるようにしたので専用画面へ回す（本人の指示 2026-08-21）
+    if (id === "kailun" && typeof KAILUNUI !== "undefined") {
+      KAILUNUI.open();
       return;
     }
     selectedGame = id;
@@ -1101,13 +1108,11 @@ const SETUP = (function () {
   /** プルダウンに入れる値。種目の単位（ラック/点）で刻みを変える */
   function moreGoalValues(unit) {
     if (unit === "点") {
-      // 点数制は桁が大きいので粗く刻む。
-      // ただし1〜9も1点刻みで入れる。点数で決める種目からは
-      // 「3先」などのボタンを外したので（本人の指示 2026-08-20）、
-      // ここに無いと少ない点数の勝負やハンデ戦が組めなくなる
+      // 30点以下は使わないので出さない（本人の指示 2026-08-21）。
+      // 少ない点数で区切る種目（カイルンの5点先取など）は
+      // 種目ごとのボタン（quickGoalValues）から選ぶ
       const out = [];
-      for (let v = 1; v <= 9; v++) out.push(v);
-      for (let v = 10; v <= 100; v += 10) out.push(v);
+      for (let v = 40; v <= 100; v += 10) out.push(v);
       for (let v = 120; v <= 200; v += 20) out.push(v);
       return out;
     }
@@ -1170,6 +1175,41 @@ const SETUP = (function () {
     holder.appendChild(sel);
 
     return holder;
+  }
+
+  /**
+   * セット数（何セット先取で試合の勝ちにするか）。
+   *
+   * 勝利条件（ラック数・点数）のすぐ下に置く（本人の指示 2026-08-21）。
+   * 1〜5をボタン5つで1行に並べる。既定は1セット。
+   * JPAは公式の対戦表で1本勝負と決まっているので出さない。
+   */
+  function setsAllowed(g) {
+    if (!g || g.solo) return false;
+    if (g.goal === "jpaSL" || g.goal === "jpaSL8") return false;
+    return true;
+  }
+
+  function renderSetsField(wrap, g) {
+    if (!setsAllowed(g)) return;
+    const chips = UI.el("div", { class: "chips sets-chips" });
+    [1, 2, 3, 4, 5].forEach(function (v) {
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip",
+          "aria-pressed": String(setsToWin === v),
+          text: v + "セット",
+          onclick: function () { setsToWin = v; renderGoalArea(); },
+        })
+      );
+    });
+    wrap.appendChild(
+      UI.el("div", { class: "field" }, [
+        UI.el("label", { text: "何セット先取で勝ちか" }),
+        chips,
+      ])
+    );
   }
 
   /**
@@ -1276,6 +1316,7 @@ const SETUP = (function () {
     if (g.solo) {
       if (goalTitle) goalTitle.hidden = true;
       wrap.hidden = true;
+      renderSetsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1285,6 +1326,7 @@ const SETUP = (function () {
     // JPAはスキルレベルから持ち点が決まるため、専用のUIにする
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
+      renderSetsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1346,6 +1388,7 @@ const SETUP = (function () {
         );
       });
 
+      renderSetsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1358,6 +1401,7 @@ const SETUP = (function () {
           text: g.goalHiddenNote || "この種目は決まった点数で行います。",
         })
       );
+      renderSetsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1391,6 +1435,7 @@ const SETUP = (function () {
       );
     }
 
+    renderSetsField(wrap, g);
     // ハンデの有無に連動してボールハンデの欄も出し入れする
     renderBallHandicap();
   }
@@ -1640,6 +1685,8 @@ const SETUP = (function () {
       ballHandicap: bh,
       // ダブルスの個人ごとのハンデ（表示用。得点計算には使わない）
       memberHandicap: buildMemberHandicap(g),
+      // 何セット先取か。1なら今までどおり1本勝負
+      sets: setsAllowed(g) ? setsToWin : 1,
       raceType: "raceTo",
     };
   }
@@ -1710,6 +1757,8 @@ const SETUP = (function () {
             + " ／ " + sideName("B") + " " + goalValues.B + unit);
         }
       }
+
+      if (setsAllowed(g) && setsToWin > 1) add("セット数", setsToWin + "セット先取");
 
       // ハンデ
       const hParts = ["A", "B"].map(function (side) {

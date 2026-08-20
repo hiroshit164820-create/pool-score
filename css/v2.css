@@ -667,3 +667,353 @@ button::after {
   height: 23px;
   font-size: 15px;
 }
+
+/* ---------- カイルン（複数人） ---------- */
+
+.kl-players {
+  padding: 0 14px;
+}
+.kl-prow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.kl-prow input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  font-size: 16px;
+}
+.kl-prow select {
+  flex: 0 0 auto;
+  min-height: 48px;
+  font-size: 15px;
+}
+#kailunAddBtn,
+.kl-start {
+  margin: 4px 14px 10px;
+  width: calc(100% - 28px);
+}
+#kailunPenalty,
+#kailunGoal {
+  padding: 0 14px 6px;
+}
+
+/* 持ち点。押せる的なので大きく取る */
+.kl-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px 6px;
+}
+.kl-score {
+  flex: 1 1 46%;
+  min-width: 130px;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+/* いま撞いている人。枠の色で示す */
+.kl-score.is-turn {
+  border-color: var(--accent, #f2b705);
+  box-shadow: 0 0 0 3px var(--accent, #f2b705) inset, var(--shadow-sm);
+}
+.kl-name {
+  font-size: 15px;
+  font-weight: 800;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kl-val {
+  font-family: var(--font-pixel);
+  font-size: 30px;
+  line-height: 1;
+}
+.kl-score.is-top .kl-val {
+  color: var(--accent-2, #d86a10);
+}
+
+/* 操作 */
+.kl-pad {
+  padding: 4px 14px 0;
+}
+.kl-who {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.kl-who-name {
+  font-size: 17px;
+  font-weight: 800;
+}
+.kl-who-step {
+  font-size: 13px;
+  color: var(--muted, #6b6255);
+}
+
+/* 成功のボタン。ここだけ大きくする（本人の指示 2026-08-21） */
+.kl-ok {
+  width: 100%;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--block, #f2b705);
+  color: var(--ink);
+  border: var(--bw-thick, 4px) solid var(--ink);
+  box-shadow: var(--shadow);
+  font-weight: 900;
+}
+.kl-ok-text {
+  font-size: 20px;
+}
+.kl-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kl-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  display: inline-block;
+}
+.kl-dot.is-red { background: #d3202a; }
+.kl-dot.is-yellow { background: #f2b705; }
+.kl-arrow {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* 交代と反則。成功より小さくして押し分けやすくする */
+.kl-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.kl-sub {
+  flex: 1 1 0;
+  min-height: 56px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.kl-sub.is-foul {
+  background: var(--danger-bg, #f7d9d4);
+}
+.kl-win {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 4px 0 8px;
+}
+.kl-finish {
+  width: 100%;
+  min-height: 56px;
+}
+.kl-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+.kl-actions button {
+  flex: 1 1 0;
+}
+.kl-log {
+  padding: 10px 14px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kl-logrow {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+}
+
+/* ---------- 横向きのときのスコアボード ---------- */
+
+/* スマホを横にしたら、AとBを上下ではなく左右に並べる（本人の指示 2026-08-21）。
+   縦向きの見た目は変えない。
+   縦が短いので、スコアボードは中身ぶんの高さだけ取り、
+   余った縦は盤面（play-area）と下の操作ボタンに回す */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .scoreboard {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+  #screenMatch .panel-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* 案内文は2つのパネルの下に、横いっぱいで出す */
+  #screenMatch .tap-hint {
+    order: 3;
+    flex: 1 1 100%;
+    text-align: center;
+  }
+  /* 縦が足りないので、パネルは名前と数字を横に並べた1行にする */
+  #screenMatch .score-panel {
+    min-height: 60px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  #screenMatch .score-panel .sp-head {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #screenMatch .score-panel .val {
+    flex: 0 0 auto;
+    font-size: 30px;
+    min-height: 0;
+  }
+  /* 進捗バーは横並びでは置き場が無い（残りは「/ N」で読める） */
+  #screenMatch .score-panel .progress {
+    display: none;
+  }
+  /* スコアシートは縦を食うので、横向きでは取り分を抑える */
+  #screenMatch .sheet-area {
+    max-height: 26vh;
+  }
+
+  /* --- ここから下は「横向きで1画面に収める」ための詰め --- */
+
+  /* 上の帯。横向きでは高さが命なので小さくする */
+  #screenMatch .topbar {
+    padding: 4px 12px;
+  }
+  #screenMatch .topbar h1 {
+    font-size: 14px;
+  }
+  #screenMatch .topbar .sub {
+    font-size: 11px;
+  }
+  #screenMatch .topbar button {
+    min-height: 36px;
+    padding: 4px 10px;
+  }
+
+  /* マスワリ・ブレイクエースはパネルに重ねない。
+     横向きではパネルが低く、重ねるとスコアが読めなくなる */
+  #screenMatch .panel-flags {
+    position: static;
+    transform: none;
+    flex-direction: row;
+    width: auto;
+    order: 4;
+    flex: 1 1 100%;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  #screenMatch .panel-flags button {
+    flex: 1 1 0;
+    min-height: 38px;
+  }
+
+  /* 案内文は横向きでは出さない（縦向きでは今までどおり出す） */
+  #screenMatch .tap-hint {
+    display: none;
+  }
+
+  /* ラック・イニング・ブレイクの行を詰める */
+  #screenMatch .match-info {
+    padding: 2px 12px;
+    font-size: 12px;
+  }
+
+  /* 交代とセーフティ。押せる大きさ（44px）は守ったまま詰める */
+  #screenMatch .turn-btn {
+    min-height: 48px;
+    font-size: 17px;
+  }
+  #screenMatch .play-fixed {
+    gap: 4px;
+    padding: 0 12px 4px;
+  }
+  #screenMatch .bottom-bar {
+    padding-top: 4px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  }
+  #screenMatch .bottom-bar button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  /* 余白だけを削って1画面に収める。
+     押せる大きさ（44px以上）はどれも下げない */
+  #screenMatch .scoreboard {
+    gap: 4px;
+    padding: 4px 12px 2px;
+  }
+  #screenMatch .play-area {
+    padding: 0 12px;
+    gap: 4px;
+  }
+
+  /* 名前と印（撞く番・BREAK）で場所を取りすぎて、スコアが枠の外へ
+     押し出されていた。印は詰め、名前は縮む側にして、数字を必ず残す */
+  #screenMatch .score-panel .sp-head {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    gap: 4px;
+  }
+  #screenMatch .score-panel .sp-head .breakmark {
+    flex: 0 0 auto;
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+  #screenMatch .score-panel .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #screenMatch .score-panel .val-row {
+    flex: 0 0 auto;
+  }
+  /* 「● 撞く番」の札は横向きでは印だけにする。
+     撞いている側は枠の色と地の色でも分かるので、名前の場所を優先する */
+  #screenMatch .score-panel.is-turn .sp-head::before {
+    content: "●";
+    padding: 2px 5px;
+    margin-right: 4px;
+  }
+}
+
+/* ---------- セット数 ---------- */
+
+/* 5つとも必ず1行に並べる（本人の指示 2026-08-21）。
+   chip の既定の余白のままだと2行になる。
+   押せる高さ（44px以上）は下げない */
+.sets-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.sets-chips .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 2px;
+  font-size: 13px;
+  white-space: nowrap;
+}

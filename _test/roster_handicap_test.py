@@ -190,8 +190,9 @@ with sync_playwright() as p:
     pg.click('#ballHandicapArea .field:nth-of-type(2) .chip:text-is("7番以上")')
     pg.wait_for_timeout(300)
     summary = pg.text_content(".bh-summary") or ""
-    check("7番以上" in summary, "設定内容が文章で確認できる", summary)
-    check("9番のみ" in summary, "ハンデなし側の基準も出る", summary)
+    # 1行に収めるため「7番以上」→「7番〜」、「9番のみ」→「9番」に短くした（2026-08-21）
+    check("7番〜" in summary, "設定内容が文章で確認できる", summary)
+    check("9番" in summary, "ハンデなし側の基準も出る", summary)
 
     # 単位が「点」に変わることが伝わる
     warn = pg.locator("#ballHandicapArea .hint.warn").count()

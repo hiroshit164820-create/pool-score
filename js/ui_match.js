@@ -861,6 +861,11 @@ const MATCH = (function () {
     const btLabel = { winner: "ウィナーズブレイク", alternate: "オルタネートブレイク", continuation: "連続ブレイク" }[bt] || bt;
     const btShort = { winner: "ウィナーズ", alternate: "オルタネート", continuation: "連続" }[bt] || bt;
     const parts = [match.goal.targets.A + " 対 " + match.goal.targets.B + unit];
+    // セット制のときは「いま何セット目で、セットの取り合いがどうなっているか」を出す
+    const nSets = Math.max(1, (match.goal && match.goal.sets) || 1);
+    if (nSets > 1) {
+      parts.push("セット " + st.sets.A + "-" + st.sets.B + "／" + nSets + "先取");
+    }
     if (!r.base.breakTypeFixed) parts.push(btShort);
     if (match.goal.targets.A !== match.goal.targets.B) parts.push("ハンデ戦");
     if (hasAnyHandicap()) parts.push("ボールハンデ");
@@ -937,7 +942,9 @@ const MATCH = (function () {
       $("panel" + side).classList.toggle("has-break", hasBreak);
     });
 
-    $("rackInfo").textContent = "ラック " + Math.max(1, st.rackNo);
+    const nSets2 = Math.max(1, (match.goal && match.goal.sets) || 1);
+    $("rackInfo").textContent = (nSets2 > 1 ? st.setNo + "セット目　" : "")
+      + "ラック " + Math.max(1, st.rackNo);
 
     // イニング表示。イニングは全種目で数えているので、試合中も常に出す
     // （本人の指示 2026-08-20。以前は14-1とJPAだけだった）
@@ -995,8 +1002,8 @@ const MATCH = (function () {
       ? "" // 盤面・段階の入力側に案内を出すのでここは空にする
       : perBall
       ? (hasAnyHandicap()
-          ? "入れた人のスコアをタップ（長押しで戻す）"
-          : "入れた人のスコアをタップ（長押しで戻す）")
+          ? "得点になる球を入れてスコアをタップ"
+          : "球を入れたら、その人のスコアをタップ")
       : "取った側のスコアをタップ（長押しで戻す）";
     $("tapHint").hidden = (gridMode || stepMode) && !finished;
 
@@ -1617,7 +1624,22 @@ const MATCH = (function () {
     const msB = (st.stats.B && st.stats.B.masuwari) || 0;
     // 試合中の「Nイニング目」と同じ数え方にする（完了イニング数 +1）。
     // 相手に一度も回らずに終わった試合を「0イニング」と書くと読めないため
-    const lines = [["イニング数", String(st.innings + 1)]];
+    // ボウラードは1人でやる種目なので、イニングではなく
+    // ストライク／スペア／ミスの数を出す（本人の指示 2026-08-21）
+    let lines;
+    if (r0.scoring.kind === "bowling") {
+      const tally = bowlardTally(bowlardThrowsOf(match), {
+        frames: r0.scoring.frames,
+        pinsPerFrame: r0.scoring.pinsPerFrame,
+      });
+      lines = [
+        ["ストライク", tally.strike + "回"],
+        ["スペア", tally.spare + "回"],
+        ["ミス", tally.miss + "回"],
+      ];
+    } else {
+      lines = [["イニング数", String(st.innings + 1)]];
+    }
     if (r0.base.safetyCallable) {
       lines.push(["セーフティ数", (sfA + sfB) + "（" + sideName("A") + " " + sfA
         + " ／ " + sideName("B") + " " + sfB + "）"]);
@@ -1632,6 +1654,11 @@ const MATCH = (function () {
       lines.unshift(["勝敗（W-L）",
         sideName("A") + " " + (st.winner === "A" ? "W" : "L")
         + " ／ " + sideName("B") + " " + (st.winner === "B" ? "W" : "L")]);
+    }
+    const nSets3 = Math.max(1, (match.goal && match.goal.sets) || 1);
+    if (nSets3 > 1) {
+      lines.unshift(["セット", sideName("A") + " " + st.sets.A
+        + " ／ " + sideName("B") + " " + st.sets.B]);
     }
     lines.unshift(["獲得スコア",
       sideName("A") + " " + cur.A + unit + " ／ " + sideName("B") + " " + cur.B + unit]);

@@ -236,7 +236,11 @@ const HISTORY = (function () {
 
       // イニング数とセーフティ数。スコアだけでは分からない内容を1行足す
       if (m.finished && m.innings !== null && m.innings !== undefined) {
-        const bits = ["イニング " + m.innings];
+        // ボウラードはイニングに意味が無いので、代わりに3つの数を出す
+        const bits = m.bowlard
+          ? ["ストライク " + m.bowlard.strike, "スペア " + m.bowlard.spare,
+             "ミス " + m.bowlard.miss]
+          : ["イニング " + m.innings];
         const sf = m.safety || {};
         if ((sf.A || 0) + (sf.B || 0) > 0) {
           bits.push("セーフティ " + ((sf.A || 0) + (sf.B || 0)));

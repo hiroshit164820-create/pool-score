@@ -282,6 +282,10 @@ function initState(match, base) {
     // スリーファール管理（同一ラック内・連続）
     foulStreak: { A: 0, B: 0 },
     twoFoulWarned: { A: false, B: false },
+    // セット制（本人の指示 2026-08-21）。goal.sets が2以上のときだけ動く。
+    // 目標に届いた側が1セット取り、点とラックを0に戻して次のセットへ進む
+    sets: { A: 0, B: 0 },
+    setNo: 1,
     step: { A: 1, B: 1 }, // カイルン
     // カイルンで、このイニングに既に得点したか（連続得点を許さない設定用）
     stepScoredThisInning: null,
@@ -318,15 +322,35 @@ function reduceMatch(match) {
     lastRackWinner: null,
   };
 
+  // 何セット先取か。1（既定）のときは今までどおりの動きにする
+  const setsToWin = Math.max(1, (match.goal && match.goal.sets) || 1);
+
   for (let i = 0; i < match.events.length; i++) {
     const ev = match.events[i];
     if (ev.voided) continue;
     if (ev.t === "VOID") continue;
     applyEvent(st, ev, ctx);
+    if (!st.winner && setsToWin > 1) {
+      const sw = checkWin(st, match.goal);
+      if (sw) {
+        st.sets[sw] += 1;
+        if (st.sets[sw] >= setsToWin) {
+          st.winner = sw;
+          st.endReason = "goal";
+        } else {
+          // 次のセットへ。点とラックだけ戻す（セーフティ等の記録は通して数える）
+          st.score = { A: 0, B: 0 };
+          st.racks = { A: 0, B: 0 };
+          st.setNo += 1;
+        }
+      }
+    }
     if (st.winner) break; // 決着後のイベントは無視
   }
 
-  if (!st.winner) {
+  // セット制のときは上のループで判定済み（点を戻したあとに再判定すると
+  // 0点で勝ちになってしまうため、ここは通さない）
+  if (!st.winner && setsToWin <= 1) {
     const w = checkWin(st, match.goal);
     if (w) {
       st.winner = w;
@@ -666,6 +690,9 @@ function buildResult(match, now) {
     // 相手に一度も回らずに終わった試合を 0 と書くと、記録として読めないため
     inningsPlayed: st.innings + 1,
     hasUnresolvedError: st.hasUnresolvedError,
+    // セット制。1セットの試合では { A: 0, B: 0 } のままになる
+    sets: { A: st.sets.A, B: st.sets.B },
+    setsToWin: Math.max(1, (match.goal && match.goal.sets) || 1),
     perSide: { A: st.stats.A, B: st.stats.B },
     // ショットクロックの平均タイム（計測できたショットのみ）
     avgShotSec: {
@@ -677,6 +704,14 @@ function buildResult(match, now) {
         : null,
     },
   };
+
+  // ボウラードはイニングではなくストライク／スペア／ミスの数を記録に残す
+  if (r.scoring.kind === "bowling") {
+    result.bowlard = bowlardTally(bowlardThrowsOf(match), {
+      frames: r.scoring.frames,
+      pinsPerFrame: r.scoring.pinsPerFrame,
+    });
+  }
 
   // JPA 8ボールは「何対何で勝ったか」の3段階でポイントが決まる
   if (r.game.goal === "jpaSL8" && st.winner) {
@@ -730,6 +765,37 @@ function buildResult(match, now) {
  * @param {object} cfg      { frames, pinsPerFrame }
  * @returns {{frames: Array, total: number, complete: boolean}}
  */
+/**
+ * 試合の出来事から、投球ごとの「入れた球数」の並びを取り出す。
+ * 画面側（ui_sheet.js）でも同じ計算をしていたので、ここを本体にする。
+ */
+function bowlardThrowsOf(match) {
+  const out = [];
+  ((match && match.events) || []).forEach(function (e) {
+    if (e.voided || e.t !== "POCKET") return;
+    out.push(((e.d && e.d.balls) || []).length);
+  });
+  return out;
+}
+
+/**
+ * ストライク・スペア・ミス（オープンフレーム）の数を数える。
+ *
+ * ボウラードは1人でやる種目で、イニング（手番の入れ替わり）に意味が無い。
+ * 結果と記録にはこの3つを出す（本人の指示 2026-08-21）。
+ * まだ投げていないフレームはどれにも数えない。
+ */
+function bowlardTally(throws, cfg) {
+  const sc = buildBowlardScore(throws, cfg);
+  const out = { strike: 0, spare: 0, miss: 0 };
+  sc.frames.forEach(function (f) {
+    if (f.kind === "strike") out.strike += 1;
+    else if (f.kind === "spare") out.spare += 1;
+    else if (f.kind === "open") out.miss += 1;
+  });
+  return out;
+}
+
 function buildBowlardScore(throws, cfg) {
   const nFrames = (cfg && cfg.frames) || 10;
   const pins = (cfg && cfg.pinsPerFrame) || 10;

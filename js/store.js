@@ -78,6 +78,8 @@ const STORE = (function () {
       masuwari: res
         ? { A: (per.A && per.A.masuwari) || 0, B: (per.B && per.B.masuwari) || 0 }
         : null,
+      // ボウラードのストライク／スペア／ミス。履歴で試合を開かずに読めるようにする
+      bowlard: res ? (res.bowlard || null) : null,
       // JPAはスキルレベルとチームポイントを履歴に出す
       skillLevel: meta.skillLevel || null,
       jpa: res ? (res.jpa || null) : null,

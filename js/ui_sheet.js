@@ -186,16 +186,10 @@ const SHEET = (function () {
    * ============================================================ */
 
   /** 記録された投球（各投で入れた球数）を取り出す */
+  // ボウラードは「その投で入れた球数」を balls の個数で持つ。
+  // 計算は engine.js（bowlardThrowsOf）に1か所だけ置いてある
   function bowlardThrows(match) {
-    const out = [];
-    (match.events || []).forEach(function (e) {
-      if (e.voided) return;
-      if (e.t !== "POCKET") return;
-      const balls = (e.d && e.d.balls) || [];
-      // ボウラードは「その投で入れた球数」を balls の個数で持つ
-      out.push(balls.length);
-    });
-    return out;
+    return bowlardThrowsOf(match);
   }
 
   function renderBowlard(area, match, st) {

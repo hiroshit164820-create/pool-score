@@ -383,6 +383,50 @@
     <div id="moneyLog" class="money-log"></div>
   </section>
 
+  <!-- ================= カイルン（複数人） ================= -->
+  <section id="screenKailunSetup" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>カイルン</h1>
+        <div class="sub">公式の規程が無いので、決め方を選びます。</div>
+      </div>
+    </div>
+
+    <div class="section-title">参加する人</div>
+    <div id="kailunPlayers" class="kl-players"></div>
+    <button id="kailunAddBtn" class="ghost">＋ 人を追加する</button>
+
+    <div class="section-title">反則のとき</div>
+    <div id="kailunPenalty" class="chips"></div>
+
+    <div class="section-title">勝利条件</div>
+    <div id="kailunGoal" class="chips"></div>
+
+    <button id="kailunStartBtn" class="primary kl-start">この人数で始める</button>
+  </section>
+
+  <section id="screenKailunMatch" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>カイルン</h1>
+        <div class="sub" id="kailunSub"></div>
+      </div>
+      <button id="kailunQuitBtn" class="small ghost">やめる</button>
+    </div>
+
+    <!-- 持ち点。タップで+1、長押しで-1 -->
+    <div id="kailunScores" class="kl-scores"></div>
+
+    <!-- 成功・交代・反則 -->
+    <div id="kailunPad" class="kl-pad"></div>
+
+    <div class="kl-actions">
+      <button id="kailunUndoBtn" class="ghost">元に戻す</button>
+    </div>
+
+    <div id="kailunLog" class="kl-log"></div>
+  </section>
+
   <section id="screenLayout" class="screen">
     <div class="topbar">
       <div>
@@ -612,6 +656,7 @@
 <script src="js/ui_home.js"></script>
 <script src="js/money_game.js"></script>
 <script src="js/ui_money.js"></script>
+<script src="js/ui_kailun.js"></script>
 <script src="js/ui_layout.js"></script>
 <script src="js/app.js"></script>
 <script>

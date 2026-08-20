@@ -87,6 +87,7 @@ const CSVOUT = (function () {
       "セーフティA", "セーフティB",
       "マスワリA", "マスワリB",
       "JPAポイントA", "JPAポイントB",
+      "ストライク", "スペア", "ミス",
       "メモ",
     ]];
     items.forEach(function (m) {
@@ -98,6 +99,8 @@ const CSVOUT = (function () {
       const sf = m.safety || {};
       const ms = m.masuwari || {};
       const jp = (m.jpa && m.jpa.teamPoints) || {};
+      // ボウラードだけに入る（他の種目は空欄になる）
+      const bw = m.bowlard || {};
       rows.push([
         fmtDate(m.createdAt),
         m.gameLabel,
@@ -109,6 +112,9 @@ const CSVOUT = (function () {
         sf.A === undefined ? "" : sf.A, sf.B === undefined ? "" : sf.B,
         ms.A === undefined ? "" : ms.A, ms.B === undefined ? "" : ms.B,
         jp.A === undefined ? "" : jp.A, jp.B === undefined ? "" : jp.B,
+        bw.strike === undefined ? "" : bw.strike,
+        bw.spare === undefined ? "" : bw.spare,
+        bw.miss === undefined ? "" : bw.miss,
         m.note || "",
       ]);
     });
