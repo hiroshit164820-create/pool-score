@@ -1490,7 +1490,6 @@ const MATCH = (function () {
    * 上の帯（種目名の行）には横の余白が余っているので、そこへ寄せる。
    * 縦向きに戻したら元の場所へ戻す。
    */
-  const LANDSCAPE_Q = "(orientation: landscape) and (max-height: 560px)";
   // 移すのはラック数とイニング数だけ。マスワリの合計は元の場所に残す
   const META_MOVE = ["rackInfo", "inningInfo"];
 
@@ -1508,14 +1507,51 @@ const MATCH = (function () {
       topbar.insertBefore(slot, topbar.lastElementChild);
     }
 
-    const wide = window.matchMedia && window.matchMedia(LANDSCAPE_Q).matches;
-    const to = wide ? slot : chips;
+    // 縦向きでも上の帯へ移す（本人の指示 2026-08-21）。
+    // 帯には横の余白が余っているので、そのぶんスコアボードを広く使える
     META_MOVE.forEach(function (id) {
       const node = $(id);
       // 元の並び順（ラック → イニング）のまま入れ直す
-      if (node && node.parentNode !== to) to.appendChild(node);
+      if (node && node.parentNode !== slot) slot.appendChild(node);
     });
-    slot.hidden = !wide;
+    slot.hidden = false;
+
+    // ブレイク入れ替えボタンは交代ボタンの隣へ移して1行にする
+    // （本人の指示 2026-08-21：交代が2/3、ブレイク入れ替えが1/3）
+    const row = document.querySelector("#screenMatch .turn-row");
+    const bt = $("breakToggleBtn");
+    if (row && bt && bt.parentNode !== row) row.appendChild(bt);
+
+    // 中身が全部よそへ移った行・帯は畳む。
+    // 畳まないと、空の帯のぶんだけスコアボードが狭いままになる
+    const line = document.querySelector("#screenMatch .meta-line");
+    if (line) line.hidden = !hasVisibleChild(line);
+    const info = document.querySelector("#screenMatch .match-info");
+    if (info) info.hidden = !hasVisibleChild(info);
+  }
+
+  /**
+   * その要素の中に、いま見えている中身があるか。
+   *
+   * hidden 属性だけでなく CSS の display:none も見る
+   * （ブレイクの帯・「いまの番」の帯は hidden ではなく CSS で消してある）。
+   * 大きさ（getClientRects）では測らない。試合画面を出す前に描くことがあり、
+   * そのときは中身があっても全部0で返ってきて「空」と誤って判定するため。
+   * 入れ子（.meta-line > .meta-chips > span）も見るため再帰する。
+   */
+  function hasVisibleChild(node) {
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k.hidden) continue;
+      if (window.getComputedStyle(k).display === "none") continue;
+      if (k.children.length) {
+        if (hasVisibleChild(k)) return true;
+        continue;
+      }
+      if ((k.textContent || "").trim() !== "") return true;
+    }
+    return false;
   }
 
   /**

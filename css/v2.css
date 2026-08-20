@@ -1766,3 +1766,157 @@ button::after {
     padding-bottom: 0;
   }
 }
+
+/* ============ 縦向きの試合画面の作り直し（本人の指示 2026-08-21） ============
+   ・ブレイク権のボタンを交代ボタンの隣に置いて1行にする
+     （交代が横幅の2/3、ブレイク入れ替えが1/3）
+   ・ラック数とイニング数は横向きと同じく上の帯へ移す（js の syncMetaPlace）
+   ・空いた高さはスコアボードに回す */
+
+/* 交代とブレイク入れ替えを1行に。押せる大きさ（44px）は下げない */
+#screenMatch .turn-row {
+  align-items: stretch;
+}
+#screenMatch .turn-row .turn-btn {
+  flex: 2 1 0;
+}
+#screenMatch .turn-row .break-toggle {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.15;
+  overflow: hidden;
+}
+/* ダブルスの「味方と交代」が出るときも、交代の側が広いままになるようにする */
+#screenMatch .turn-row .member-turn-btn {
+  flex: 1 1 0;
+}
+/* 名前が長くても行が増えないよう、中で詰める */
+#screenMatch .turn-row .break-toggle .bt-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 900;
+  /* 台の脇から読める大きさを保つ（2026-08-20 の決めごと・14px以上） */
+  font-size: 14px;
+}
+#screenMatch .turn-row .break-toggle .bt-label,
+#screenMatch .turn-row .break-toggle .bt-swap {
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 上の帯へ移したラック数・イニング数（縦向きでも同じ見た目にする）。
+   帯は濃い色なので、コインの色の札にして読めるようにする */
+#screenMatch .topbar .meta-chips.in-topbar {
+  margin-left: auto;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+#screenMatch .topbar .meta-chips.in-topbar > span {
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  white-space: nowrap;
+}
+#screenMatch .topbar .meta-chips.in-topbar > span[hidden] {
+  display: none;
+}
+/* 種目名は帯の中で縮む側にする（ラック数は必ず読ませる）。
+   縦向きは帯の幅が足りず、種目名が1文字ずつ縦積みになって帯が328pxまで
+   伸びていた（390x844 の14-1で実測）。1行に収めて、入りきらない字は
+   「…」で省く */
+#screenMatch .topbar > div:first-child {
+  min-width: 0;
+  overflow: hidden;
+}
+#screenMatch .topbar h1,
+#screenMatch .topbar .sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 中身がよそへ移って空になった行・帯は、場所ごと消す。
+   display:flex を指定してあるので hidden 属性だけでは消えない */
+#screenMatch .meta-line[hidden],
+#screenMatch .match-info[hidden] {
+  display: none;
+}
+
+/* 空いた高さはスコアボードが吸う。
+   もとから .scoreboard は flex:1（＝1 1 0）なので、畳んだ帯のぶんは
+   ここへ回る。flex-basis を auto に変えると、盤面のある種目（14-1）で
+   盤面の側が伸びて下の帯が画面から出るため、基準は 0 のままにする */
+
+/* 縦向きの上の帯は幅が足りない。ラック数・イニング数を移したことで
+   種目名が19pxまで潰れて1文字も読めなくなっていた（390x844で実測）。
+   札とボタンの文字・余白を詰めて、種目名に読める幅を残す。
+   押せる大きさ（44px）は下げない */
+@media (orientation: portrait) {
+  #screenMatch .topbar {
+    gap: 6px;
+  }
+  #screenMatch .topbar > div:first-child {
+    flex: 1 1 auto;
+    min-width: 72px;
+  }
+  #screenMatch .topbar h1 {
+    font-size: 15px;
+  }
+  #screenMatch .topbar .sub {
+    font-size: 11px;
+  }
+  #screenMatch .topbar .meta-chips.in-topbar {
+    margin-right: 0;
+    gap: 4px;
+  }
+  #screenMatch .topbar .meta-chips.in-topbar > span {
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+  #screenMatch .tb-actions {
+    gap: 6px;
+  }
+  #screenMatch .tb-actions button {
+    min-height: 44px;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+}
+
+/* 横向きは高さがぎりぎり。ブレイク入れ替えを交代の隣に置いたことで
+   交代の行が44px→57pxに伸び、記録のボタン列（44px×3）が12pxはみ出した
+   （844x390で実測）。横向きだけ札を2行に詰めて44pxに収める。
+   「ブレイク」の字はスコア欄の BREAK の札と重複するので省く */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .turn-row .break-toggle {
+    min-height: 44px;
+    padding: 2px 6px;
+    line-height: 1.1;
+  }
+  #screenMatch .turn-row .break-toggle .bt-label {
+    display: none;
+  }
+  #screenMatch .turn-row .break-toggle .bt-name {
+    /* 横向きでも14pxは下げない（台の脇から読むため） */
+    font-size: 14px;
+  }
+  #screenMatch .turn-row .break-toggle .bt-swap {
+    font-size: 10px;
+  }
+}

@@ -10,7 +10,7 @@
   6. 横向き: スコアの枠が大きく、数字も大きい（正方形に近い）
   7. 横向き: ラック数・イニング数が上の帯にある
   8. ブレイク権はパネルの中の BREAK の札で示す（帯は縦横とも出さない）
-  9. 縦向きに戻すとラック数が元の場所へ戻る
+  9. 縦向きに戻してもラック数は上の帯のまま（本人の指示 2026-08-21・B）
  10. 横スクロールが出ない／画面からはみ出さない
  11. 押せる大きさ（44px以上）を守っている
 
@@ -216,10 +216,12 @@ with sync_playwright() as p:
     section("9. 縦向きに戻す")
     pg.set_viewport_size(PORT)
     pg.wait_for_timeout(800)
-    check(not pg.eval_on_selector("#rackInfo", "e => !!e.closest('#screenMatch .topbar')"),
-          "ラック数が元の場所へ戻る")
-    check(pg.eval_on_selector("#rackInfo", "e => !!e.closest('.match-info')"),
-          "ラック情報の行に戻っている")
+    # 2026-08-21 の指示で、縦向きでもラック数・イニング数は上の帯に置く
+    # （空いた高さはスコアボードに回す）
+    check(pg.eval_on_selector("#rackInfo", "e => !!e.closest('#screenMatch .topbar')"),
+          "縦向きでもラック数は上の帯にある")
+    check(pg.eval_on_selector("#inningInfo", "e => !!e.closest('#screenMatch .topbar')"),
+          "縦向きでもイニング数は上の帯にある")
     # ブレイクの帯は 2026-08-20 の指示で縦横とも出していない。
     # ブレイク権はパネルの中の BREAK の札で示す
     check(not pg.eval_on_selector("#breakBanner",
