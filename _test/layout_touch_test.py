@@ -146,8 +146,17 @@ with sync_playwright() as p:
     )
     check(pos_undo == pos_before, "動かしたのも取り消せる", (pos_before, pos_undo))
 
-    # 戻せるものが無いときは押せない
-    check(pg.is_disabled("#layoutUndoBtn"), "取り消したあとは押せなくなる")
+    # 取り消しは1手だけでなく直近30手ぶん控えるようにした（本人の指示 2026-08-20）。
+    # 1回戻しただけではまだ戻れる。「一つ次に進む」で戻し過ぎを取り返せる
+    check(not pg.is_disabled("#layoutUndoBtn"), "1回戻したあともまだ前に戻れる")
+    check(not pg.is_disabled("#layoutRedoBtn"), "戻したあとは「一つ次に進む」が押せる")
+    # 戻せるものが無くなるまで押すと、そこで押せなくなる
+    for _ in range(30):
+        if pg.is_disabled("#layoutUndoBtn"):
+            break
+        pg.click("#layoutUndoBtn")
+        pg.wait_for_timeout(60)
+    check(pg.is_disabled("#layoutUndoBtn"), "全部戻しきると押せなくなる")
 
     check(not errs, "JavaScriptエラーが出ていない", errs[:3])
     b.close()

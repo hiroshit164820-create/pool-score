@@ -143,7 +143,7 @@ with sync_playwright() as p:
 
     # ================================================================
     section("③ ボールハンデはハンデありのときだけ出る")
-    pg.click("#playersNewMatchBtn")
+    pg.click("#tabSetup")  # 選手一覧の「新しい試合」は撤去したので下部タブから
     pg.wait_for_timeout(300)
     helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(200)

@@ -104,6 +104,35 @@
   color: var(--muted, #6b6255);
 }
 
+/* ============ 「この内容で始めます」のまとめ ============ */
+.start-summary {
+  border: 2px solid var(--ink, #241a12);
+  background: var(--card, #fffdf6);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.ss-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.ss-row + .ss-row {
+  border-top: 1px dashed rgba(0, 0, 0, 0.18);
+}
+.ss-key {
+  flex: 0 0 auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ss-val {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
 /* ============ ボールの番号（見えづらさの解消） ============ */
 /* 白抜きの数字にして、地の色に関わらず読めるように縁取りを付ける。
    数字は少し大きく・太くする（本人の指示） */

@@ -152,6 +152,9 @@ const GAMES = {
     base: "nineball", scoring: "jpa9", goal: "jpaSL",
     playersPerSide: 1, mode: "inning",
     goalType: "score",
+    // JPAは8ボールも9ボールもウィナーズブレイク。選ばせない（本人の指示）
+    defaultBreakType: "winner",
+    breakTypeFixed: true,
   },
 
   jpa_9ball_doubles: {
@@ -160,6 +163,8 @@ const GAMES = {
     playersPerSide: 2, mode: "inning",
     goalType: "score",
     skillSum: true, // ペアスキル = 2人のSLの単純合計
+    defaultBreakType: "winner",
+    breakTypeFixed: true,
   },
 
   jpa_8ball: {
@@ -167,6 +172,8 @@ const GAMES = {
     base: "eightball", scoring: "jpa8", goal: "jpaSL8",
     playersPerSide: 1, mode: "inning",
     goalType: "games",
+    defaultBreakType: "winner",
+    breakTypeFixed: true,
   },
 
   jcl_9ball: {

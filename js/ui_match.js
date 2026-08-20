@@ -857,7 +857,12 @@ const MATCH = (function () {
       // どの球が得点になるのか分からなくなる
       const bh = match.goal.ballHandicap && match.goal.ballHandicap[side];
       const hNode = $("handicap" + side);
-      if (bh && bh.from) {
+      if (bh && bh.groupMinus) {
+        // 8ボールの1ボールハンデ。得点の数え方は変わらないので、
+        // 記録として残した内容をそのまま出すだけにする
+        hNode.textContent = "1ボールハンデ（グループ球" + (7 - bh.groupMinus) + "個で8番へ）";
+        hNode.hidden = false;
+      } else if (bh && bh.from) {
         hNode.textContent = bh.from + "番以上で1点";
         hNode.hidden = false;
       } else if (bh && bh.scoringBalls && bh.scoringBalls.length) {

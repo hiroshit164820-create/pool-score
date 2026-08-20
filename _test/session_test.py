@@ -121,10 +121,11 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     check(pg.is_visible("#ballSetSection"), "ローテーションでボールセットを選べる")
     sets = pg.locator(".ballset-chip").count()
-    check(sets == 4, "4種類から選べる", sets)
+    # チタニウムは本人の指示（2026-08-20）で削除した。残り3種類
+    check(sets == 3, "3種類から選べる", sets)
     labels = pg.locator(".ballset-chip .bs-name").all_text_contents()
     check(any("プラチナム" in x for x in labels), "プラチナムがある", labels)
-    check(any("チタニウム" in x for x in labels), "チタニウムがある", labels)
+    check(not any("チタニウム" in x for x in labels), "チタニウムは消えている", labels)
     check(any("ブラック" in x for x in labels), "アラミス ブラックがある", labels)
 
     # 9ボールでは出さない（盤面を使わないため）

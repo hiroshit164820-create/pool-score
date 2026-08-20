@@ -52,26 +52,9 @@ const BALL_SETS = {
     },
   },
 
-  // Dynaspheres Titanium（チタニウム）
-  // 出典: https://dynaspheres.com/product/titanium-572/ の公式製品画像
-  // ※ 同ページの説明文には別製品(Unity)の内容が混入しているため画像のみを根拠にした
-  titanium: {
-    label: "ダイナスフィア チタニウム",
-    note: "4番がサーモンピンク、6番がグレーです（通常とは違います）。",
-    numberStyle: "diamond", // 数字が白いダイヤ（菱形）の枠に入る
-    stripeBase: "#efe6d2",
-    stripeOnBase: false,
-    colors: {
-      1: "#d9a521", // マスタード寄りの黄
-      2: "#2a6cae", // 青
-      3: "#c92f2c", // 赤
-      4: "#e58b7a", // サーモンピンク（通常は紫）
-      5: "#e07b26", // 橙
-      6: "#9c948a", // グレー／トープ（通常は緑）
-      7: "#8e2b2b", // えんじ
-      8: "#1a1a1a", // 黒
-    },
-  },
+  // ※ Dynaspheres Titanium（チタニウム）は本人の指示（2026-08-20）で削除した。
+  //   使わないため。色の出典と数値は 04_種目ルール仕様.md に残してある。
+  //   過去の試合が titanium を指していても ballAppearance が標準に倒すので壊れない。
 
   // Aramith Tournament BLACK（Duramith™ Technology）
   // 出典: https://aramith.com/story-behind-aramith-tournament-black-colours/
@@ -97,7 +80,7 @@ const BALL_SETS = {
 };
 
 /** 選べるボールセットの一覧（表示順） */
-const BALL_SET_ORDER = ["standard", "platinum", "titanium", "aramith_black"];
+const BALL_SET_ORDER = ["standard", "platinum", "aramith_black"];
 
 /**
  * 球番号の見た目を返す。

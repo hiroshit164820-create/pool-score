@@ -184,7 +184,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     for nm in ["あきら", "いすず", "うたの", "えいじ"]:
         helpers.add_player(pg, nm)
-    pg.click("#playersNewMatchBtn")
+    pg.click("#tabSetup")  # 選手一覧の「新しい試合」は撤去したので下部タブから
     pg.wait_for_timeout(300)
 
     helpers.pick_game(pg, "9ball_doubles")

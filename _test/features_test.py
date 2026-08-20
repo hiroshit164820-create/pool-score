@@ -103,7 +103,8 @@ with sync_playwright() as p:
 
     # ================= プレーヤー選択 =================
     section("試合作成で登録名を選べる")
-    pg.click("#playersNewMatchBtn")
+    # 選手一覧の「新しい試合」は本人の指示（2026-08-20）で撤去したので下部タブを使う
+    pg.click("#tabSetup")
     pg.wait_for_timeout(300)
     helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(250)
@@ -190,7 +191,7 @@ with sync_playwright() as p:
     txt = card.text_content() or ""
     check("1勝" in txt, "山田に1勝が記録される", txt[:60])
 
-    pg.click("#playersToStatsBtn")
+    pg.click("#tabStats")
     pg.wait_for_timeout(400)
     check(pg.is_visible("#screenStats"), "成績画面が開く")
     stats_txt = pg.text_content("#statsBody") or ""
@@ -211,7 +212,7 @@ with sync_playwright() as p:
     section("ショットクロックの平均タイム")
     pg.click("#backFromStatsBtn")
     pg.wait_for_timeout(300)
-    pg.click("#playersNewMatchBtn")
+    pg.click("#tabSetup")
     pg.wait_for_timeout(300)
     pg.locator("#playerFields .field").nth(0).locator(".picker .chip", has_text="鈴木").click()
     pg.locator("#playerFields .field").nth(1).locator(".picker .chip", has_text="佐藤").click()
@@ -239,7 +240,7 @@ with sync_playwright() as p:
 
     pg.click("#toPlayersBtn")
     pg.wait_for_timeout(300)
-    pg.click("#playersToStatsBtn")
+    pg.click("#tabStats")
     pg.wait_for_timeout(300)
     pg.locator("#statsBody .match-card").filter(has_text="鈴木").first.click()
     pg.wait_for_timeout(400)

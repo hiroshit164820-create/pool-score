@@ -234,7 +234,9 @@ const SETUP = (function () {
 
   // ダブルスをONにしているか（親種目ごとに覚える必要はなく、選択中の種目だけで足りる）
   let doublesOn = false;
-  let openGroup = "standard";
+  // 種目のカテゴリはすべて閉じた状態で始める（本人の指示 2026-08-20）。
+  // 一覧が縦に長いと、下の勝利条件やプレーヤー欄まで届かないため
+  let openGroup = null;
 
   let selectedGame = "9ball";
   let goalMode = "same"; // same | handicap
@@ -243,6 +245,15 @@ const SETUP = (function () {
   let skillLevels = { A: 5, B: 5 };
   // 使うボールセット（盤面の色分けに使う）。前回選んだものを覚える
   let ballSet = (STORE.getSettings() || {}).ballSet || "standard";
+
+  /**
+   * 8ボールの「1ボールハンデ」を表す印。
+   *
+   * 8ボールはラック単位で数える種目で、engine は個々のグループ球を追っていない。
+   * そのため得点計算には効かせず、記録と表示だけに使う。
+   * 数字の下限（7番以上など）と同じ変数に入れるので、番号と衝突しない文字列にする。
+   */
+  const GROUP_MINUS_1 = "groupMinus1";
 
   // ボールハンデ。「N番以上を入れたら1点」の N を持つ（null＝ハンデなし）
   // 出典: CUES「相手は9番、自分は7番以上を入れたら1ポイント」（04_種目ルール仕様.md）
@@ -271,6 +282,30 @@ const SETUP = (function () {
     UI.bindToggle($("scModeToggle"), function () {});
     $("startMatchBtn").addEventListener("click", UI.guard(startMatch));
     selectGame("9ball");
+    // selectGame は選んだ種目のカテゴリを開くが、起動直後だけは全部閉じておく
+    openGroup = null;
+    renderGames();
+
+    // 設定を触るたびに「この内容で始めます」のまとめを描き直す。
+    // 個々の描画関数から呼ぶと呼び忘れが出るため、画面ごと監視する
+    const screen = $("screenSetup");
+    if (screen) {
+      ["input", "change", "click"].forEach(function (ev) {
+        screen.addEventListener(ev, scheduleSummary);
+      });
+    }
+    renderStartSummary();
+  }
+
+  /** まとめの描き直しは1フレームに1回にまとめる（連打で何度も組み立てないため） */
+  let summaryQueued = false;
+  function scheduleSummary() {
+    if (summaryQueued) return;
+    summaryQueued = true;
+    window.requestAnimationFrame(function () {
+      summaryQueued = false;
+      renderStartSummary();
+    });
   }
 
   /** よく使う種目（選んだ回数の多い順に最大3件） */
@@ -441,19 +476,19 @@ const SETUP = (function () {
     // 種目の注意書きは本人の指示（2026-08-20）で画面から削除した。
     // data/ 側の note や規程の根拠は 04_種目ルール仕様.md に残してある。
 
-    // ブレイク方式の既定値
-    UI.setToggle($("breakTypeToggle"), base.defaultBreakType);
+    // ブレイク方式の既定値。種目側の指定（JPAのウィナーズ固定）を優先する
+    UI.setToggle($("breakTypeToggle"), g.defaultBreakType || base.defaultBreakType);
 
-    // ローテーションのようにブレイク方式が決まっている種目では
+    // ローテーションやJPAのようにブレイク方式が決まっている種目では
     // 選択肢を出さない（選べるように見せて engine が無視するのは不誠実なため）
     const btField = $("breakTypeToggle").closest(".field");
-    if (base.breakTypeFixed) {
+    if (g.breakTypeFixed || base.breakTypeFixed) {
       if (btField) btField.hidden = true;
       $("breakTypeNote").textContent = "";
     } else {
       if (btField) btField.hidden = false;
       $("breakTypeNote").textContent =
-        base.defaultBreakType === "winner"
+        (g.defaultBreakType || base.defaultBreakType) === "winner"
           ? "この種目は勝者ブレイクが一般的です。"
           : "この種目は交互ブレイクが一般的です。";
     }
@@ -498,6 +533,10 @@ const SETUP = (function () {
     const g = GAMES[selectedGame];
     const base = BASE_RULES[g.base];
 
+    // 8ボールは「N番以上で1点」という数え方をしない。
+    // 自分のグループ球を1個減らす形のハンデを出す（本人の指示 2026-08-20）
+    const isGroupGame = !!base.groupAssign;
+
     // 出せる種目かどうか。ラック単位で数える種目のみ。
     // さらに「ハンデあり」を選んでいるときだけ出す
     // （ハンデなしの人に球ごとの設定を見せても迷わせるだけのため）
@@ -515,13 +554,20 @@ const SETUP = (function () {
     wrap.appendChild(
       UI.el("p", {
         class: "hint",
-        text: "実力差があるとき、弱い側が「番号の若い球でも得点になる」ようにする決め方です。",
+        text: isGroupGame
+          ? "実力差があるとき、弱い側が「自分のグループ球を1個残したまま8番を狙える」ようにする決め方です。"
+          : "実力差があるとき、弱い側が「番号の若い球でも得点になる」ようにする決め方です。",
       })
     );
 
-    // 選べる下限。キーボールと、その手前の2つまでを出す（実際に使われる範囲）
+    // 選べる下限。7番から、キーボールの1つ手前まで（本人の指示 2026-08-20）。
+    // 9ボールは7・8番、10ボールは7・8・9番。以前は「キーボールの手前2つ」だったため
+    // 10ボールで7番が選べなかった
     const key = base.keyBall;
-    const options = [key - 2, key - 1].filter(function (n) { return n >= 1; });
+    const options = [];
+    if (!isGroupGame) {
+      for (let n = 7; n <= key - 1; n++) options.push(n);
+    }
 
     ["A", "B"].forEach(function (side) {
       const chips = UI.el("div", { class: "chips bh-chips" });
@@ -540,6 +586,22 @@ const SETUP = (function () {
           },
         })
       );
+
+      // 8ボールの1ボールハンデ。落とす球が1個少なくて済む
+      if (isGroupGame) {
+        chips.appendChild(
+          UI.el("button", {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(ballHandicap[side] === GROUP_MINUS_1),
+            text: "1ボールハンデ",
+            onclick: function () {
+              ballHandicap[side] = GROUP_MINUS_1;
+              renderGoalArea();
+            },
+          })
+        );
+      }
 
       options.forEach(function (n) {
         chips.appendChild(
@@ -609,6 +671,24 @@ const SETUP = (function () {
     });
 
     // いまの設定を文章で確認できるようにする
+    if (isGroupGame) {
+      const gsum = ["A", "B"].map(function (side) {
+        return nameForSide(side) + "は" +
+          (ballHandicap[side] === GROUP_MINUS_1 ? "グループ球6個で8番へ" : "グループ球7個すべて");
+      });
+      wrap.appendChild(
+        UI.el("p", { class: "hint bh-summary", text: gsum.join("　／　") })
+      );
+      wrap.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "このハンデは記録として残し、試合画面にも出します。"
+            + "どの球を残すかは対戦する2人で決めてください。",
+        })
+      );
+      return;
+    }
+
     const summary = ["A", "B"].map(function (side) {
       const n = ballHandicap[side];
       return nameForSide(side) + "は" + (n === null ? key + "番のみ" : n + "番以上");
@@ -1104,6 +1184,19 @@ const SETUP = (function () {
     const wrap = $("goalArea");
     UI.clear(wrap);
 
+    // 1人でやる種目（ボウラード）は相手がいないので勝利条件が無い。
+    // 見出しごと消す（本人の指示 2026-08-20）
+    const goalTitle = $("goalTitle");
+    if (g.solo) {
+      if (goalTitle) goalTitle.hidden = true;
+      wrap.hidden = true;
+      renderBallHandicap();
+      renderBallSet();
+      return;
+    }
+    if (goalTitle) goalTitle.hidden = false;
+    wrap.hidden = false;
+
     // JPAはスキルレベルから持ち点が決まるため、専用のUIにする
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
@@ -1315,16 +1408,29 @@ const SETUP = (function () {
     function one(side, fallback) {
       const n1 = readName("inName" + side, "");
       if (g.playersPerSide === 1) {
-        const name = n1 || fallback;
+        // 名前を入れずに始めた側は「ゲスト」として扱い、選手一覧には登録しない
+        // （本人の指示 2026-08-20）。「プレーヤーA」という名前の選手が
+        // 一覧に溜まってしまっていた
+        if (!n1) return { name: fallback, playerIds: [], guest: true };
         // JPAシングルスは、この試合で使ったスキルレベルをその人に覚えさせる。
         // 次回この人を選んだときに自動で入る
         const skill = kind ? (function () { const o = {}; o[kind] = skillLevels[side]; return o; })() : null;
-        const p = STORE.upsertPlayer(name, skill);
-        return { name: name, playerIds: p ? [p.id] : [] };
+        const p = STORE.upsertPlayer(n1, skill);
+        return { name: n1, playerIds: p ? [p.id] : [] };
       }
       const n2 = readName("inName" + side + "2", "");
       const names = [n1, n2].filter(Boolean);
-      const label = names.length ? names.join("・") : fallback;
+      // 2人とも名前が無ければチームごとゲスト扱い
+      if (!names.length) {
+        return {
+          name: fallback,
+          teamLabel: side === "A" ? "チームA" : "チームB",
+          members: [],
+          playerIds: [],
+          guest: true,
+        };
+      }
+      const label = names.join("・");
       const ids = names
         .map(function (n) {
           const p = STORE.upsertPlayer(n);
@@ -1396,6 +1502,11 @@ const SETUP = (function () {
     ["A", "B"].forEach(function (side) {
       const from = ballHandicap[side];
       if (from === null || from === undefined) return;
+      if (from === GROUP_MINUS_1) {
+        // 8ボールの1ボールハンデ。得点の数え方は変えない（表示と記録だけ）
+        out[side] = { groupMinus: 1 };
+        return;
+      }
       out[side] = {
         from: from, // 表示用。「7番以上」と出すために持っておく
         scoringBalls: base.balls.filter(function (b) { return b >= from; }),
@@ -1427,7 +1538,11 @@ const SETUP = (function () {
   function buildGoal(g) {
     const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
     const bh = buildBallHandicap(g);
-    const hasBh = !!(bh.A || bh.B);
+    // 点数制に切り替えるのは「得点になる球を絞った」ときだけ。
+    // 8ボールの1ボールハンデは数え方を変えないので、ラック先取のままにする
+    const hasBh = ["A", "B"].some(function (s) {
+      return !!(bh[s] && bh[s].scoringBalls && bh[s].scoringBalls.length);
+    });
 
     // ボールハンデは「球1個ごとに1点」で数える必要があるため、
     // ラック先取の種目でも点数制に切り替える（engine.js の effectiveScoreKind が
@@ -1447,6 +1562,133 @@ const SETUP = (function () {
     };
   }
 
+  /**
+   * 「この内容で始めます」のまとめ。1行につき1項目で出す（本人の指示 2026-08-20）。
+   *
+   * 始めたあとに直せない項目（勝利条件・ハンデ・ブレイク方式）があるため、
+   * 押す直前に一覧で確かめられるようにする。
+   *
+   * ここでは STORE を一切触らない。buildSides() は選手を登録してしまうので呼ばない
+   * （まとめを描くたびに選手が増えてしまう）。
+   */
+  function renderStartSummary() {
+    const wrap = $("startSummary");
+    if (!wrap) return;
+    UI.clear(wrap);
+
+    const g = GAMES[selectedGame];
+    if (!g) return;
+    const base = BASE_RULES[g.base];
+    const rows = [];
+    function add(label, value) {
+      if (value === null || value === undefined || value === "") return;
+      wrap.appendChild(
+        UI.el("div", { class: "ss-row" }, [
+          UI.el("span", { class: "ss-key", text: label + "：" }),
+          UI.el("span", { class: "ss-val", text: String(value) }),
+        ])
+      );
+      rows.push(label);
+    }
+
+    add("競技種目", g.label);
+
+    // プレーヤー
+    function sideName(side) {
+      const n1 = readName("inName" + side, "");
+      if (g.playersPerSide === 2) {
+        const n2 = readName("inName" + side + "2", "");
+        const names = [n1, n2].filter(Boolean);
+        return names.length ? names.join("・") : "ゲスト";
+      }
+      return n1 || "ゲスト";
+    }
+    if (g.solo) add("プレーヤー", sideName("A"));
+    else add("プレーヤー", sideName("A") + " 対 " + sideName("B"));
+
+    // 勝利条件。1人用の種目には無い
+    if (!g.solo) {
+      const isJpa = g.goal === "jpaSL" || g.goal === "jpaSL8";
+      if (isJpa) {
+        const unit = g.goal === "jpaSL8" ? "ゲーム先取" : "点先取";
+        add("スキルレベル", "SL" + skillLevels.A + " 対 SL" + skillLevels.B);
+        add("勝利条件", sideName("A") + " " + goalValues.A + unit
+          + " ／ " + sideName("B") + " " + goalValues.B + unit);
+      } else if (g.goalHidden) {
+        add("勝利条件", g.goalHiddenNote || "この種目は決まった点数で行います。");
+      } else {
+        const scored = ["A", "B"].some(function (s) {
+          return ballHandicap[s] !== null && ballHandicap[s] !== GROUP_MINUS_1;
+        });
+        const unit = scored ? "点" : (g.goalType === "racks" ? "ラック" : "点");
+        if (goalMode === "same" && goalValues.A === goalValues.B) {
+          add("勝利条件", goalValues.A + unit + "先取");
+        } else {
+          add("勝利条件", sideName("A") + " " + goalValues.A + unit
+            + " ／ " + sideName("B") + " " + goalValues.B + unit);
+        }
+      }
+
+      // ハンデ
+      const hParts = ["A", "B"].map(function (side) {
+        const v = ballHandicap[side];
+        if (v === null || v === undefined) return null;
+        return sideName(side) + "は"
+          + (v === GROUP_MINUS_1 ? "1ボールハンデ（グループ球を1個減らす）" : v + "番以上で1点");
+      }).filter(Boolean);
+      add("ハンデ", hParts.length ? hParts.join(" ／ ") : "なし");
+
+      // ダブルスの個人ごとのハンデ
+      if (g.playersPerSide === 2) {
+        const mParts = [];
+        ["A", "B"].forEach(function (side) {
+          [readName("inName" + side, ""), readName("inName" + side + "2", "")]
+            .forEach(function (nm, i) {
+              if (!nm || memberHandicap[side][i] === null) return;
+              mParts.push(nm + "は" + memberHandicap[side][i] + "番以上");
+            });
+        });
+        if (mParts.length) add("個人のハンデ", mParts.join(" ／ "));
+      }
+    }
+
+    // ブレイク。方式が決まっている種目では選ばせていないので出さない
+    if (!g.solo && !(g.breakTypeFixed || base.breakTypeFixed)) {
+      const bt = UI.toggleValue($("breakTypeToggle"));
+      add("ブレイク方式", bt === "alternate" ? "オルタネート（交互）" : "ウィナーズ（勝った側）");
+    }
+    if (!g.solo) {
+      const first = UI.toggleValue($("firstSideToggle")) || "A";
+      add("先にブレイクする人", sideName(first));
+    }
+
+    // 使う球
+    const bs = BALL_SETS[ballSet];
+    if (bs) add("ボールセット", bs.label);
+
+    // 時計
+    const ct = clockType();
+    if (ct === "shot") {
+      add("時計", "ショットクロック " + num("scSeconds", 45) + "秒");
+    } else if (ct === "chess") {
+      add("時計", "チェスクロック " + num("ccMinutes", 30) + "分");
+    } else {
+      add("時計", "使わない");
+    }
+
+    // ハウス設定（公式規程が無い種目）
+    if (base.hasPenalty) {
+      add("反則の扱い", houseRule.penaltyMode === "othersPlus"
+        ? "他の人に+1点" : "自分が-1点");
+      add("ミスでステップ", houseRule.stepResetOnMiss ? "1に戻す" : "戻さない");
+      add("1イニング内の連続得点", houseRule.allowMultiScorePerInning ? "できる" : "できない");
+    }
+
+    if (!rows.length) {
+      wrap.appendChild(UI.el("p", { class: "hint", text: "種目を選んでください。" }));
+    }
+  }
+
   function startMatch() {
     const g = GAMES[selectedGame];
     if (goalValues.A < 1 || goalValues.B < 1) {
@@ -1460,7 +1702,9 @@ const SETUP = (function () {
       goal: buildGoal(g),
       options: {
         ballSet: ballSet,
-        breakType: UI.toggleValue($("breakTypeToggle")) || BASE_RULES[g.base].defaultBreakType,
+        breakType: g.breakTypeFixed
+          ? (g.defaultBreakType || BASE_RULES[g.base].defaultBreakType)
+          : (UI.toggleValue($("breakTypeToggle")) || g.defaultBreakType || BASE_RULES[g.base].defaultBreakType),
         shotClock: buildShotClock(),
         chessClock: buildChessClock(),
         inputMode: g.mode,

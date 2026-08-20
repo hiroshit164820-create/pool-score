@@ -60,7 +60,7 @@
       <div class="section-title">プレーヤー</div>
       <div id="playerFields"></div>
 
-      <div class="section-title">勝利条件</div>
+      <div class="section-title" id="goalTitle">勝利条件</div>
       <div id="goalArea"></div>
 
       <!-- 公式競技規程が無いゲームの、店ごとの決め方 -->
@@ -161,6 +161,10 @@
           <p class="hint">持ち時間を使い切っても、1回の番ごとにこの秒数だけ撞けます。0にすると使い切った時点で時間切れ負けです。</p>
         </div>
       </div>
+
+      <!-- 始める直前に、いま選んでいる内容を1行1項目でまとめて出す -->
+      <div class="section-title">この内容で始めます</div>
+      <div id="startSummary" class="start-summary"></div>
 
       <div style="height:12px"></div>
       <button id="startMatchBtn" class="primary" style="width:100%">この内容で試合を始める</button>

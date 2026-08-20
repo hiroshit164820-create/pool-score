@@ -73,9 +73,11 @@ with sync_playwright() as p:
     check(any("一般" in h for h in heads), "「一般」カテゴリがある", heads)
     check(any("JPA" in h for h in heads), "「JPA」カテゴリがある", heads)
 
-    # 初期状態では「一般」だけが開いている＝一覧が短い
-    check(pg.locator(".game-pick").count() == 6, "最初は一般の6種目だけが見えている",
+    # 初期状態ではすべて閉じている（本人の指示 2026-08-20）＝一覧が最も短い
+    check(pg.locator(".game-pick").count() == 0, "最初はどのカテゴリも開いていない",
           pg.locator(".game-pick").count())
+    expanded = pg.locator(".group-head").evaluate_all("els => els.map(e => e.getAttribute('aria-expanded'))")
+    check(all(v == "false" for v in expanded), "すべて閉じた状態で始まる", expanded)
 
     # 畳んだ状態でも全種目選べる
     check(helpers.count_selectable_games(pg) == 14, "全カテゴリ合わせて14種目選べる",
@@ -163,7 +165,7 @@ with sync_playwright() as p:
 
     # ================================================================
     section("④ 試合作成で登録済みプレーヤーを呼び出せる")
-    pg.click("#playersNewMatchBtn")
+    pg.click("#tabSetup")  # 選手一覧の「新しい試合」は撤去したので下部タブから
     pg.wait_for_timeout(300)
     helpers.pick_game(pg, "9ball")
     check(pg.locator(".picker-chip").count() >= 1, "登録した人を選ぶボタンが出る",

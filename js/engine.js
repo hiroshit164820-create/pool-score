@@ -54,8 +54,11 @@ function createMatch(cfg) {
     },
     cfg.options || {}
   );
-  // ローテーション・カイルンはブレイク方式が固定
+  // ローテーション・カイルンは基礎種目としてブレイク方式が固定。
+  // JPAは基礎種目（9/8ボール）は自由だが種目としてウィナーズ固定なので、
+  // 種目側の指定も見る（games_data.js の breakTypeFixed）
   if (base.breakTypeFixed) options.breakType = base.defaultBreakType;
+  if (g.breakTypeFixed) options.breakType = g.defaultBreakType || base.defaultBreakType;
 
   const sideA = (cfg.sides && cfg.sides[0]) || {};
   const sideB = (cfg.sides && cfg.sides[1]) || {};
@@ -75,10 +78,14 @@ function createMatch(cfg) {
     sides: [
       // teamLabel / members はダブルスの表示用（「チームA（2人の名前）」）。
       // 無い種目では undefined のままで構わない
+      // guest = 名前を入れずに始めた側。選手一覧には登録しないので
+      // 成績の集計からも外れる（playerIds が空になる）
       { sideId: "A", name: sideA.name || "プレーヤーA", playerIds: sideA.playerIds || [],
-        teamLabel: sideA.teamLabel || null, members: sideA.members || null },
+        teamLabel: sideA.teamLabel || null, members: sideA.members || null,
+        guest: !!sideA.guest },
       { sideId: "B", name: sideB.name || "プレーヤーB", playerIds: sideB.playerIds || [],
-        teamLabel: sideB.teamLabel || null, members: sideB.members || null },
+        teamLabel: sideB.teamLabel || null, members: sideB.members || null,
+        guest: !!sideB.guest },
     ],
 
     goal: cfg.goal,
