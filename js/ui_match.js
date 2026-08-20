@@ -995,9 +995,9 @@ const MATCH = (function () {
       ? "" // 盤面・段階の入力側に案内を出すのでここは空にする
       : perBall
       ? (hasAnyHandicap()
-          ? "得点になる球を入れたら、その人のスコアをタップ／長押しで1点戻す"
-          : "球を入れたら、その人のスコアをタップ／長押しで1点戻す")
-      : "ラックを取った側のスコアをタップ／長押しで1点戻す";
+          ? "入れた人のスコアをタップ（長押しで戻す）"
+          : "入れた人のスコアをタップ（長押しで戻す）")
+      : "取った側のスコアをタップ（長押しで戻す）";
     $("tapHint").hidden = (gridMode || stepMode) && !finished;
 
     // ターン交代ボタン。
@@ -1092,7 +1092,7 @@ const MATCH = (function () {
     wrap.appendChild(
       UI.el("p", {
         class: "bg-who",
-        text: sideName(shooter) + " が入れた球を押してください",
+        text: sideName(shooter) + "：入れた球を押す",
       })
     );
 
@@ -1323,7 +1323,7 @@ const MATCH = (function () {
       if (sc.frames[i].score === null || !sc.frames[i].throws.length) { frameNo = i + 1; break; }
     }
     wrap.appendChild(
-      UI.el("p", { class: "bp-who", text: frameNo + "フレーム目：入れた球の数を押してください" })
+      UI.el("p", { class: "bp-who", text: frameNo + "フレーム目：入れた数を押す" })
     );
 
     const pad = UI.el("div", { class: "bp-nums" });

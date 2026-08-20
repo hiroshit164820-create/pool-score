@@ -158,11 +158,13 @@ with sync_playwright() as p:
     check(over and over["fits"], "通知を出しても試合画面が1画面に収まる", over)
     pg.screenshot(path=os.path.join(SHOTS, "tune3_toast.png"))
 
-    # 2.6秒は長いという指摘への対応（1.3秒）
-    pg.wait_for_timeout(900)
+    # 2.6秒は長いという指摘への対応（1.3秒）。
+    # 直前の画面撮影に時間がかかるので、時間を測る前に出し直す
+    pg.evaluate("() => UI.toast('9番を落として1点入りました。')")
+    pg.wait_for_timeout(500)
     still = pg.locator("#toastWrap .toast").count()
-    check(still == 1, "1.1秒の時点ではまだ出ている", still)
-    pg.wait_for_timeout(800)
+    check(still == 1, "0.7秒の時点ではまだ出ている", still)
+    pg.wait_for_timeout(1200)
     check(pg.locator("#toastWrap .toast").count() == 0, "1.9秒までには消える")
 
     # ================= 4/5/6. 終了画面 =================

@@ -604,9 +604,10 @@ const SETUP = (function () {
     wrap.appendChild(
       UI.el("p", {
         class: "hint",
+        // スマホで1行に収まる長さにする（本人の指示 2026-08-21）
         text: isGroupGame
-          ? "実力差があるとき、弱い側が「自分のグループ球を1個残したまま8番を狙える」ようにする決め方です。"
-          : "実力差があるとき、弱い側が「番号の若い球でも得点になる」ようにする決め方です。",
+          ? "弱い側は自分の球を1個残して8番を狙えます。"
+          : "弱い側は番号の若い球でも得点になります。",
       })
     );
 
@@ -722,29 +723,30 @@ const SETUP = (function () {
 
     // いまの設定を文章で確認できるようにする
     if (isGroupGame) {
+      // 1行に収める。名前が長いと折り返すので「は」を省いて短くする
       const gsum = ["A", "B"].map(function (side) {
-        return nameForSide(side) + "は" +
-          (ballHandicap[side] === GROUP_MINUS_1 ? "グループ球6個で8番へ" : "グループ球7個すべて");
+        return nameForSide(side) + " " +
+          (ballHandicap[side] === GROUP_MINUS_1 ? "6個" : "7個");
       });
       wrap.appendChild(
-        UI.el("p", { class: "hint bh-summary", text: gsum.join("　／　") })
+        UI.el("p", { class: "hint bh-summary", text: "持つ球 " + gsum.join(" ／ ") })
       );
       wrap.appendChild(
         UI.el("p", {
           class: "hint",
-          text: "このハンデは記録として残し、試合画面にも出します。"
-            + "どの球を残すかは対戦する2人で決めてください。",
+          text: "どの球を残すかは2人で決めてください。",
         })
       );
       return;
     }
 
+    // 1行に収める。「は」「で1点」を省き、見出しの語で意味を補う
     const summary = ["A", "B"].map(function (side) {
       const n = ballHandicap[side];
-      return nameForSide(side) + "は" + (n === null ? key + "番のみ" : n + "番以上");
+      return nameForSide(side) + " " + (n === null ? key + "番" : n + "番〜");
     });
     wrap.appendChild(
-      UI.el("p", { class: "hint bh-summary", text: summary.join("　／　") + " で1点" })
+      UI.el("p", { class: "hint bh-summary", text: "1点になる球 " + summary.join(" ／ ") })
     );
 
     // ハンデを付けると数え方が「ラック先取」から「点数先取」に変わる。
@@ -1192,7 +1194,7 @@ const SETUP = (function () {
     wrap.appendChild(
       UI.el("p", {
         class: "hint",
-        text: "公式の競技規程が無いゲームです。よく使われる決め方を選べます。",
+        text: "公式の規程が無いので、決め方を選びます。",
       })
     );
 
@@ -1448,7 +1450,8 @@ const SETUP = (function () {
           UI.el("label", { text: "この組み合わせの勝利条件" }),
           UI.el("p", {
             class: "jpa-result",
-            text: "SL" + skillLevels.A + " → " + targets.A + unit + "　／　SL" +
+            // 1行に収めるため区切りは半角にする（本人の指示 2026-08-21）
+            text: "SL" + skillLevels.A + " → " + targets.A + unit + " ／ SL" +
               skillLevels.B + " → " + targets.B + unit,
           }),
         ])

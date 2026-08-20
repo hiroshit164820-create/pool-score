@@ -484,7 +484,7 @@ const PLAYERS = (function () {
           return b.st.winRate - a.st.winRate;
         });
 
-      body.appendChild(UI.el("p", { class: "hint", text: "登録したプレーヤーの成績です。名前を押すと詳しく見られます。" }));
+      body.appendChild(UI.el("p", { class: "hint", text: "名前を押すと詳しく見られます。" }));
       rows.forEach(function (r) {
         const card = UI.el("div", {
           class: "match-card",

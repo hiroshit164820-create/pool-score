@@ -29,6 +29,11 @@ const LAYOUT = (function () {
     $("layoutUndoBtn").addEventListener("click", UI.guard(undo));
     $("layoutRedoBtn").addEventListener("click", UI.guard(redo));
     $("layoutListBtn").addEventListener("click", UI.guard(toggleList));
+
+    // 画面の向きや大きさが変わったら台を測り直す。
+    // 入れておかないと、横向きにしたときに台が画面からはみ出す
+    window.addEventListener("resize", fitTable);
+    window.addEventListener("orientationchange", fitTable);
   }
 
   /**
@@ -108,8 +113,11 @@ const LAYOUT = (function () {
 
   function open() {
     bindOnce();
-    render();
+    // 先に画面を出す。隠れたままだと幅が0で、台の大きさを測れない
     UI.showScreen("screenLayout");
+    render();
+    // 出た直後は幅がまだ確定していないことがあるので、1フレーム待って測り直す
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(fitTable);
   }
 
   /* ---------- 台の描画 ---------- */
@@ -141,8 +149,8 @@ const LAYOUT = (function () {
     return balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
   }
 
-  /** 球の直径（px）。style.css の .tb-ball と揃える */
-  const BALL_PX = 44;
+  /** 球の直径（px）。css/v2.css の .tb-ball と揃える */
+  const BALL_PX = 40;
 
   /** いまの盤面を控える。盤面を変える操作の直前に呼ぶ */
   function remember() {
@@ -195,7 +203,8 @@ const LAYOUT = (function () {
     if (!table || table.querySelector(".pt-marks")) return;
     const marks = UI.el("div", { class: "pt-marks" });
 
-    // 目印はすべて台の内側に置く。外へはみ出させると画面が横スクロールする。
+    // 目印の箱（.pt-marks）はレール（茶色の枠）まで含めた大きさにしてある。
+    // ポイント（ダイヤ）は実物と同じくレールの上に乗せる（本人の指示 2026-08-21）。
     // 角は left/top、反対側は right/bottom を使って端に貼り付ける
     function place(node, side) {
       if (side.left !== undefined) node.style.left = side.left;
@@ -214,8 +223,10 @@ const LAYOUT = (function () {
     place(UI.el("div", { class: "pt-pocket side" }), { left: "0", top: "50%" });
     place(UI.el("div", { class: "pt-pocket side" }), { right: "0", top: "50%" });
 
-    // ポイント。短辺は3つずつ、長辺はサイドポケットを挟んで3つずつ（計18）
-    const RAIL = "4px";
+    // ポイント。短辺は3つずつ、長辺はサイドポケットを挟んで3つずつ（計18）。
+    // レールの幅は css/v2.css の --rail（14px）。
+    // ダイヤは45度回しているので見かけの幅は約11px。レールの真ん中に来る値を置く
+    const RAIL = "1.5px";
     [25, 50, 75].forEach(function (x) {
       place(UI.el("div", { class: "pt-dot h" }), { left: x + "%", top: RAIL });
       place(UI.el("div", { class: "pt-dot h" }), { left: x + "%", bottom: RAIL });
@@ -229,8 +240,47 @@ const LAYOUT = (function () {
     table.insertBefore(marks, table.firstChild);
   }
 
+  /**
+   * 台の大きさを実測して決める。
+   *
+   * CSSだけで「高さを決めて幅を導く」書き方（aspect-ratio + width:auto）にしていたが、
+   * 実機で台が細長い棒に潰れた（本人の指摘 2026-08-21）。
+   * 手元のChromium・Firefox・WebKitでは再現しなかったため、環境に依存しない
+   * 「舞台の実寸から計算して入れる」方式に変える。
+   *
+   * ラシャ（内側）が縦：横＝2：1になるようにし、その外側にレールを足す。
+   */
+  const RAIL_PX = 14;
+
+  function fitTable() {
+    const table = $("poolTable");
+    const stage = document.querySelector(".lay-stage");
+    if (!table || !stage) return;
+
+    // 左右のボタン列と、その間の余白を引いた残りが台に使える幅
+    let used = 0;
+    Array.prototype.forEach.call(stage.querySelectorAll(".lay-side"), function (n) {
+      used += n.getBoundingClientRect().width;
+    });
+    const gaps = 12; // .lay-stage の gap 6px × 2か所
+    // 画面がまだ出ていないと幅が0になる。そのときは前の大きさを残す
+    // （0を元に計算すると台が最小まで縮んで、実機の「潰れ」と同じ見た目になる）
+    if (stage.clientWidth < 80) return;
+    const availW = Math.max(60, stage.clientWidth - used - gaps);
+    // 縦は画面の62%まで。これ以上取ると下の球の一覧が画面から出る
+    const availH = Math.max(140, Math.round(window.innerHeight * 0.62));
+
+    const feltW = Math.max(40, Math.min(
+      Math.floor(availW - RAIL_PX * 2),
+      Math.floor((availH - RAIL_PX * 2) / 2)
+    ));
+    table.style.width = (feltW + RAIL_PX * 2) + "px";
+    table.style.height = (feltW * 2 + RAIL_PX * 2) + "px";
+  }
+
   function renderTable() {
     renderMarks();
+    fitTable();
     const wrap = $("tableBalls");
     if (!wrap) return;
     UI.clear(wrap);

@@ -8,7 +8,7 @@
   4. 「一つ前に戻る」「全部どける」が台の左に縦に並ぶ
   5. 「一つ次に進む」が台の右にある／戻る・進むが両方効く
   6. 一言メモを保存して呼び出せる
-  7. 球の番号が白文字・太字・拡大されている
+  7. 球の番号が黒文字・太字・拡大されている（白地に黒枠の丸）
 
 実行: python _test/layout2_test.py
 """
@@ -119,7 +119,8 @@ with sync_playwright() as p:
       const s = getComputedStyle(e);
       return { color: s.color, weight: s.fontWeight, size: parseFloat(s.fontSize) };
     }""")
-    check(st["color"] == "rgb(255, 255, 255)", "配置図の番号が白文字", st["color"])
+    # 2026-08-21の指示で「白地に黒い枠線・黒文字の丸」に変えた（白文字ではなくなった）
+    check(st["color"] == "rgb(17, 17, 17)", "配置図の番号が黒文字", st["color"])
     check(int(st["weight"]) >= 700, "太字", st["weight"])
     check(st["size"] >= 15, "12px→15px以上に拡大", st["size"])
     pg.screenshot(path=os.path.join(SHOTS, "layout2.png"), full_page=True)

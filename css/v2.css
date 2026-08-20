@@ -587,3 +587,83 @@ button::after {
 .finish-stats .ss-sep {
   white-space: nowrap;
 }
+
+
+/* ============ 2026-08-21 の指示ぶん ============ */
+
+/* ---------- 配置図（練習配置） ---------- */
+
+/* 台の寸法は js/ui_layout.js の fitTable() が実測して入れる。
+   CSSだけで「高さ→幅」を出す書き方は実機で潰れたため（本人の指摘 2026-08-21）。
+   ここに書くのは色と枠（レール）だけにして、大きさの計算は持たせない */
+.pool-table {
+  /* ラシャは緑ではなくグレー（本人の指示 2026-08-21） */
+  background: rgb(125, 125, 125);
+  /* レール（茶色の枠）。--rail は js の RAIL_PX と同じ値にすること */
+  --rail: 14px;
+  border-width: var(--rail);
+  /* 大きさは JS が入れるので、CSS 側の計算は打ち消しておく */
+  height: auto;
+  aspect-ratio: auto;
+  max-width: none;
+}
+
+/* 目印の箱をレールまで広げる。
+   ポイント（ダイヤ）を緑のラシャではなくレールの上に置くため（本人の指示 2026-08-21） */
+.pt-marks {
+  inset: calc(-1 * var(--rail, 14px));
+}
+/* ダイヤはレールの上なので、地の茶色に映える白のままにする */
+.pt-dot {
+  width: 8px;
+  height: 8px;
+}
+.pt-dot.h { margin-left: -4px; }
+.pt-dot.v { margin-top: -4px; }
+
+/* ---------- ローテーション等の盤面つき種目 ---------- */
+
+/* スコアが1本の線に潰れて見えなくなっていたのを直す（本人の指摘 2026-08-21）。
+   盤面つきの種目ではスコアボードの高さを中身から決めているのに、
+   中のパネル（.panel-wrap）が flex-basis:0 のままで「高さ0」と数えられていた。
+   中身ぶんの高さを持たせる */
+#screenMatch.grid-mode .panel-wrap {
+  flex: 0 0 auto;
+}
+
+/* ---------- ボールの番号 ---------- */
+
+/* どのボールセットでも「円形・白地・黒い枠線・黒文字」に統一する
+   （本人の指示 2026-08-21）。
+   セットごとの三角・菱形の枠は、数字が小さくなって読みづらいのでやめる */
+.ball-btn .bb-num,
+.tb-ball .bb-num,
+.tray-ball .bb-num {
+  background: #ffffff;
+  color: #111111;
+  border: 2px solid #111111;
+  border-radius: 50%;
+  clip-path: none;
+  padding-top: 0;
+  text-shadow: none;
+  font-weight: 700;
+}
+/* 形の指定を打ち消して、どのセットも同じ丸にする */
+.ball-btn .bb-num.shape-triangle,
+.ball-btn .bb-num.shape-diamond {
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+}
+.tb-ball .bb-num.shape-triangle,
+.tb-ball .bb-num.shape-diamond {
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+}
+.tray-ball .bb-num.shape-triangle,
+.tray-ball .bb-num.shape-diamond {
+  width: 23px;
+  height: 23px;
+  font-size: 15px;
+}

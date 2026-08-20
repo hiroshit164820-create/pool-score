@@ -59,13 +59,14 @@ const BALL_SETS = {
   // Aramith Tournament BLACK（Duramith™ Technology）
   // 出典: https://aramith.com/story-behind-aramith-tournament-black-colours/
   //   3セット中このセットだけメーカーが番号ごとの色を文章で明記している
-  // ストライプの向きが通常と逆（色地に黒帯）
+  // ストライプは「真ん中が色、上下が黒」（本人の指示 2026-08-21）。
+  // 通常のセット（白地に色帯）と帯の向きは同じで、地の色だけが白ではなく黒
   aramith_black: {
     label: "アラミス ブラック",
-    note: "ストライプが「色地に黒帯」で通常と逆です。5番が薄紫、7番が薄茶です。",
+    note: "ストライプの上下が黒で、真ん中が色です。5番が薄紫、7番が薄茶です。",
     numberStyle: "circle",
-    stripeBase: "#141414", // 帯の色（このセットは帯が黒）
-    stripeOnBase: true, // true = 地が色で帯が黒
+    stripeBase: "#141414", // 地の色（このセットは地が黒）
+    stripeOnBase: false, // false = 地が stripeBase で帯が色（真ん中が色になる）
     colors: {
       1: "#f0c11b", // 黄
       2: "#1d3f7a", // 濃紺
