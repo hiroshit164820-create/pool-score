@@ -49,11 +49,25 @@ const HISTORY = (function () {
     });
   }
 
+  /** いま画面に出ているハウスゲーム（5-9 / 5-10 / カイルン）の記録 */
+  function visibleMoneyItems() {
+    const money = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
+    return money.filter(function (m) {
+      if (filter.gameId && m.gameId !== filter.gameId) return false;
+      // 対戦相手で絞っているときは、その人が出ている試合だけ
+      if (filter.opponent
+        && !(m.players || []).some(function (p) { return p.name === filter.opponent; })) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   /**
    * 絞り込みの選択肢を作り直す。
    * 記録に出てくる種目・名前だけを並べる（選んでも0件になる項目を出さない）。
    */
-  function renderFilters(all) {
+  function renderFilters(all, money) {
     const gameSel = $("histGameFilter");
     const oppSel = $("histOppFilter");
     if (!gameSel || !oppSel) return;
@@ -72,6 +86,20 @@ const HISTORY = (function () {
         if (nm && !seenName[nm]) {
           seenName[nm] = true;
           names.push(nm);
+        }
+      });
+    });
+    // ハウスゲーム（5-9 / 5-10 / カイルン）は対戦記録とは別の入れ物に保存している。
+    // 種目の絞り込みに出てこなかったので、ここからも集める（本人の指示 2026-08-21）
+    (money || []).forEach(function (m) {
+      if (m.gameId && !seenGame[m.gameId]) {
+        seenGame[m.gameId] = true;
+        games.push({ id: m.gameId, label: m.gameLabel || m.gameId });
+      }
+      (m.players || []).forEach(function (p) {
+        if (p.name && !seenName[p.name]) {
+          seenName[p.name] = true;
+          names.push(p.name);
         }
       });
     });
@@ -181,32 +209,33 @@ const HISTORY = (function () {
     const list = $("historyList");
     UI.clear(list);
     const all = STORE.listMatches();
-    renderFilters(all);
+    const allMoney = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
+    renderFilters(all, allMoney);
     const items = visibleItems();
+    const moneyItems = visibleMoneyItems();
 
     const filterOn = !!(filter.gameId || filter.opponent);
-    if (all.length && !items.length) {
+
+    // 記録がひとつも無い
+    if (!all.length && !allMoney.length) {
+      list.appendChild(
+        UI.el("div", { class: "empty" }, [
+          UI.el("p", { text: "まだ試合の記録がありません。" }),
+          UI.el("p", { text: "「新しい試合」から始めてください。" }),
+        ])
+      );
+      return;
+    }
+
+    // 記録はあるが、いまの絞り込みに合うものが無い。
+    // ハウスゲームだけが残る場合があるので、両方が空のときだけ出す
+    if (!items.length && !moneyItems.length) {
       list.appendChild(
         UI.el("div", { class: "empty" }, [
           UI.el("p", { text: "この条件に合う試合はありません。" }),
           UI.el("p", { text: "「絞り込みを外す」で全部に戻せます。" }),
         ])
       );
-      return;
-    }
-
-    if (!all.length) {
-      const money = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
-      if (!money.length) {
-        list.appendChild(
-          UI.el("div", { class: "empty" }, [
-            UI.el("p", { text: "まだ試合の記録がありません。" }),
-            UI.el("p", { text: "「新しい試合」から始めてください。" }),
-          ])
-        );
-        return;
-      }
-      renderMoneyResults(list);
       return;
     }
 
@@ -351,7 +380,7 @@ const HISTORY = (function () {
       list.appendChild(card);
     });
 
-    renderMoneyResults(list);
+    renderMoneyResults(list, moneyItems);
   }
 
   /**
@@ -404,27 +433,16 @@ const HISTORY = (function () {
   }
 
   /**
-   * 5-9 / 5-10 の結果。
+   * ハウスゲーム（5-9 / 5-10 / カイルン）の結果。
    *
    * 3人以上で遊ぶゲームでA/B2サイドの試合記録に収まらないため、
    * 別の場所（STORE.listMoneyResults）に最終結果だけを保存している。
-   * 絞り込みは種目だけ効かせる（対戦相手は「相手」という概念が無いため）。
+   * 絞り込みは render() 側で済ませたものを受け取る。
    */
-  function renderMoneyResults(list) {
-    if (!STORE.listMoneyResults) return;
-    let items = STORE.listMoneyResults();
-    if (filter.gameId) {
-      items = items.filter(function (m) { return m.gameId === filter.gameId; });
-    }
-    // 対戦相手で絞っているときは、その人が出ている試合だけ
-    if (filter.opponent) {
-      items = items.filter(function (m) {
-        return (m.players || []).some(function (p) { return p.name === filter.opponent; });
-      });
-    }
-    if (!items.length) return;
+  function renderMoneyResults(list, items) {
+    if (!items || !items.length) return;
 
-    list.appendChild(UI.el("div", { class: "section-title", text: "5-9 / 5-10 の記録" }));
+    list.appendChild(UI.el("div", { class: "section-title", text: "ハウスゲームの記録" }));
 
     items.forEach(function (m) {
       const card = UI.el("div", { class: "match-card" });
@@ -450,9 +468,12 @@ const HISTORY = (function () {
         );
       });
       card.appendChild(rows);
-      card.appendChild(
-        UI.el("div", { class: "mc-stats", text: m.racks + "ラック" })
-      );
+      // カイルンはラックで数えないので、0のときは出さない
+      if (m.racks) {
+        card.appendChild(
+          UI.el("div", { class: "mc-stats", text: m.racks + "ラック" })
+        );
+      }
 
       const foot = UI.el("div", { class: "mc-foot" });
       foot.appendChild(

@@ -59,7 +59,7 @@ const MATCH = (function () {
     // 画面の向きや高さが変わったら数字の大きさを取り直す
     // （横向きにすると使える高さが変わり、そのままだと数字が切れる）
     window.addEventListener("resize", function () {
-      if (match) fitScoreFont();
+      if (match) { syncMetaPlace(); fitScoreFont(); }
     });
 
     // スコア欄そのものがボタン。タップで1点（1ラック）加算し、
@@ -1068,6 +1068,7 @@ const MATCH = (function () {
     // 帯やボタンの出し入れで使える高さが変わるので、最後に数字を合わせる。
     // このときまだ配置が確定していないことがある（高さが0で返る）ので、
     // 描画が終わったフレームで測る
+    syncMetaPlace();
     fitScoreFont();
     requestAnimationFrame(fitScoreFont);
   }
@@ -1422,69 +1423,96 @@ const MATCH = (function () {
       return;
     }
 
+    // 記録するものは「押すと1回ぶん増える」形にそろえ、
+    // 3つとも各プレーヤーのパネルの脇に置く（本人の指示 2026-08-21）。
+    // どちらの記録になるのかを、置き場所そのもので示すため。
+    //
+    // instant: 押した時点でラック取得まで記録する（予約にしない）
+    // breakerOnly: ブレイクした側しか出せない記録。反対側は押せなくして
+    //              出しておく（回数は左右それぞれで読めるようにするため）
     const defs = [
-      // instant: 押した時点でラック取得まで記録する（予約にしない）
       { key: "masuwari", label: "マスワリ", show: base.hasMasuwari,
-        hint: "ブレイクして撞き切った", instant: true },
+        hint: "ブレイクして撞き切った", instant: true, breakerOnly: true },
       { key: "breakAce", label: "ブレイクエース", show: base.hasBreakAce,
-        hint: "ブレイクで直接入れた", instant: true },
-    ];
+        hint: "ブレイクで直接入れた", instant: true, breakerOnly: true },
+      { key: "safety", label: "セーフティ", show: base.safetyCallable,
+        hint: "わざと取りにくい形にした", instant: false, breakerOnly: false },
+    ].filter(function (d) { return d.show; });
 
     const st = reduceMatch(match);
     const breaker = st.breakSide || st.firstSide;
 
-    // ---- マスワリ・ブレイクエースはブレイク権のある側のパネル内に出す ----
-    // どちらの記録になるのかを、置き場所そのもので示す（本人の指示）
     ["A", "B"].forEach(function (sd) {
       const host = $("panelFlags" + sd);
+      const w = $("panelWrap" + sd);
       if (!host) return;
-      const instants = defs.filter(function (d) { return d.show && d.instant; });
-      // ブレイク権のある側だけに出す。両方に出すと押し間違える
-      const wrap = $("panelWrap" + sd);
-      if (sd !== breaker || !instants.length || st.winner) {
+      if (!defs.length) {
         host.hidden = true;
-        if (wrap) wrap.classList.remove("has-flags");
+        if (w) w.classList.remove("has-flags");
         return;
       }
+      defs.forEach(function (d) {
+        const stat = st.stats[sd] || {};
+        const n = stat[d.key] || 0;
+        // 決着後と、ブレイクしていない側のマスワリ・エースは押せなくする
+        const off = !!st.winner || (d.breakerOnly && sd !== breaker);
+        const btn = UI.el("button", {
+          type: "button",
+          class: (d.instant ? "flag-instant" : "safety-btn")
+            + " flag-count side-" + sd.toLowerCase(),
+          title: d.hint,
+          onclick: UI.guard(function () {
+            if (d.instant) recordRackWin(sd, { instantFlag: d.key });
+            else recordSafety(sd);
+          }),
+        }, [
+          UI.el("span", { class: "sf-name", text: d.label }),
+          UI.el("span", { class: "sf-count", text: String(n) }),
+        ]);
+        if (off) btn.disabled = true;
+        host.appendChild(btn);
+      });
       host.hidden = false;
-      if (wrap) wrap.classList.add("has-flags");
-      instants.forEach(function (d) {
-        host.appendChild(
-          UI.el("button", {
-            type: "button",
-            class: "flag-instant",
-            title: d.hint,
-            text: d.label,
-            onclick: UI.guard(function () {
-              recordRackWin(sd, { instantFlag: d.key });
-            }),
-          })
-        );
-      });
+      if (w) w.classList.add("has-flags");
     });
-
-    // ---- セーフティは人ごとの回数カウントにする（本人の指示） ----
-    if (base.safetyCallable) {
-      wrap.appendChild(UI.el("div", { class: "safety-title", text: "セーフティ" }));
-      const row = UI.el("div", { class: "safety-row" });
-      ["A", "B"].forEach(function (sd) {
-        const n = (st.stats[sd] && st.stats[sd].safety) || 0;
-        row.appendChild(
-          UI.el("button", {
-            type: "button",
-            class: "safety-btn side-" + sd.toLowerCase(),
-            onclick: UI.guard(function () { recordSafety(sd); }),
-          }, [
-            UI.el("span", { class: "sf-name", text: sideName(sd) }),
-            UI.el("span", { class: "sf-count", text: String(n) }),
-          ])
-        );
-      });
-      wrap.appendChild(row);
-    }
 
     // 追加の記録項目が無い種目では、この欄ごと出さない。
     // 「ありません」と書くだけの行は場所を取るだけになる
+  }
+
+  /**
+   * 横向きのときだけ、ラック数とイニング数を上の帯へ移す（本人の指示 2026-08-21）。
+   *
+   * 横向きは高さが足りず、帯が1本増えるだけでスコアが小さくなる。
+   * 上の帯（種目名の行）には横の余白が余っているので、そこへ寄せる。
+   * 縦向きに戻したら元の場所へ戻す。
+   */
+  const LANDSCAPE_Q = "(orientation: landscape) and (max-height: 560px)";
+  // 移すのはラック数とイニング数だけ。マスワリの合計は元の場所に残す
+  const META_MOVE = ["rackInfo", "inningInfo"];
+
+  function syncMetaPlace() {
+    // 上の帯に作る置き場も .meta-chips なので、元の場所を取り違えないよう
+    // in-topbar が付いていないほうを指す
+    const chips = document.querySelector("#screenMatch .meta-chips:not(.in-topbar)");
+    const topbar = document.querySelector("#screenMatch .topbar");
+    if (!chips || !topbar) return;
+
+    // 上の帯の中の置き場。無ければ作る（中断ボタンの手前に置く）
+    let slot = $("topbarMeta");
+    if (!slot) {
+      slot = UI.el("span", { id: "topbarMeta", class: "meta-chips in-topbar" });
+      topbar.insertBefore(slot, topbar.lastElementChild);
+    }
+
+    const wide = window.matchMedia && window.matchMedia(LANDSCAPE_Q).matches;
+    const to = wide ? slot : chips;
+    META_MOVE.forEach(function (id) {
+      const node = $(id);
+      // 元の並び順（ラック → イニング）のまま入れ直す
+      if (node && node.parentNode !== to) to.appendChild(node);
+    });
+    slot.hidden = !wide;
   }
 
   /**

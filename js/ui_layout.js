@@ -16,6 +16,12 @@ const LAYOUT = (function () {
 
   // いま台に乗っている球（{ n: 番号(0=手玉), x, y }）
   let balls = [];
+  // 台に引いた直線（{ x1, y1, x2, y2 }）。球と同じく台に対する割合で持つ
+  let lines = [];
+  // 線を引くモード。入っている間は球を掴めない（指がどちらに効くか分からなくなるため）
+  let drawMode = false;
+  // 指を離す前の線。確定していないので lines には入れない
+  let preview = null;
   // 編集中の配置。保存済みを開いたときだけ id が入る
   let editingId = null;
   let editingName = "";
@@ -94,6 +100,21 @@ const LAYOUT = (function () {
     const actions = screen.querySelector(".layout-actions");
     if (actions && !actions.querySelector("button")) actions.hidden = true;
 
+    // 「直線を引く」の切り替え。球の一覧の上に置く。
+    // 台の左右の列は細く、ここに置くと文字が読めなくなるため
+    const hint = $("layoutHint");
+    if (hint && hint.parentNode && !$("layoutDrawBtn")) {
+      const tools = UI.el("div", { class: "lay-tools" }, [
+        UI.el("button", {
+          type: "button", id: "layoutDrawBtn", class: "ghost",
+          text: "直線を引く",
+          "aria-pressed": "false",
+          onclick: function () { setDrawMode(!drawMode); },
+        }),
+      ]);
+      hint.parentNode.insertBefore(tools, hint);
+    }
+
     // 一言メモ（球の一覧のすぐ下）
     const tray = $("ballTray");
     if (tray && tray.parentNode && !$("layoutMemo")) {
@@ -129,9 +150,12 @@ const LAYOUT = (function () {
     syncUndo();
     const sub = $("layoutSub");
     if (sub) {
+      const bits = [];
+      if (balls.length) bits.push(balls.length + "個");
+      if (lines.length) bits.push("線 " + lines.length + "本");
       sub.textContent = editingName
         ? editingName + " を編集中"
-        : (balls.length ? balls.length + "個" : "球を置いてください");
+        : (bits.length ? bits.join("　") : "球を置いてください");
     }
   }
 
@@ -146,7 +170,18 @@ const LAYOUT = (function () {
   const HISTORY_MAX = 30;
 
   function snapshot() {
-    return balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
+    return {
+      balls: balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; }),
+      lines: lines.map(function (l) {
+        return { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 };
+      }),
+    };
+  }
+
+  /** 控えから盤面を戻す */
+  function restore(snap) {
+    balls = (snap && snap.balls) ? snap.balls : [];
+    lines = (snap && snap.lines) ? snap.lines : [];
   }
 
   /** 球の直径（px）。css/v2.css の .tb-ball と揃える */
@@ -175,7 +210,7 @@ const LAYOUT = (function () {
       return;
     }
     future.push(snapshot());
-    balls = past.pop();
+    restore(past.pop());
     render();
     UI.toast("一つ前に戻しました。");
   }
@@ -186,7 +221,7 @@ const LAYOUT = (function () {
       return;
     }
     past.push(snapshot());
-    balls = future.pop();
+    restore(future.pop());
     render();
     UI.toast("一つ次に進みました。");
   }
@@ -281,6 +316,7 @@ const LAYOUT = (function () {
   function renderTable() {
     renderMarks();
     fitTable();
+    renderLines();
     const wrap = $("tableBalls");
     if (!wrap) return;
     UI.clear(wrap);
@@ -300,6 +336,177 @@ const LAYOUT = (function () {
       bindDrag(node, i);
       wrap.appendChild(node);
     });
+  }
+
+  /* ---------- 直線（ボールの軌道） ---------- */
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  function svgEl(name, attrs) {
+    const node = document.createElementNS(SVG_NS, name);
+    Object.keys(attrs || {}).forEach(function (k) {
+      node.setAttribute(k, String(attrs[k]));
+    });
+    return node;
+  }
+
+  function pct(v) { return (v * 100) + "%"; }
+
+  /**
+   * 引いた直線を描く。
+   *
+   * 球（z-index 2）より下、台の目印より上に敷く。
+   * ラシャの色に負けないよう、濃い縁取りの上に明るい線を重ねる。
+   * 線そのものは指に反応させず（pointer-events: none）、
+   * どの線を押したかは JS 側で距離を測って決める。重なった線でも
+   * 「一番近い1本」だけが消えるようにするため。
+   */
+  function renderLines() {
+    const table = $("poolTable");
+    if (!table) return;
+    let svg = table.querySelector(".pt-lines");
+    if (!svg) {
+      svg = svgEl("svg", { class: "pt-lines" });
+      table.insertBefore(svg, $("tableBalls") || null);
+      bindDraw(table);
+    }
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const all = lines.concat(preview ? [preview] : []);
+    all.forEach(function (l, i) {
+      const isPreview = !!preview && i === all.length - 1;
+      const pos = { x1: pct(l.x1), y1: pct(l.y1), x2: pct(l.x2), y2: pct(l.y2) };
+      svg.appendChild(svgEl("line", {
+        class: "ptl-edge", "stroke-linecap": "round",
+        x1: pos.x1, y1: pos.y1, x2: pos.x2, y2: pos.y2,
+      }));
+      svg.appendChild(svgEl("line", {
+        class: "ptl-main" + (isPreview ? " is-preview" : ""),
+        "stroke-linecap": "round",
+        x1: pos.x1, y1: pos.y1, x2: pos.x2, y2: pos.y2,
+      }));
+    });
+  }
+
+  /** 指の位置を台に対する割合（0〜1）にする */
+  function ratioOf(e, table) {
+    const rect = table.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
+    };
+  }
+
+  /** 点と線分の距離（px）。押した線を選ぶのに使う */
+  function distToLine(px, py, l, rect) {
+    const x1 = l.x1 * rect.width, y1 = l.y1 * rect.height;
+    const x2 = l.x2 * rect.width, y2 = l.y2 * rect.height;
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 ? ((px - x1) * dx + (py - y1) * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const cx = x1 + t * dx, cy = y1 + t * dy;
+    return Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+  }
+
+  /** 押した場所に一番近い線を消す。指の幅ぶん（16px）まで拾う */
+  function removeLineAt(pt, rect) {
+    const px = pt.x * rect.width, py = pt.y * rect.height;
+    let hit = -1;
+    let best = 16;
+    lines.forEach(function (l, i) {
+      const d = distToLine(px, py, l, rect);
+      if (d < best) { best = d; hit = i; }
+    });
+    if (hit < 0) {
+      UI.toast("台を指でなぞると線が引けます。", "warn");
+      return;
+    }
+    remember();
+    lines.splice(hit, 1);
+    render();
+    UI.toast("線を消しました。「一つ前に戻る」で戻せます。");
+  }
+
+  /**
+   * 台をなぞって直線を引けるようにする。
+   *
+   * 「線を引く」に入っている間だけ効く。ふだんは球を動かすほうを優先する。
+   * ほとんど動かさずに離したときは、その場所の線を消す操作にする
+   * （球と同じ作法にそろえる）。
+   */
+  function bindDraw(table) {
+    let from = null;
+
+    table.addEventListener("pointerdown", function (e) {
+      if (!drawMode) return;
+      e.preventDefault();
+      from = ratioOf(e, table);
+      preview = { x1: from.x, y1: from.y, x2: from.x, y2: from.y };
+      try { table.setPointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
+    });
+
+    table.addEventListener("pointermove", function (e) {
+      if (!drawMode || !from) return;
+      const p = ratioOf(e, table);
+      preview = { x1: from.x, y1: from.y, x2: p.x, y2: p.y };
+      renderLines();
+    });
+
+    function end(e) {
+      if (!from) return;
+      const p = ratioOf(e, table);
+      const rect = table.getBoundingClientRect();
+      try { table.releasePointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
+      const start = from;
+      from = null;
+      preview = null;
+      const dx = (p.x - start.x) * rect.width;
+      const dy = (p.y - start.y) * rect.height;
+      if (Math.sqrt(dx * dx + dy * dy) < 10) {
+        // ほとんど動いていない = 押しただけ。その場所の線を消す
+        renderLines();
+        removeLineAt(p, rect);
+        return;
+      }
+      remember();
+      lines.push({ x1: start.x, y1: start.y, x2: p.x, y2: p.y });
+      render();
+      UI.toast("線を引きました。線を押すと消せます。");
+    }
+
+    table.addEventListener("pointerup", end);
+    table.addEventListener("pointercancel", function () {
+      from = null;
+      preview = null;
+      renderLines();
+    });
+  }
+
+  /** 「直線を引く」の入り切り */
+  function setDrawMode(on) {
+    drawMode = !!on;
+    const btn = $("layoutDrawBtn");
+    if (btn) {
+      btn.textContent = drawMode ? "線を引くのをやめる" : "直線を引く";
+      btn.className = drawMode ? "primary" : "ghost";
+      btn.setAttribute("aria-pressed", drawMode ? "true" : "false");
+    }
+    // 線を引く間は球を掴めないようにする
+    const wrap = $("tableBalls");
+    if (wrap) wrap.style.pointerEvents = drawMode ? "none" : "";
+    const table = $("poolTable");
+    if (table) table.classList.toggle("drawing", drawMode);
+    const hint = $("layoutHint");
+    if (hint) {
+      hint.textContent = drawMode
+        ? "台を指でなぞると直線が引けます。引いた線を押すと消せます。"
+        : "下の番号を押すと台に足せます。";
+    }
+    if (!drawMode) {
+      preview = null;
+      renderLines();
+    }
   }
 
   /**
@@ -474,9 +681,10 @@ const LAYOUT = (function () {
   }
 
   function clearAll() {
-    if (!balls.length) return;
+    if (!balls.length && !lines.length) return;
     remember();
     balls = [];
+    lines = [];
     editingId = null;
     editingName = "";
     render();
@@ -492,7 +700,7 @@ const LAYOUT = (function () {
   }
 
   function save() {
-    if (!balls.length) {
+    if (!balls.length && !lines.length) {
       UI.toast("先に球を置いてください。", "warn");
       return;
     }
@@ -506,6 +714,7 @@ const LAYOUT = (function () {
       id: editingId,
       name: (name || "").trim() || "名前なし",
       balls: balls,
+      lines: lines,
       note: memoValue(),
     });
     if (!saved) {
@@ -542,7 +751,11 @@ const LAYOUT = (function () {
       const row = UI.el("div", { class: "layout-item" }, [
         UI.el("div", { class: "li-main" }, [
           UI.el("div", { class: "li-name", text: l.name }),
-          UI.el("div", { class: "li-sub", text: l.balls.length + "個" }),
+          UI.el("div", {
+            class: "li-sub",
+            text: l.balls.length + "個"
+              + ((l.lines && l.lines.length) ? "　線 " + l.lines.length + "本" : ""),
+          }),
           l.note ? UI.el("div", { class: "li-note", text: l.note }) : null,
         ]),
         UI.el("button", {
@@ -575,6 +788,10 @@ const LAYOUT = (function () {
       return;
     }
     balls = l.balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
+    // 線を入れる前に保存した配置には lines が無い
+    lines = (l.lines || []).map(function (t) {
+      return { x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 };
+    });
     editingId = l.id;
     editingName = l.name;
     const memo = $("layoutMemo");

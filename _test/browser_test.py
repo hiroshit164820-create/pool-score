@@ -141,9 +141,10 @@ def run():
         check(panel_h >= 120, "スコア欄のタップ領域が120px以上ある", panel_h)
 
         # 種目別ボタン。
-        # マスワリ・ブレイクエースはブレイク権のある側のパネル内、
-        # セーフティは人ごとの回数カウントに分かれている
-        panel_flags = page.locator(".panel-flags button").all_text_contents()
+        # マスワリ・ブレイクエース・セーフティは、どれも回数のカウント式で
+        # 各プレーヤーのパネルの脇に並ぶ（本人の指示 2026-08-21）。
+        # 文字はボタンの中で「名前＋回数」になるので、名前の欄だけを見る
+        panel_flags = page.locator(".panel-flags button .sf-name").all_text_contents()
         check("マスワリ" in panel_flags, "マスワリボタンがある", panel_flags)
         check("ブレイクエース" in panel_flags, "ブレイクエースボタンがある", panel_flags)
         check(page.locator(".safety-btn").count() == 2,
@@ -284,7 +285,7 @@ def run():
         page.fill("#inNameB", "鈴木")
         page.click("#startMatchBtn")
         page.wait_for_timeout(400)
-        labels10 = page.locator(".panel-flags button").all_text_contents()
+        labels10 = page.locator(".panel-flags button .sf-name").all_text_contents()
         check("ブレイクエース" not in labels10, "10ボールにブレイクエースボタンが出ない", labels10)
         check(page.locator(".safety-btn").count() == 0,
               "10ボールにセーフティは出ない（規程で廃止）", page.locator(".safety-btn").count())

@@ -548,7 +548,20 @@ const PLAYERS = (function () {
         st.jpaPoints + "P（" + st.jpaMatches + "試合・1試合平均 "
         + (Math.round((st.jpaPoints / st.jpaMatches) * 10) / 10) + "P）"]);
     }
-    body.appendChild(statTable("成績", main));
+    body.appendChild(statTable("成績（総合）", main));
+
+    // 一般種目とJPAの内訳。点の付け方も勝ち方も違うので分けて出す
+    // （本人の指示 2026-08-21）。総合はそのまま上に残してある
+    const split = [];
+    function splitRow(label, b) {
+      if (!b || !b.matches) return;
+      split.push([label,
+        b.wins + "勝" + b.losses + "敗（" + b.matches + "試合・勝率 "
+        + pct(b.winRate) + "）"]);
+    }
+    splitRow("一般種目", st.general);
+    splitRow("JPA", st.jpa);
+    if (split.length) body.appendChild(statTable("一般種目とJPAの内訳", split));
 
     // ショットクロックの平均タイム
     if (st.shotClockShots) {
@@ -575,6 +588,14 @@ const PLAYERS = (function () {
       return [g.label, g.matches + "試合 " + g.wins + "勝（" + Math.round((g.wins / g.matches) * 100) + "%）"];
     });
     if (byGame.length) body.appendChild(statTable("種目別", byGame));
+
+    // パートナー別（ダブルスで組んだ相手）
+    const byPartner = Object.keys(st.partners).map(function (k) {
+      const pt = st.partners[k];
+      return [k, pt.wins + "勝" + pt.losses + "敗（" + pt.matches + "試合・勝率 "
+        + pct(pt.winRate) + "）"];
+    });
+    if (byPartner.length) body.appendChild(statTable("パートナー別", byPartner));
 
     // 対戦相手別
     const byOpp = Object.keys(st.opponents).map(function (k) {

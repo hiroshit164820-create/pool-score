@@ -22,6 +22,13 @@ os.makedirs(SHOTS, exist_ok=True)
 results = []
 
 
+def click_flag(pg, side, label):
+    """マスワリ等のボタンを名前で選んで押す。
+    ボタンの文字が「名前＋回数」になったので text-is では選べない"""
+    pg.locator("#panelFlags" + side + " button").filter(
+        has=pg.locator(".sf-name", has_text=label)).first.click()
+
+
 def check(cond, label, detail=""):
     results.append((bool(cond), label, detail))
     print(("OK  " if cond else "NG  ") + label + (("  -> " + str(detail)) if detail and not cond else ""))
@@ -125,9 +132,14 @@ with sync_playwright() as p:
     check(pg.locator("#panelFlags" + breaker + " button").count() >= 1,
           "ブレイク側のパネル内にマスワリのボタンがある")
     other = "B" if breaker == "A" else "A"
-    check(pg.locator("#panelFlags" + other).get_attribute("hidden") is not None,
-          "ブレイク権の無い側には出さない")
-    pg.click('#panelFlags' + breaker + ' button:text-is("マスワリ")')
+    # 2026-08-21 の指示で、記録のボタンは両側に出すようになった。
+    # ブレイクしていない側は押せなくして、回数だけ読めるようにしてある
+    check(pg.locator("#panelFlags" + other + " button").count() >= 1,
+          "反対側にもボタンは出る（回数を読ませるため）")
+    check(pg.locator("#panelFlags" + other + ' button').filter(
+              has=pg.locator(".sf-name", has_text="マスワリ")).first.is_disabled(),
+          "ブレイク権の無い側のマスワリは押せない")
+    click_flag(pg, breaker, "マスワリ")
     pg.wait_for_timeout(500)
     after = pg.text_content("#score" + breaker)
     check(after == "1", "押した時点でブレイク側のスコアが増える", after)
@@ -146,7 +158,7 @@ with sync_playwright() as p:
     # ================================================================
     section("指示9: ブレイクエースも同じ")
     breaker = pg.evaluate(BREAKER)
-    pg.click('#panelFlags' + breaker + ' button:text-is("ブレイクエース")')
+    click_flag(pg, breaker, "ブレイクエース")
     pg.wait_for_timeout(500)
     check(pg.text_content("#score" + breaker) == "1", "押した時点でスコアが増える",
           pg.text_content("#score" + breaker))
@@ -164,7 +176,7 @@ with sync_playwright() as p:
         if pg.is_visible("#finishModal"):
             break
         brk = pg.evaluate(BREAKER)
-        pg.click('#panelFlags' + brk + ' button:text-is("マスワリ")')
+        click_flag(pg, brk, "マスワリ")
         pg.wait_for_timeout(450)
     sides = [w["side"] for w in pg.evaluate(RACK_WINS)]
     check(sides == ["A", "B", "A", "B"], "交互ブレイクでは記録される側が入れ替わる", sides)
@@ -200,7 +212,7 @@ with sync_playwright() as p:
         if pg.is_visible("#finishModal"):
             break
         brk = pg.evaluate(BREAKER)
-        pg.click('#panelFlags' + brk + ' button:text-is("マスワリ")')
+        click_flag(pg, brk, "マスワリ")
         pg.wait_for_timeout(450)
     if pg.is_visible("#finishModal"):
         pg.click("#confirmFinishBtn")

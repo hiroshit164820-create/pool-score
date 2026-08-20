@@ -118,11 +118,12 @@ const CSVOUT = (function () {
         m.note || "",
       ]);
     });
-    // 5-9 / 5-10 は3人以上で遊ぶため列の形が違う。同じ表の下に続けて書く
+    // ハウスゲーム（5-9 / 5-10 / カイルン）は3人以上で遊ぶため列の形が違う。
+    // 同じ表の下に続けて書く
     const money = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
     if (money.length) {
       rows.push([]);
-      rows.push(["5-9 / 5-10 の記録"]);
+      rows.push(["ハウスゲームの記録"]);
       rows.push(["日時", "種目", "ラック数", "順位", "W-L", "プレーヤー", "獲得スコア", "ハンデ球"]);
       money.forEach(function (m) {
         (m.players || []).forEach(function (p, i) {

@@ -188,6 +188,12 @@ const STORE = (function () {
       balls: (layout.balls || []).map(function (b) {
         return { n: b.n, x: Math.max(0, Math.min(1, b.x)), y: Math.max(0, Math.min(1, b.y)) };
       }),
+      // lines: [{ x1, y1, x2, y2 }] 球の軌道を示す直線。位置は球と同じ割合で持つ。
+      // 線を入れる前に保存した配置には無いので、読むときは空として扱う
+      lines: (layout.lines || []).map(function (l) {
+        const c = function (v) { return Math.max(0, Math.min(1, Number(v) || 0)); };
+        return { x1: c(l.x1), y1: c(l.y1), x2: c(l.x2), y2: c(l.y2) };
+      }),
       note: String(layout.note || ""),
       createdAt: layout.createdAt || now,
       updatedAt: now,
@@ -408,6 +414,12 @@ const STORE = (function () {
       shotClockViolations: 0, shotClockExtensions: 0,
       byGame: {},
       opponents: {},
+      // 一般種目とJPAは点の付け方も勝ち方も違うので、勝敗を分けて数える
+      // （本人の指示 2026-08-21）
+      general: { matches: 0, wins: 0, losses: 0 },
+      jpa: { matches: 0, wins: 0, losses: 0 },
+      // ダブルスで組んだ相手ごとの成績
+      partners: {},
     };
 
     listMatches().forEach(function (idx) {
@@ -428,6 +440,26 @@ const STORE = (function () {
       out.matches++;
       if (r.winner === side) out.wins++;
       else if (r.winner) out.losses++;
+
+      // 一般種目とJPAの内訳。種目IDの頭が jpa_ のものをJPAとして数える
+      const bucket = /^jpa_/.test(m.gameId) ? out.jpa : out.general;
+      bucket.matches++;
+      if (r.winner === side) bucket.wins++;
+      else if (r.winner) bucket.losses++;
+
+      // ダブルスで組んだ相手（自分と同じ側の、自分以外の人）
+      const mine = m.sides[side === "A" ? 0 : 1];
+      const memberNames = mine.members || [];
+      (mine.playerIds || []).forEach(function (pid, i) {
+        if (pid === playerId) return;
+        const nm = memberNames[i] || (findPlayerById(pid) || {}).name;
+        if (!nm) return;
+        const pt = out.partners[nm] || { matches: 0, wins: 0, losses: 0 };
+        pt.matches++;
+        if (r.winner === side) pt.wins++;
+        else if (r.winner) pt.losses++;
+        out.partners[nm] = pt;
+      });
 
       out.racks += (r.racks ? r.racks.A + r.racks.B : 0);
       out.rackWins += (r.racks ? r.racks[side] : 0);
@@ -467,6 +499,13 @@ const STORE = (function () {
     });
 
     out.winRate = out.matches ? out.wins / out.matches : null;
+    out.general.winRate = out.general.matches
+      ? out.general.wins / out.general.matches : null;
+    out.jpa.winRate = out.jpa.matches ? out.jpa.wins / out.jpa.matches : null;
+    Object.keys(out.partners).forEach(function (k) {
+      const pt = out.partners[k];
+      pt.winRate = pt.matches ? pt.wins / pt.matches : null;
+    });
     out.rackWinRate = out.racks ? out.rackWins / out.racks : null;
     out.masuwariRate = out.breaks ? out.masuwari / out.breaks : null;
     out.avgShotSec = out.shotClockShots ? out.shotClockTotalSec / out.shotClockShots : null;

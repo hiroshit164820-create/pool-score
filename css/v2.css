@@ -1176,3 +1176,242 @@ button::after {
 .match-card .mc-jpa .mc-jpa-label {
   justify-self: start;
 }
+
+/* ============ 配置図の直線（ボールの軌道） ============ */
+/* 「どこへ出したいか」を配置図に描けるようにする（本人の指示 2026-08-21）。
+   球（z-index 2）より下に敷く。ラシャの色に負けないよう、
+   濃い縁取りの上に明るい線を重ねる。
+   線そのものは指に反応させない（どの線を押したかは
+   js/ui_layout.js が距離を測って決める。重なった線を1本ずつ消すため） */
+.pt-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+.ptl-edge {
+  stroke: #14140f;
+  stroke-width: 6;
+}
+.ptl-main {
+  stroke: #ffe14d;
+  stroke-width: 3;
+}
+/* 指を離す前の線は破線にして、まだ確定していないと分かるようにする */
+.ptl-main.is-preview {
+  stroke-dasharray: 7 5;
+}
+
+/* 線を引いている間は、なぞる場所だと分かるようにする */
+.pool-table.drawing {
+  cursor: crosshair;
+}
+
+/* 「直線を引く」の切り替え。台の左右の列は細いので球の一覧の上に置く */
+.lay-tools {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+}
+.lay-tools button {
+  flex: 1 1 auto;
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* 三角の番号枠（ダイナスフィア プラチナム）は、枠のちょうど真ん中に置くと
+   上に寄って見える。試合画面（.ball-btn）と同じだけ下げてそろえる */
+.tb-ball .bb-num.shape-triangle,
+.tray-ball .bb-num.shape-triangle {
+  padding-top: 3px;
+}
+
+/* ============ マスワリ・エース・セーフティを各プレーヤーの側へ ============ */
+/* 3つとも「押すと1回ぶん増える」形にそろえ、記録する人のパネルの側に置く
+   （本人の指示 2026-08-21）。
+   数が3つに増えたので、パネルに重ねる置き方はやめる（重ねるとスコアが隠れる） */
+.panel-flags {
+  position: static;
+  transform: none;
+  width: auto;
+  flex-direction: row;
+  gap: 6px;
+  z-index: auto;
+}
+/* 重ねなくなったので、右に逃げの余白（style.css の 104〜108px）は要らない。
+   縦の短い端末向けの規則（@media max-height:820px）でも上書きされるため、
+   同じだけ細かい書き方にして打ち消す */
+.panel-wrap.has-flags .score-panel,
+#screenMatch .panel-wrap.has-flags .score-panel {
+  padding-right: 10px;
+}
+/* 名前を上、回数を下の2段にする。
+   横1列にすると「ブレイクエース」が入らず「ブレイ…」と切れる */
+.panel-flags button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+/* ボタン自体に「セーフティ」と書くようになったので、飾りの札は出さない */
+.panel-flags .safety-btn::before {
+  content: none;
+}
+/* 名前は省略させない。「ブレイクエース」まで全部読めるようにする */
+.panel-flags .sf-name {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+.panel-flags .sf-count {
+  flex: 0 0 auto;
+  min-width: 28px;
+  padding: 0 4px;
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  text-align: center;
+  background: var(--coin);
+  border: 2px solid var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.panel-flags .side-a .sf-count { background: #cfe3ff; }
+.panel-flags .side-b .sf-count { background: #ffd9cc; }
+/* ブレイクしていない側のマスワリ・エースは押せない。
+   回数は読ませたいので消さず、薄くして「いまは押せない」と分かるようにする */
+.panel-flags button[disabled] {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+/* ============ 横向きのスコアボード（本人の指示 2026-08-21） ============ */
+/* ・スコアを正方形に近い大きな枠にして、数字も大きくする
+   ・マスワリ・エース・セーフティはスコアの横（各プレーヤーの側）に縦に並べる
+   ・ラック数とイニング数は上の帯へ（js/ui_match.js の syncMetaPlace）
+   ・ブレイクの帯は出さず、パネルの中の BREAK の札で示す
+   上に同じ条件のブロックがあるので、こちらを後に置いて上書きする */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* 余っている高さをスコアに使い切る */
+  #screenMatch .scoreboard {
+    flex: 1 1 auto;
+    align-items: stretch;
+    min-height: 0;
+  }
+  /* 枠の中は「スコア | 記録のボタン」の横並びにする */
+  #screenMatch .panel-wrap {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    min-height: 0;
+  }
+  /* 1行に潰していたのをやめ、名前の下に大きな数字を置く形に戻す */
+  #screenMatch .score-panel {
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    min-height: 0;
+    padding: 6px 10px;
+  }
+  /* 数字の大きさは js/ui_match.js の fitScoreFont が枠を実測して決める。
+     ここは変数が無いときの控え */
+  #screenMatch .score-panel .val {
+    font-size: var(--val-size, 48px);
+  }
+  #screenMatch .score-panel .val-row {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  /* 記録のボタンはスコアの右に縦に並べる */
+  #screenMatch .panel-flags {
+    order: 0;
+    flex: 0 0 92px;
+    width: 92px;
+    flex-direction: column;
+    margin-top: 0;
+    gap: 4px;
+  }
+  #screenMatch .panel-flags button {
+    flex: 1 1 0;
+    min-height: 44px;
+    gap: 1px;
+    font-size: 11px;
+  }
+  #screenMatch .panel-flags .sf-name {
+    font-size: 11px;
+  }
+  /* ブレイクの帯（.break-banner）は 2026-08-20 の指示で縦横とも出していない。
+     ブレイク権はパネルの中の BREAK の札で示す（下のとおり枠を付けて目立たせる） */
+  #screenMatch .score-panel .breakmark {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 2px 5px;
+    background: var(--coin);
+    border: 2px solid var(--ink);
+    width: auto;
+  }
+  /* 名前は印のぶんを引いた残りを全部使う（「た」だけになっていた） */
+  #screenMatch .score-panel .sp-head {
+    align-self: stretch;
+  }
+  #screenMatch .score-panel .name {
+    flex: 1 1 auto;
+    font-size: 17px;
+  }
+  /* 上の帯へ移したラック数・イニング数。
+     帯は濃い色なので、そのままだと字が沈んで読めない。
+     コインの色の札にして、種目名との間も空ける */
+  #screenMatch .topbar .meta-chips.in-topbar {
+    margin-left: auto;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+  #screenMatch .topbar .meta-chips.in-topbar > span {
+    padding: 3px 8px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink);
+    background: var(--coin);
+    border: 2px solid var(--ink);
+    white-space: nowrap;
+  }
+  #screenMatch .topbar .meta-chips.in-topbar > span[hidden] {
+    display: none;
+  }
+  /* 種目名は帯の中で縮む側にする（ラック数は必ず読ませる） */
+  #screenMatch .topbar > div:first-child {
+    min-width: 0;
+    overflow: hidden;
+  }
+}
+
+/* 盤面のある種目（ローテーション・14-1）は縦に余裕が無い。
+   記録のボタンをスコアの下に置くと、その高さぶん盤面が押し下げられて
+   11〜15番のボタンが画面の外に出る（layout_fit_test で検出）。
+   スコアの右横に置いて、盤面の高さを削らないようにする */
+#screenMatch.grid-mode .panel-wrap {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+}
+#screenMatch.grid-mode .panel-flags {
+  flex: 0 0 96px;
+  width: 96px;
+  flex-direction: column;
+}
+#screenMatch.grid-mode .panel-flags button {
+  flex: 1 1 auto;
+  min-height: 44px;
+}

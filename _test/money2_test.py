@@ -264,7 +264,7 @@ with sync_playwright() as p:
     pg.click("#tabHistory")
     pg.wait_for_timeout(500)
     htxt = pg.inner_text("#historyList")
-    check("5-9 / 5-10 の記録" in htxt, "履歴に5-9の欄が出る", htxt[:120])
+    check("ハウスゲームの記録" in htxt, "履歴に5-9の欄が出る", htxt[:120])
     check("タイラ" in htxt and "岸川" in htxt, "参加者が出る", htxt[:200])
     mwl = pg.eval_on_selector_all(".money-result .mc-wl", "e => e.map(x => x.textContent)")
     check(mwl[:2] == ["W", "L"], "W-Lが出る", mwl)
@@ -274,7 +274,7 @@ with sync_playwright() as p:
     path = os.path.join(SHOTS, "history2.csv")
     dl.value.save_as(path)
     text = io.open(path, "rb").read().decode("utf-8-sig")
-    check("5-9 / 5-10 の記録" in text, "CSVにも5-9の記録が入る", text[-200:])
+    check("ハウスゲームの記録" in text, "CSVにも5-9の記録が入る", text[-200:])
     check("獲得スコア" in text, "獲得スコアの列がある", text[-200:])
 
     section("JSエラー")
