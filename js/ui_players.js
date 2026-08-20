@@ -762,8 +762,9 @@ const PLAYERS = (function () {
       rows.push(["最大連続得点",
         h.maxRun === null ? "記録がありません（2026-08-21以降の試合から）" : h.maxRun + "点"]);
     } else {
+      // ブレイクエースは 5-9 / 5-10 に入力の手立てが無く常に0になるため出さない
+      // （本人の指示 2026-08-21：行ごと消す）
       rows.push(["マスワリ数／率", cntRate(h.masuwari, h.racks)]);
-      rows.push(["ブレイクエース数／率", cntRate(h.breakAce, h.racks)]);
     }
     // 各種目の獲得得点履歴（新しい順・多いときは直近20回まで）
     const list = h.scores.slice(0, 20).map(function (x) {

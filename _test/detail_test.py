@@ -309,6 +309,17 @@ with sync_playwright() as p:
     check(house.get("money_9ball", {}).get("plays") == 2, "5-9は2回ぶん",
           house.get("money_9ball"))
     check("5-9" in txt, "5-9の節がある")
+    # 5-9 / 5-10 はブレイクエースを入力する手立てが無く常に0になるため、行ごと消した
+    # （本人の指示 2026-08-21）
+    seg9 = pg.evaluate("""() => {
+      const heads = [...document.querySelectorAll('.detail-card .dc-game')];
+      const h = heads.find(e => e.textContent.indexOf('5-9') >= 0);
+      return h && h.nextElementSibling ? h.nextElementSibling.innerText : null;
+    }""")
+    check(seg9 is not None, "5-9の節を取り出せる", txt[:300])
+    seg9 = seg9 or ""
+    check("ブレイクエース" not in seg9, "5-9にブレイクエースの行は出さない", seg9[:300])
+    check("マスワリ数／率" in seg9, "5-9のマスワリの行は残る", seg9[:300])
 
     # ================= 9. 記録の無い人 =================
     section("9. 記録の無い人")

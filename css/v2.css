@@ -1525,15 +1525,17 @@ button::after {
   padding-right: 52px;
 }
 
-/* 配置図の球の番号が、まだ下に寄って見える（本人の指摘 2026-08-21）。
-   枠のちょうど真ん中に置くと、数字の見た目の重心が下に来るため1px上げる */
+/* 配置図の球の番号（本人の指示 2026-08-21：「円を1px下に移動して、番号はそのまま」）。
+   白い円そのものは元の位置（＝これまでより1px下）に戻し、数字は動かさない。
+   これまでは円ごと1px上げていた。円の中で数字を中央そろえ（flex）にすると、
+   数字は v29 と同じ高さのまま、円だけが1px下がる。
+   実測（390x844 Chromium）: 円の中心 -1px→0、数字の中心 0→0 */
 .tb-ball .bb-num,
 .tray-ball .bb-num {
-  transform: translateY(-1px);
-}
-/* 掴んでいる最中は既存の指定（translateY(-2px)）が勝つので、そちらに合わせる */
-.tb-ball.dragging .bb-num {
-  transform: translateY(-3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* ============ 試合画面の作り直し（本人の指示 2026-08-21） ============ */

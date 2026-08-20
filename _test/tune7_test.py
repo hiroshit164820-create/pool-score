@@ -93,23 +93,35 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
 
     # ================= 1. 配置図の番号 =================
-    section("1. 配置図の球の番号を1px上へ")
+    section("1. 配置図の球の番号（円は中央・数字はそのまま）")
     pg.click("#tabLayout")
     pg.wait_for_timeout(800)
     pg.click(".tray-ball[data-ball='1']")
     pg.wait_for_timeout(400)
-    dy = pg.eval_on_selector(".tb-ball .bb-num", """(n) => {
+    # 本人の指示（2026-08-21）:「円を1px下に移動して、番号はそのまま」。
+    # 白い円は球の中心に揃え、中の数字は v29 と同じ高さ（球の中心）に残す。
+    # 数字そのものの位置は、いったん <i> で包んで実物の枠を測る
+    MEASURE = """(n) => {
       const b = n.parentElement.getBoundingClientRect();
       const r = n.getBoundingClientRect();
-      return +((r.top + r.height / 2) - (b.top + b.height / 2)).toFixed(2);
-    }""")
-    check(dy is not None and -2.5 <= dy <= -0.5, "台の球の番号が1pxほど上にある", dy)
-    dy2 = pg.eval_on_selector(".tray-ball[data-ball='2'] .bb-num", """(n) => {
-      const b = n.parentElement.getBoundingClientRect();
-      const r = n.getBoundingClientRect();
-      return +((r.top + r.height / 2) - (b.top + b.height / 2)).toFixed(2);
-    }""")
-    check(dy2 is not None and -2.5 <= dy2 <= -0.5, "一覧の球の番号も上にある", dy2)
+      const txt = n.textContent;
+      n.textContent = "";
+      const w = document.createElement("i");
+      w.style.fontStyle = "normal";
+      w.textContent = txt;
+      n.appendChild(w);
+      const t = w.getBoundingClientRect();
+      return {
+        circle: +((r.top + r.height / 2) - (b.top + b.height / 2)).toFixed(2),
+        num: +((t.top + t.height / 2) - (b.top + b.height / 2)).toFixed(2)
+      };
+    }"""
+    m = pg.eval_on_selector(".tb-ball .bb-num", MEASURE)
+    check(m and abs(m["circle"]) <= 0.5, "台の球の白い円が球の中心にある", m)
+    check(m and abs(m["num"]) <= 0.5, "台の球の番号は球の中心のまま", m)
+    m2 = pg.eval_on_selector(".tray-ball[data-ball='2'] .bb-num", MEASURE)
+    check(m2 and abs(m2["circle"]) <= 0.5, "一覧の球の白い円も中心にある", m2)
+    check(m2 and abs(m2["num"]) <= 0.5, "一覧の球の番号も中心のまま", m2)
 
     # ================= 2. JPAポイント率 =================
     section("2. JPAの平均獲得ポイント率")
