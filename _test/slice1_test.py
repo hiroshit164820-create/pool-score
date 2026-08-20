@@ -276,8 +276,14 @@ with sync_playwright() as p:
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(600)
 
+    # スコアシートは既定で閉じるようにした（本人の指示 2026-08-20）。
+    # マスの大きさを測るので、まず開く
+    check(pg.locator(".sheet-toggle").count() == 1, "スコアシートの開閉ボタンがある")
+    check(pg.locator(".sheet-cell").count() == 0, "既定は閉じている")
+    pg.click(".sheet-toggle")
+    pg.wait_for_timeout(250)
     has_sheet = pg.locator(".sheet-cell").count()
-    check(has_sheet > 0, "JPAスコアシートのマスが出る", has_sheet)
+    check(has_sheet > 0, "開くとJPAスコアシートのマスが出る", has_sheet)
     box = pg.evaluate(CELL_BOX_JS)
     check(box["h"] >= 28, "マスの高さが28px以上", round(box["h"], 1))
     check(box["w"] >= 28, "マスの幅が28px以上", round(box["w"], 1))

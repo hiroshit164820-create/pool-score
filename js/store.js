@@ -44,17 +44,42 @@ const STORE = (function () {
 
   function indexEntry(match) {
     const g = GAMES[match.gameId];
+    const res = match.result || null;
+    const per = (res && res.perSide) || {};
+    const meta = (match.goal && match.goal.meta) || {};
     return {
       id: match.id,
       gameId: match.gameId,
       gameLabel: g ? g.label : match.gameId,
       names: { A: match.sides[0].name, B: match.sides[1].name },
+      // 履歴の絞り込み（対戦相手）と成績の突き合わせに使う
+      playerIds: {
+        A: match.sides[0].playerIds || [],
+        B: match.sides[1].playerIds || [],
+      },
+      // 名前を入れずに始めた側。成績には数えない
+      guest: { A: !!match.sides[0].guest, B: !!match.sides[1].guest },
       createdAt: match.createdAt,
       updatedAt: match.updatedAt,
-      finished: !!match.result,
-      winner: match.result ? match.result.winner : null,
-      scores: match.result ? match.result.scores : null,
-      racks: match.result ? match.result.racks : null,
+      finished: !!res,
+      winner: res ? res.winner : null,
+      scores: res ? res.scores : null,
+      racks: res ? res.racks : null,
+      // 履歴と成績で使う。試合を1件ずつ開かずに読めるよう索引に持たせる
+      // 画面に出すのは「何イニング戦ったか」。古い記録には無いので、
+      // 無ければ完了イニング数 +1 で補う
+      innings: res
+        ? (res.inningsPlayed != null ? res.inningsPlayed : (res.innings || 0) + 1)
+        : null,
+      safety: res
+        ? { A: (per.A && per.A.safety) || 0, B: (per.B && per.B.safety) || 0 }
+        : null,
+      masuwari: res
+        ? { A: (per.A && per.A.masuwari) || 0, B: (per.B && per.B.masuwari) || 0 }
+        : null,
+      // JPAはスキルレベルとチームポイントを履歴に出す
+      skillLevel: meta.skillLevel || null,
+      jpa: res ? (res.jpa || null) : null,
       note: match.note || "",
       deletedAt: match.deletedAt || null,
     };
@@ -348,7 +373,7 @@ const STORE = (function () {
       out.racks += (r.racks ? r.racks.A + r.racks.B : 0);
       out.rackWins += (r.racks ? r.racks[side] : 0);
       out.score += (r.scores ? r.scores[side] : 0);
-      out.innings += r.innings || 0;
+      out.innings += r.inningsPlayed != null ? r.inningsPlayed : (r.innings || 0) + 1;
 
       ["masuwari", "breakAce", "safety", "fouls", "breaks", "breakWins",
        "shotClockViolations", "shotClockExtensions"].forEach(function (k) {
@@ -467,6 +492,104 @@ const STORE = (function () {
     return { added: added, total: matches.length };
   }
 
+  /**
+   * 種目（フォーマット）ごとの成績。
+   *
+   * @param {string|null} playerId 集計する人。null なら全試合をまとめて数える
+   * @returns {{scope:string, games:Array, partners:Array}}
+   *
+   * ・平均イニング数 … 上り（試合終了）までにかかったイニング数の平均
+   * ・マスワリ率     … マスワリ回数 ÷ ブレイク回数
+   * ・1イニング平均得点 … JPA 9ボールのみ。得点 ÷ イニング数
+   * 実施したことのない種目は配列に入れない（画面に出さないため）。
+   */
+  function gameStats(playerId) {
+    const byGame = {};
+    const partners = {};
+
+    listMatches().forEach(function (idx) {
+      if (!idx.finished) return;
+      const m = loadMatch(idx.id);
+      if (!m || !m.result) return;
+
+      // どちら側を数えるか。playerId が無ければ両側をまとめて数える
+      let side = null;
+      if (playerId) {
+        if ((m.sides[0].playerIds || []).indexOf(playerId) >= 0) side = "A";
+        else if ((m.sides[1].playerIds || []).indexOf(playerId) >= 0) side = "B";
+        if (!side) return;
+      }
+
+      const g = GAMES[m.gameId];
+      const r = g ? g : null;
+      const row = byGame[m.gameId] || {
+        gameId: m.gameId,
+        label: idx.gameLabel,
+        isJpa9: !!(g && g.goal === "jpaSL"),
+        matches: 0, wins: 0, losses: 0,
+        innings: 0, score: 0,
+        masuwari: 0, breaks: 0, safety: 0,
+      };
+
+      const res = m.result;
+      const per = res.perSide || {};
+      const sides = side ? [side] : ["A", "B"];
+
+      row.matches++;
+      if (side) {
+        if (res.winner === side) row.wins++;
+        else if (res.winner) row.losses++;
+      } else if (res.winner) {
+        row.wins++; // 全体集計では「決着がついた試合」の数として使う
+      }
+      // イニングは試合に1つの値なので、側で割らずそのまま足す。
+      // 古い記録に inningsPlayed が無ければ完了イニング数 +1 で補う
+      row.innings += res.inningsPlayed != null ? res.inningsPlayed : (res.innings || 0) + 1;
+      sides.forEach(function (s) {
+        const st = per[s] || {};
+        row.masuwari += st.masuwari || 0;
+        row.breaks += st.breaks || 0;
+        row.safety += st.safety || 0;
+        row.score += (res.scores && res.scores[s]) || 0;
+      });
+      byGame[m.gameId] = row;
+
+      // ダブルスのパートナー別成績
+      if (side && g && g.playersPerSide === 2) {
+        const mem = m.sides[side === "A" ? 0 : 1].members || [];
+        const me = findPlayerById(playerId);
+        const myName = me ? me.name : null;
+        mem.forEach(function (nm) {
+          if (!nm || nm === myName) return;
+          const p = partners[nm] || { name: nm, matches: 0, wins: 0, games: {} };
+          p.matches++;
+          if (res.winner === side) p.wins++;
+          p.games[idx.gameLabel] = true;
+          partners[nm] = p;
+        });
+      }
+    });
+
+    const games = Object.keys(byGame).map(function (k) {
+      const row = byGame[k];
+      row.winRate = row.matches ? row.wins / row.matches : null;
+      row.avgInnings = row.matches ? row.innings / row.matches : null;
+      row.masuwariRate = row.breaks ? row.masuwari / row.breaks : null;
+      // JPA 9ボールだけ、1イニングあたり何点取れているかを出す
+      row.pointsPerInning = row.isJpa9 && row.innings ? row.score / row.innings : null;
+      return row;
+    }).sort(function (a, b) { return b.matches - a.matches; });
+
+    const partnerList = Object.keys(partners).map(function (k) {
+      const p = partners[k];
+      p.winRate = p.matches ? p.wins / p.matches : null;
+      p.gameLabels = Object.keys(p.games);
+      return p;
+    }).sort(function (a, b) { return b.matches - a.matches; });
+
+    return { games: games, partners: partnerList };
+  }
+
   /** 概算の使用容量（KB） */
   function usageKB() {
     let total = 0;
@@ -499,6 +622,7 @@ const STORE = (function () {
     deletePlayer: deletePlayer,
     renamePlayer: renamePlayer,
     playerStats: playerStats,
+    gameStats: gameStats,
     getSelf: getSelf,
     getSelfId: getSelfId,
     setSelf: setSelf,

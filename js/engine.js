@@ -658,7 +658,13 @@ function buildResult(match, now) {
     by: st.endReason || "goal",
     scores: { A: st.score.A, B: st.score.B },
     racks: { A: st.racks.A, B: st.racks.B },
+    // innings は「後攻→先攻に手番が戻った回数」＝完了したイニング数。
+    // 既存のテストと集計がこの意味で使っているので、値は変えない。
     innings: st.innings,
+    // inningsPlayed は「何イニング目まで戦ったか」。試合中の表示（Nイニング目）
+    // と同じ数え方で、画面に出すのはこちらを使う。
+    // 相手に一度も回らずに終わった試合を 0 と書くと、記録として読めないため
+    inningsPlayed: st.innings + 1,
     hasUnresolvedError: st.hasUnresolvedError,
     perSide: { A: st.stats.A, B: st.stats.B },
     // ショットクロックの平均タイム（計測できたショットのみ）

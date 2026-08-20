@@ -104,6 +104,195 @@
   color: var(--muted, #6b6255);
 }
 
+/* ============ 試合履歴 ============ */
+
+/* 種目と対戦相手での絞り込み */
+.hist-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.hf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 130px;
+  min-width: 120px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.hf-item select {
+  min-height: 44px;
+  font-size: 16px;
+  padding: 4px 8px;
+  border: 2px solid var(--ink, #241a12);
+  background: var(--surface, #fffdf6);
+  color: var(--ink, #241a12);
+  max-width: 100%;
+}
+.hist-filter > button {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+/* 名前とスキルレベル。進行中・勝ちの印は同じ行の右端に置く */
+.match-card .mc-main {
+  flex-wrap: nowrap;
+}
+.match-card .mc-nm {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-card .mc-nm:last-of-type {
+  justify-content: flex-end;
+  text-align: right;
+}
+.match-card .mc-sl {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border: 2px solid var(--ink, #241a12);
+  background: var(--surface-2, #f1e7cf);
+  color: var(--ink, #241a12);
+}
+.match-card .mc-badge {
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+.match-card .win-badge {
+  background: var(--accent-2, #d86a10);
+  color: #fff;
+}
+
+/* イニング・セーフティなどの補足 */
+.match-card .mc-stats {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim, #6b6255);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 操作ボタンは1行に収める（以前は勝敗の印と一緒に並べて2行になっていた） */
+.match-card .mc-foot {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.match-card .mc-foot button {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* ============ 種目ごとの成績 ============ */
+/* ホームの導線。「新しい試合を始める」と同じ幅で並べる */
+.home-gamestats {
+  width: 100%;
+  margin-top: 10px;
+}
+.gs-rows {
+  margin-top: 6px;
+}
+.gs-rows .ss-row {
+  font-size: 15px;
+}
+
+/* ============ JPAスコアシート ============ */
+
+/* 開閉の見出し。既定は閉じ（本人の指示） */
+.sheet-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  min-height: 44px;
+  background: var(--card, #fffdf6);
+  border: 2px solid var(--ink, #241a12);
+  text-align: left;
+}
+.sheet-toggle .sheet-title {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.sheet-toggle .st-sum {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-toggle .st-mark {
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 700;
+  width: 20px;
+  text-align: center;
+}
+
+/* ラックの区切り。以前は黒い内枠だったが、マスの枠線と見分けが付かず
+   どこで切れているのか読めなかった。明るいオレンジの枠＋斜線にする */
+.sheet-cell.rack-end {
+  box-shadow: inset 0 0 0 3px #ff8c1a;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 140, 26, 0.95) 0 3px,
+    rgba(255, 140, 26, 0) 3px 8px
+  );
+}
+
+/* ============ 試合終了時のまとめ ============ */
+.finish-stats {
+  margin: 8px 0;
+  border-top: 1px dashed rgba(0, 0, 0, 0.25);
+}
+.finish-stats .ss-row {
+  font-size: 15px;
+}
+
+/* ラック番号・イニング・マスワリは1つのまとまりにして、
+   帯が2行3行に増えないようにする */
+.meta-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+}
+.meta-chips .inning-info {
+  font-size: 12px;
+  padding: 1px 5px;
+}
+#nextRackBtn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 4px 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* マスワリの合計（マスワリが出るまでは出さない） */
+.masuwari-info {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b34700;
+  white-space: nowrap;
+}
+
 /* ============ 「この内容で始めます」のまとめ ============ */
 .start-summary {
   border: 2px solid var(--ink, #241a12);

@@ -154,6 +154,19 @@ const HOME = (function () {
       );
     }
 
+    // 種目ごとの成績。どの種目が得意かは人ごとの成績では読み取れないため、
+    // ホームから1タップで開けるようにする（本人の指示 2026-08-20）。
+    // 確定した試合が1件も無いうちは出さない（開いても空になるため）
+    if (done.length) {
+      body.appendChild(
+        UI.el("button", {
+          class: "ghost home-gamestats",
+          text: "種目ごとの成績を見る",
+          onclick: function () { GAMESTATS.open(); },
+        })
+      );
+    }
+
     // 新しい試合はどの状態でも始められるようにする
     body.appendChild(
       UI.el("button", {

@@ -15,6 +15,15 @@ const SHEET = (function () {
   const $ = UI.$;
 
   /**
+   * JPAのスコアシートを開いているか。
+   *
+   * 既定は閉じる（本人の指示 2026-08-20）。1点=1マスの表が縦に長く、
+   * 開いたままだとスコアと操作ボタンが画面外に押し出されるため。
+   * 開閉の状態は同じ試合の間だけ覚える。
+   */
+  let jpaOpen = false;
+
+  /**
    * その試合でスコアシートを出すか。
    * 種目定義の sheet 指定を見る（ここに種目名の分岐は書かない）。
    */
@@ -92,9 +101,28 @@ const SHEET = (function () {
     const sl = (match.goal.meta && match.goal.meta.skillLevel) || {};
     const isDoubles = g.playersPerSide === 2;
 
+    // 開閉の見出し。閉じているときも「何点取っているか」だけは読めるようにする
+    const got = { A: series.A.length, B: series.B.length };
     area.appendChild(
-      UI.el("div", { class: "sheet-title", text: "JPAスコアシート" })
+      UI.el("button", {
+        type: "button",
+        class: "sheet-toggle",
+        "aria-expanded": String(jpaOpen),
+        onclick: function () {
+          jpaOpen = !jpaOpen;
+          render(match, st);
+        },
+      }, [
+        UI.el("span", { class: "sheet-title", text: "JPAスコアシート" }),
+        UI.el("span", {
+          class: "st-sum",
+          text: got.A + " / " + match.goal.targets.A + "　・　"
+            + got.B + " / " + match.goal.targets.B,
+        }),
+        UI.el("span", { class: "st-mark", text: jpaOpen ? "−" : "＋" }),
+      ])
     );
+    if (!jpaOpen) return;
 
     ["A", "B"].forEach(function (side) {
       const target = match.goal.targets[side];

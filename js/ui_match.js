@@ -92,6 +92,8 @@ const MATCH = (function () {
     }));
 
     $("turnBtn").addEventListener("click", UI.guard(onTurnChange));
+    const nrb = $("nextRackBtn");
+    if (nrb) nrb.addEventListener("click", UI.guard(goNextRack));
     $("memberTurnBtn").addEventListener("click", UI.guard(onMemberTurnChange));
     $("ccPauseBtn").addEventListener("click", UI.guard(function () {
       if (!chess) return;
@@ -484,6 +486,47 @@ const MATCH = (function () {
         clock.resetRack();
         startClockForCurrentTurn();
       }
+    }
+  }
+
+  /** JPAのように球1個ずつ点を入れる形で、ラックの区切りが要る種目か */
+  function isJpaBallInput(r) {
+    return r.scoring.kind === "ballScore" && !!r.base.keyBall && !!r.base.rackEndsScoring;
+  }
+
+  /**
+   * 手で次のラックへ進める。
+   *
+   * JPA 9ボールは無効球（デッドボール）があるため、1ラックで10点に
+   * 届かないまま次のラックへ移ることがある。得点の入力だけでは
+   * 区切りが立たないので、押して区切れるようにしている。
+   * スコアシートにはこの時点で区切りの印が残る（jpaSeries が RACK_START を見る）。
+   */
+  function goNextRack() {
+    const before = reduceMatch(match);
+    if (before.winner) {
+      UI.toast("この試合はもう終わっています。", "warn");
+      return;
+    }
+    const r = resolveGame(match.gameId);
+    const prevBreak = before.breakSide || before.firstSide;
+    const bt = (match.options && match.options.breakType) || r.base.defaultBreakType;
+    // 誰がこのラックを取ったかは分からないので、直前に撞いていた側が
+    // 取ったものとして次のブレイク権を決める
+    const taker = before.turn || prevBreak;
+    const nextBreak = nextBreakSide(bt, prevBreak, taker);
+    appendEvent(match, {
+      t: "RACK_START",
+      side: null,
+      d: { rackNo: before.rackNo + 1, breakSide: nextBreak, manual: true },
+    });
+    save();
+    render();
+    const after = reduceMatch(match);
+    announceNextRack(after.rackNo, prevBreak, nextBreak, bt);
+    if (clock) {
+      clock.resetRack();
+      startClockForCurrentTurn();
     }
   }
 
@@ -896,15 +939,36 @@ const MATCH = (function () {
 
     $("rackInfo").textContent = "ラック " + Math.max(1, st.rackNo);
 
-    // イニング表示。14-1のように交代回数が実力の指標になる種目で出す
+    // イニング表示。イニングは全種目で数えているので、試合中も常に出す
+    // （本人の指示 2026-08-20。以前は14-1とJPAだけだった）
     const inningNode = $("inningInfo");
-    if (g.showInnings) {
-      inningNode.hidden = false;
-      // 1イニング目を戦っている間は「1イニング目」と出す
-      // （engine は完了した回数を数えるため +1 して表示する）
-      inningNode.textContent = (st.innings + 1) + "イニング目";
-    } else {
-      inningNode.hidden = true;
+    inningNode.hidden = false;
+    // 1イニング目を戦っている間は「1イニング目」と出す
+    // （engine は完了した回数を数えるため +1 して表示する）
+    inningNode.textContent = (st.innings + 1) + "イニング目";
+
+    // セーフティ数は試合結果・成績・履歴に出す（本人の指示 2026-08-20）。
+    // 試合中の帯にも出すと行が増え、下の操作ボタンが画面からはみ出すため置かない。
+
+    // マスワリの合計。1回も出ていないうちは出さない（本人の指示）
+    const masuNode = $("masuwariInfo");
+    if (masuNode) {
+      const mA = (st.stats.A && st.stats.A.masuwari) || 0;
+      const mB = (st.stats.B && st.stats.B.masuwari) || 0;
+      if (mA + mB > 0) {
+        masuNode.hidden = false;
+        masuNode.textContent = "マスワリ " + (mA + mB)
+          + "（" + sideName("A") + mA + "・" + sideName("B") + mB + "）";
+      } else {
+        masuNode.hidden = true;
+      }
+    }
+
+    // 「次のラックへ」。JPAは無効球があり、10点に届かないままラックが
+    // 終わることがあるので手でも進められるようにする（本人の指示）
+    const nextRackBtn = $("nextRackBtn");
+    if (nextRackBtn) {
+      nextRackBtn.hidden = !(isJpaBallInput(r) && !st.winner);
     }
 
     // ブレイク権の表示。台の脇から見て一目で分かるよう、名前を大きく出す
@@ -1500,6 +1564,29 @@ const MATCH = (function () {
 
   /* ---------- 試合終了 ---------- */
 
+  /**
+   * いまの状態でのJPAチームポイント。JPA 9ボール以外・未決着なら null。
+   *
+   * buildResult() でも同じ計算をするが、あちらは保存時にしか動かない。
+   * 保存する前に画面で確かめられるよう、ここでも出す。
+   */
+  function jpaPointsNow(st) {
+    const g = GAMES[match.gameId];
+    if (!g || g.goal !== "jpaSL" || !st.winner) return null;
+    const loser = st.winner === "A" ? "B" : "A";
+    const meta = match.goal && match.goal.meta;
+    const sl = meta && meta.skillLevel && meta.skillLevel[loser];
+    if (sl == null) return null;
+    try {
+      const tp = jpaTeamPoints(sl, st.score[loser]);
+      return st.winner === "A"
+        ? { A: tp.winner, B: tp.loser }
+        : { A: tp.loser, B: tp.winner };
+    } catch (e) {
+      return null;
+    }
+  }
+
   function openFinish() {
     const st = reduceMatch(match);
     const unit = match.goal.type === "racks" ? "ラック" : "点";
@@ -1520,6 +1607,54 @@ const MATCH = (function () {
         text: sideName("A") + " " + cur.A + unit + " 対 " + sideName("B") + " " + cur.B + unit,
       })
     );
+
+    // イニング数とセーフティ数の合計。スコアだけでは分からない内容なので
+    // 保存前にこの場で確かめられるようにする（本人の指示 2026-08-20）
+    const r0 = resolveGame(match.gameId);
+    const sfA = (st.stats.A && st.stats.A.safety) || 0;
+    const sfB = (st.stats.B && st.stats.B.safety) || 0;
+    const msA = (st.stats.A && st.stats.A.masuwari) || 0;
+    const msB = (st.stats.B && st.stats.B.masuwari) || 0;
+    // 試合中の「Nイニング目」と同じ数え方にする（完了イニング数 +1）。
+    // 相手に一度も回らずに終わった試合を「0イニング」と書くと読めないため
+    const lines = [["イニング数", String(st.innings + 1)]];
+    if (r0.base.safetyCallable) {
+      lines.push(["セーフティ数", (sfA + sfB) + "（" + sideName("A") + " " + sfA
+        + " ／ " + sideName("B") + " " + sfB + "）"]);
+    }
+    if (msA + msB > 0) {
+      lines.push(["マスワリ", (msA + msB) + "（" + sideName("A") + " " + msA
+        + " ／ " + sideName("B") + " " + msB + "）"]);
+    }
+
+    // JPA 9ボールは公式のポイント早見表で20点を分け合う
+    const jp = jpaPointsNow(st);
+    if (jp) {
+      lines.push(["JPAポイント", sideName("A") + " " + jp.A + "P ／ "
+        + sideName("B") + " " + jp.B + "P"]);
+    }
+
+    const table = UI.el("div", { class: "finish-stats" });
+    lines.forEach(function (pair) {
+      table.appendChild(
+        UI.el("div", { class: "ss-row" }, [
+          UI.el("span", { class: "ss-key", text: pair[0] + "：" }),
+          UI.el("span", { class: "ss-val", text: pair[1] }),
+        ])
+      );
+    });
+    box.appendChild(table);
+
+    if (jp) {
+      box.appendChild(
+        UI.el("p", {
+          class: "hint",
+          text: "JPA公式のポイント早見表（敗者のスキルレベル × 敗者の獲得点数）で"
+            + "20ポイントを分け合います。",
+        })
+      );
+    }
+
     // すでに書いてあるメモがあれば引き継ぐ（中断→再開でも消えない）
     const noteBox = $("finishNote");
     if (noteBox) noteBox.value = match.note || "";

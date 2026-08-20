@@ -9,6 +9,9 @@ const HISTORY = (function () {
   const $ = UI.$;
   let bound = false;
 
+  // 絞り込みの状態。画面を閉じても覚えておく（探している最中に消えると使いにくい）
+  let filter = { gameId: "", opponent: "" };
+
   function bindOnce() {
     if (bound) return;
     bound = true;
@@ -17,6 +20,84 @@ const HISTORY = (function () {
     $("exportBtn").addEventListener("click", UI.guard(exportJSON));
     $("importBtn").addEventListener("click", function () { $("importInput").click(); });
     $("importInput").addEventListener("change", onImportFile);
+
+    // 表計算（CSV）への書き出し。いま絞り込んでいるぶんだけを出す
+    $("csvHistoryBtn").addEventListener("click", UI.guard(function () {
+      CSVOUT.download(CSVOUT.historyRows(visibleItems()), "試合履歴");
+    }));
+
+    $("histGameFilter").addEventListener("change", function (e) {
+      filter.gameId = e.target.value;
+      render();
+    });
+    $("histOppFilter").addEventListener("change", function (e) {
+      filter.opponent = e.target.value;
+      render();
+    });
+    $("histFilterClear").addEventListener("click", function () {
+      filter = { gameId: "", opponent: "" };
+      render();
+    });
+  }
+
+  /** いま画面に出ている（＝絞り込みを通った）試合 */
+  function visibleItems() {
+    return STORE.listMatches().filter(function (m) {
+      if (filter.gameId && m.gameId !== filter.gameId) return false;
+      if (filter.opponent
+        && m.names.A !== filter.opponent && m.names.B !== filter.opponent) return false;
+      return true;
+    });
+  }
+
+  /**
+   * 絞り込みの選択肢を作り直す。
+   * 記録に出てくる種目・名前だけを並べる（選んでも0件になる項目を出さない）。
+   */
+  function renderFilters(all) {
+    const gameSel = $("histGameFilter");
+    const oppSel = $("histOppFilter");
+    if (!gameSel || !oppSel) return;
+
+    const games = [];
+    const seenGame = {};
+    const names = [];
+    const seenName = {};
+    all.forEach(function (m) {
+      if (!seenGame[m.gameId]) {
+        seenGame[m.gameId] = true;
+        games.push({ id: m.gameId, label: m.gameLabel });
+      }
+      ["A", "B"].forEach(function (s) {
+        const nm = m.names[s];
+        if (nm && !seenName[nm]) {
+          seenName[nm] = true;
+          names.push(nm);
+        }
+      });
+    });
+    names.sort();
+
+    function fill(sel, items, cur, allLabel) {
+      UI.clear(sel);
+      sel.appendChild(UI.el("option", { value: "", text: allLabel }));
+      items.forEach(function (it) {
+        sel.appendChild(
+          UI.el("option", { value: it.value, text: it.label })
+        );
+      });
+      sel.value = cur;
+      // 選んでいた項目が記録から消えた場合は「すべて」に戻す
+      if (sel.value !== cur) {
+        sel.value = "";
+      }
+    }
+    fill(gameSel, games.map(function (g) { return { value: g.id, label: g.label }; }),
+      filter.gameId, "すべての種目");
+    fill(oppSel, names.map(function (n) { return { value: n, label: n }; }),
+      filter.opponent, "すべての相手");
+    filter.gameId = gameSel.value;
+    filter.opponent = oppSel.value;
   }
 
   function open() {
@@ -61,9 +142,22 @@ const HISTORY = (function () {
   function render() {
     const list = $("historyList");
     UI.clear(list);
-    const items = STORE.listMatches();
+    const all = STORE.listMatches();
+    renderFilters(all);
+    const items = visibleItems();
 
-    if (!items.length) {
+    const filterOn = !!(filter.gameId || filter.opponent);
+    if (all.length && !items.length) {
+      list.appendChild(
+        UI.el("div", { class: "empty" }, [
+          UI.el("p", { text: "この条件に合う試合はありません。" }),
+          UI.el("p", { text: "「絞り込みを外す」で全部に戻せます。" }),
+        ])
+      );
+      return;
+    }
+
+    if (!all.length) {
       list.appendChild(
         UI.el("div", { class: "empty" }, [
           UI.el("p", { text: "まだ試合の記録がありません。" }),
@@ -77,7 +171,11 @@ const HISTORY = (function () {
     const done = items.filter(function (m) { return m.finished; });
     if (done.length) {
       list.appendChild(
-        UI.el("p", { class: "hint", text: "記録した試合: " + done.length + "件（保存容量 約" + STORE.usageKB() + "KB）" })
+        UI.el("p", {
+          class: "hint",
+          text: (filterOn ? "絞り込み中: " : "記録した試合: ") + done.length + "件"
+            + (filterOn ? "（全" + all.length + "件中）" : "（保存容量 約" + STORE.usageKB() + "KB）"),
+        })
       );
     }
 
@@ -96,16 +194,52 @@ const HISTORY = (function () {
             : m.scores.A + " - " + m.scores.B)
         : "—";
 
+      // JPAは名前のうしろにスキルレベルを出す（本人の指示 2026-08-20）。
+      // 同じ相手でもSLが違えば別の試合なので、SLが無いと記録が読めない
+      const sl = m.skillLevel || {};
+      function nameCell(side) {
+        const cls = "mc-nm" + (m.winner === side ? " win" : "");
+        const box = UI.el("span", { class: cls }, [
+          UI.el("span", { text: m.names[side] }),
+        ]);
+        if (sl[side] != null) {
+          box.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
+        }
+        return box;
+      }
+
       const main = UI.el("div", { class: "mc-main" }, [
-        UI.el("span", { class: m.winner === "A" ? "win" : "", text: m.names.A }),
+        nameCell("A"),
         UI.el("span", { class: "mc-score", text: scoreText }),
-        UI.el("span", { class: m.winner === "B" ? "win" : "", text: m.names.B }),
+        nameCell("B"),
       ]);
+      // 進行中・決着の印はプレーヤー名と同じ行の右端に出す（本人の指示）
+      if (!m.finished) {
+        main.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
+      } else if (m.winner) {
+        main.appendChild(UI.el("span", { class: "badge mc-badge win-badge", text: "勝ち" }));
+      }
       card.appendChild(main);
 
-      const foot = UI.el("div", { style: "margin-top:8px;display:flex;gap:8px;align-items:center" });
+      // イニング数とセーフティ数。スコアだけでは分からない内容を1行足す
+      if (m.finished && m.innings !== null && m.innings !== undefined) {
+        const bits = ["イニング " + m.innings];
+        const sf = m.safety || {};
+        if ((sf.A || 0) + (sf.B || 0) > 0) {
+          bits.push("セーフティ " + ((sf.A || 0) + (sf.B || 0)));
+        }
+        const ms = m.masuwari || {};
+        if ((ms.A || 0) + (ms.B || 0) > 0) {
+          bits.push("マスワリ " + ((ms.A || 0) + (ms.B || 0)));
+        }
+        const jp = (m.jpa && m.jpa.teamPoints) || null;
+        if (jp) bits.push("JPA " + jp.A + "P - " + jp.B + "P");
+        card.appendChild(UI.el("div", { class: "mc-stats", text: bits.join("　・　") }));
+      }
+
+      // 操作は1行に収める。勝敗の印は上の行へ移したので、ここはボタンだけ（本人の指示）
+      const foot = UI.el("div", { class: "mc-foot" });
       if (!m.finished) {
-        foot.appendChild(UI.el("span", { class: "badge", text: "進行中" }));
         foot.appendChild(
           UI.el("button", {
             class: "small primary",
@@ -116,8 +250,6 @@ const HISTORY = (function () {
             },
           })
         );
-      } else if (m.winner) {
-        foot.appendChild(UI.el("span", { class: "badge", text: (m.winner === "A" ? m.names.A : m.names.B) + " の勝ち" }));
       }
       // メモ。書いてあれば内容を、無ければ「メモを追加」を出す
       foot.appendChild(

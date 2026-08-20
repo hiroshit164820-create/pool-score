@@ -42,13 +42,16 @@ const PLAYERS = (function () {
       sortMode = v;
       render();
     });
-    // 選手一覧の下部にあった「成績を見る」「新しい試合」は本人の指示で撤去した。
-    // 同じ導線は下部タブとホーム画面にあり、二重に置くと一覧が短く見えるため。
-    // （HTML側の .bottom-bar は別セッションが同ファイルを編集中のためJSで取り除く）
-    const legacyBar = $("playersNewMatchBtn") && $("playersNewMatchBtn").closest(".bottom-bar");
-    if (legacyBar && legacyBar.parentNode) legacyBar.parentNode.removeChild(legacyBar);
-
+    // 選手一覧の下部にあった「成績を見る」「新しい試合」は本人の指示（2026-08-20）で
+    // 撤去した。同じ導線が下部タブとホーム画面にあり、二重に置くと一覧が短く見えるため
     $("backFromStatsBtn").addEventListener("click", function () { open(); });
+    // 成績を表計算（CSV）に書き出す
+    const csvBtn = $("csvStatsBtn");
+    if (csvBtn) {
+      csvBtn.addEventListener("click", UI.guard(function () {
+        CSVOUT.download(CSVOUT.playerRows(), "選手ごとの成績");
+      }));
+    }
   }
 
   function open() {
@@ -532,6 +535,9 @@ const PLAYERS = (function () {
       ["ブレイクエース", st.breakAce + "回"],
       ["セーフティ", st.safety + "回"],
       ["ファウル", st.fouls + "回"],
+      ["イニング数（合計）", st.innings + "イニング"],
+      ["1試合あたりのイニング数",
+        st.matches ? String(Math.round((st.innings / st.matches) * 10) / 10) : "—"],
     ];
     body.appendChild(statTable("成績", main));
 

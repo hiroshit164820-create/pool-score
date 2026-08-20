@@ -241,8 +241,18 @@
          縮まない外側に出して、必ず読める高さを確保する -->
     <div class="match-info">
       <div class="meta-line">
-        <span id="rackInfo">ラック 1</span>
-        <span id="inningInfo" class="inning-info" hidden></span>
+        <!-- 数字は1つのまとまりにして、行が増えないようにする。
+             セーフティ数は試合結果・成績・履歴に出す（ここに出すと帯が3行になり、
+             下の操作ボタンが画面からはみ出す） -->
+        <span class="meta-chips">
+          <span id="rackInfo">ラック 1</span>
+          <span id="inningInfo" class="inning-info" hidden></span>
+          <!-- マスワリが出るまでは出さない（出ていないのに0と書くと紛らわしいため） -->
+          <span id="masuwariInfo" class="masuwari-info" hidden></span>
+        </span>
+        <!-- JPA9ボールは無効球があり、10点に届かないままラックが終わることがある。
+             その場合に手で次のラックへ進める -->
+        <button id="nextRackBtn" class="small ghost" hidden>次のラック</button>
         <button id="breakToggleBtn" class="break-toggle">
           <span class="bt-label">ブレイク</span>
           <span class="bt-name" id="breakToggleName">—</span>
@@ -419,9 +429,22 @@
     <div class="topbar">
       <h1>履歴</h1>
       <div>
+        <button id="csvHistoryBtn" class="small ghost">表計算へ</button>
         <button id="exportBtn" class="small ghost">書き出し</button>
         <button id="backFromHistoryBtn" class="small ghost">戻る</button>
       </div>
+    </div>
+    <!-- 種目と対戦相手で絞り込む -->
+    <div class="hist-filter" id="histFilter">
+      <label class="hf-item">
+        <span>種目</span>
+        <select id="histGameFilter"><option value="">すべて</option></select>
+      </label>
+      <label class="hf-item">
+        <span>対戦相手</span>
+        <select id="histOppFilter"><option value="">すべて</option></select>
+      </label>
+      <button id="histFilterClear" class="small ghost">絞り込みを外す</button>
     </div>
     <div class="list" id="historyList"></div>
     <div class="bottom-bar">
@@ -482,17 +505,33 @@
       <div id="playerList"></div>
     </div>
 
-    <div class="bottom-bar">
-      <button id="playersToStatsBtn" class="ghost">成績を見る</button>
-      <button id="playersNewMatchBtn" class="primary">新しい試合</button>
+    <!-- 「成績を見る」「新しい試合」は本人の指示（2026-08-20）で撤去した。
+         同じ導線が下部タブとホーム画面にあり、二重に置くと一覧が短く見えるため -->
+  </section>
+
+  <!-- ================= 種目ごとの成績 ================= -->
+  <section id="screenGameStats" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>種目ごとの成績</h1>
+        <div class="sub" id="gameStatsSub"></div>
+      </div>
+      <div>
+        <button id="csvGameStatsBtn" class="small ghost">表計算へ</button>
+        <button id="backFromGameStatsBtn" class="small ghost">戻る</button>
+      </div>
     </div>
+    <div class="list" id="gameStatsBody"></div>
   </section>
 
   <!-- ================= 成績 ================= -->
   <section id="screenStats" class="screen">
     <div class="topbar">
       <h1>成績</h1>
-      <button id="backFromStatsBtn" class="small ghost">戻る</button>
+      <div>
+        <button id="csvStatsBtn" class="small ghost">表計算へ</button>
+        <button id="backFromStatsBtn" class="small ghost">戻る</button>
+      </div>
     </div>
     <div class="list" id="statsBody"></div>
   </section>
@@ -572,10 +611,12 @@
 <script src="js/chessclock.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui_setup.js"></script>
+<script src="js/csv.js"></script>
 <script src="js/ui_sheet.js"></script>
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
+<script src="js/ui_gamestats.js"></script>
 <script src="js/ui_home.js"></script>
 <script src="js/money_game.js"></script>
 <script src="js/ui_money.js"></script>
