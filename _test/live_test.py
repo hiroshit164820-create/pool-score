@@ -47,7 +47,8 @@ with sync_playwright() as p:
     check(helpers.count_selectable_games(pg) == 14, "種目が14選べる",
           helpers.count_selectable_games(pg))
     labels = helpers.all_game_labels(pg)
-    check("14-1" in labels, "14-1が公開版に入っている", labels)
+    # 種目名に「（ストレートプール）」を付けた（本人の指示 2026-08-21）
+    check(any(x.startswith("14-1") for x in labels), "14-1が公開版に入っている", labels)
     check(any("JPA" in x for x in labels), "JPA種目が公開版に入っている", labels)
     clocks = pg.locator("#clockTypeToggle button").all_text_contents()
     check(len(clocks) == 3, "時計が3択になっている", clocks)
