@@ -42,8 +42,12 @@ const PLAYERS = (function () {
       sortMode = v;
       render();
     });
-    $("playersNewMatchBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
-    $("playersToStatsBtn").addEventListener("click", function () { openStats(null); });
+    // 選手一覧の下部にあった「成績を見る」「新しい試合」は本人の指示で撤去した。
+    // 同じ導線は下部タブとホーム画面にあり、二重に置くと一覧が短く見えるため。
+    // （HTML側の .bottom-bar は別セッションが同ファイルを編集中のためJSで取り除く）
+    const legacyBar = $("playersNewMatchBtn") && $("playersNewMatchBtn").closest(".bottom-bar");
+    if (legacyBar && legacyBar.parentNode) legacyBar.parentNode.removeChild(legacyBar);
+
     $("backFromStatsBtn").addEventListener("click", function () { open(); });
   }
 
