@@ -1,0 +1,162 @@
+/**
+ * v2.css — 2026-08-20 の指示ぶんの追加スタイル
+ *
+ * style.css は別セッションが同時に編集していたため、
+ * 衝突でどちらかの変更が消えるのを避けてここに分けている。
+ * 手が空いたら style.css へ畳んでよい（読み込み順は style.css の後）。
+ */
+
+/* ============ 配置図（練習配置） ============ */
+
+/* 球の上下に横線が出ていたのを消す。
+   もとは「ポケットの目印」のつもりだったが、
+   線にしか見えず球と重なって読み取りを邪魔していた。
+   ポケットは下の .pt-pocket で実物どおりの穴として描く */
+.pool-table::before,
+.pool-table::after {
+  content: none;
+}
+
+/* 盤面を大きくする。
+   幅でも頭打ちにしないと、左右のボタン列とぶつかって台がはみ出す */
+.pool-table {
+  height: min(56vh, calc((100vw - 172px) * 2));
+}
+
+/* 台・左右のボタン列を横に並べる舞台 */
+.lay-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.lay-stage .table-wrap {
+  margin-bottom: 0;
+  flex: 0 1 auto;
+}
+.lay-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 76px;
+  width: 76px;
+}
+.lay-side button {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 2px;
+  font-size: 13px;
+  line-height: 1.25;
+  /* 日本語が折り返せないと列からはみ出すので、折り返しは止めない */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lay-side button[disabled] {
+  opacity: 0.35;
+}
+
+/* ポケットと、ポケットの間のポイント（ダイヤ） */
+.pt-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+/* 目印は台の内側に収める。外へ出すと画面全体が横スクロールしてしまう */
+.pt-pocket {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #17110b;
+  border: 2px solid #d9c9a8;
+  box-sizing: border-box;
+}
+/* サイドポケットは実物どおり角より浅い */
+.pt-pocket.side {
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+}
+/* ポケットとポケットの間のポイント。実物と同じ菱形 */
+.pt-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #f4efe2;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+  transform: rotate(45deg);
+}
+/* 短辺のポイントは左右方向、長辺のポイントは上下方向に中心を合わせる */
+.pt-dot.h { margin-left: -4.5px; }
+.pt-dot.v { margin-top: -4.5px; }
+
+/* 一言メモ */
+.lay-memo {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.li-note {
+  font-size: 13px;
+  color: var(--muted, #6b6255);
+}
+
+/* ============ ボールの番号（見えづらさの解消） ============ */
+/* 白抜きの数字にして、地の色に関わらず読めるように縁取りを付ける。
+   数字は少し大きく・太くする（本人の指示） */
+.ball-btn .bb-num,
+.tb-ball .bb-num,
+.tray-ball .bb-num,
+.bs-dot {
+  background: #1b1b1b;
+  color: #ffffff;
+  font-weight: 700;
+  border-color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.9);
+}
+.ball-btn .bb-num {
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+}
+.tb-ball .bb-num {
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+}
+/* 置ける球の一覧は1個40px角しかないため、はみ出さない範囲で最大にする */
+.tray-ball .bb-num {
+  width: 23px;
+  height: 23px;
+  font-size: 15px;
+}
+.ball-btn .bb-num.shape-triangle {
+  width: 34px;
+  height: 30px;
+}
+.ball-btn .bb-num.shape-diamond {
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+}
+.tb-ball .bb-num.shape-triangle {
+  width: 29px;
+  height: 26px;
+}
+.tb-ball .bb-num.shape-diamond {
+  width: 29px;
+  height: 29px;
+  font-size: 14px;
+}
+.tray-ball .bb-num.shape-triangle {
+  width: 26px;
+  height: 23px;
+}
+.tray-ball .bb-num.shape-diamond {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+}

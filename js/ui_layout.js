@@ -23,10 +23,87 @@ const LAYOUT = (function () {
   function bindOnce() {
     if (bound) return;
     bound = true;
+    buildChrome();
     $("layoutSaveBtn").addEventListener("click", UI.guard(save));
     $("layoutClearBtn").addEventListener("click", UI.guard(clearAll));
     $("layoutUndoBtn").addEventListener("click", UI.guard(undo));
+    $("layoutRedoBtn").addEventListener("click", UI.guard(redo));
     $("layoutListBtn").addEventListener("click", UI.guard(toggleList));
+  }
+
+  /**
+   * 画面の骨組みを組み替える。
+   *
+   * ・「配置を保存」を上の帯へ動かし、そのぶん盤面を大きく取る
+   * ・「一つ前に戻る」「全部どける」を台の左、「一つ次に進む」を台の右に縦に並べる
+   * ・一言メモの入力欄を足す
+   *
+   * 本来は index.html を直接書き換える箇所だが、同じ時間に別のセッションが
+   * index.html を編集していたため、書き込みの衝突でどちらかの変更が消えるのを
+   * 避けてここで組み替えている。手が空いたら index.html 側へ移してよい。
+   */
+  function buildChrome() {
+    const screen = document.getElementById("screenLayout");
+    if (!screen || screen.querySelector(".lay-stage")) return;
+
+    // 「配置を保存」を上の帯へ
+    const topbar = screen.querySelector(".topbar");
+    const saveBtn = $("layoutSaveBtn");
+    if (topbar && saveBtn) {
+      saveBtn.className = "small primary";
+      saveBtn.textContent = "配置を保存";
+      topbar.appendChild(saveBtn);
+    }
+
+    // 台の左右にボタンの列を作る
+    const wrap = screen.querySelector(".table-wrap");
+    if (!wrap || !wrap.parentNode) return;
+    const stage = UI.el("div", { class: "lay-stage" });
+    wrap.parentNode.insertBefore(stage, wrap);
+
+    const left = UI.el("div", { class: "lay-side lay-left" });
+    const right = UI.el("div", { class: "lay-side lay-right" });
+    stage.appendChild(left);
+    stage.appendChild(wrap);
+    stage.appendChild(right);
+
+    const undoBtn = $("layoutUndoBtn");
+    const clearBtn = $("layoutClearBtn");
+    if (undoBtn) {
+      undoBtn.className = "ghost";
+      undoBtn.textContent = "一つ前に戻る";
+      left.appendChild(undoBtn);
+    }
+    if (clearBtn) {
+      clearBtn.className = "ghost";
+      clearBtn.textContent = "全部どける";
+      left.appendChild(clearBtn);
+    }
+    right.appendChild(
+      UI.el("button", {
+        type: "button", id: "layoutRedoBtn", class: "ghost", text: "一つ次に進む",
+      })
+    );
+
+    // ボタンを抜いたあとの元の並びは空になるので畳む
+    const actions = screen.querySelector(".layout-actions");
+    if (actions && !actions.querySelector("button")) actions.hidden = true;
+
+    // 一言メモ（球の一覧のすぐ下）
+    const tray = $("ballTray");
+    if (tray && tray.parentNode && !$("layoutMemo")) {
+      tray.parentNode.insertBefore(
+        UI.el("input", {
+          id: "layoutMemo",
+          class: "lay-memo",
+          type: "text",
+          maxlength: "80",
+          placeholder: "一言メモ（例: 押しのコース練習）",
+          autocomplete: "off",
+        }),
+        tray.nextSibling
+      );
+    }
   }
 
   function open() {
@@ -51,40 +128,109 @@ const LAYOUT = (function () {
   }
 
   /**
-   * ひとつ前の盤面。取り消し用に1手分だけ控える。
+   * 盤面の履歴。「一つ前に戻る」「一つ次に進む」の両方に使う。
    *
    * 球は指より小さく、どけるつもりで動かす・動かすつもりでどけるが
-   * 起きやすい。取り消しが無いと置き直しになるため用意した。
+   * 起きやすい。1手だけでは足りないので、直近30手ぶんを控える。
    */
-  let prevBalls = null;
+  let past = [];
+  let future = [];
+  const HISTORY_MAX = 30;
+
+  function snapshot() {
+    return balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
+  }
 
   /** 球の直径（px）。style.css の .tb-ball と揃える */
   const BALL_PX = 44;
 
   /** いまの盤面を控える。盤面を変える操作の直前に呼ぶ */
   function remember() {
-    prevBalls = balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
+    past.push(snapshot());
+    if (past.length > HISTORY_MAX) past.shift();
+    // 新しい操作をしたら「進む」先は無くなる（分岐を持たせない）
+    future = [];
     syncUndo();
   }
 
-  /** 取り消しボタンの出し分け */
+  /** 「戻る」「進む」のボタンの出し分け */
   function syncUndo() {
-    const btn = $("layoutUndoBtn");
-    if (btn) btn.disabled = !prevBalls;
+    const back = $("layoutUndoBtn");
+    if (back) back.disabled = !past.length;
+    const fwd = $("layoutRedoBtn");
+    if (fwd) fwd.disabled = !future.length;
   }
 
   function undo() {
-    if (!prevBalls) {
+    if (!past.length) {
       UI.toast("戻せる操作がありません。", "warn");
       return;
     }
-    balls = prevBalls;
-    prevBalls = null;
+    future.push(snapshot());
+    balls = past.pop();
     render();
-    UI.toast("元に戻しました。");
+    UI.toast("一つ前に戻しました。");
+  }
+
+  function redo() {
+    if (!future.length) {
+      UI.toast("進める操作がありません。", "warn");
+      return;
+    }
+    past.push(snapshot());
+    balls = future.pop();
+    render();
+    UI.toast("一つ次に進みました。");
+  }
+
+  /**
+   * ポケット6つと、ポケットの間のポイント（ダイヤ）18個を描く。
+   *
+   * どこを狙っているかは実物の台ではダイヤで測る。目印が無いと
+   * 保存した配置を台の上で再現できないため、実物と同じ位置に置く。
+   * 押せるものではないので pointer-events は CSS 側で切ってある。
+   */
+  function renderMarks() {
+    const table = $("poolTable");
+    if (!table || table.querySelector(".pt-marks")) return;
+    const marks = UI.el("div", { class: "pt-marks" });
+
+    // 目印はすべて台の内側に置く。外へはみ出させると画面が横スクロールする。
+    // 角は left/top、反対側は right/bottom を使って端に貼り付ける
+    function place(node, side) {
+      if (side.left !== undefined) node.style.left = side.left;
+      if (side.right !== undefined) node.style.right = side.right;
+      if (side.top !== undefined) node.style.top = side.top;
+      if (side.bottom !== undefined) node.style.bottom = side.bottom;
+      marks.appendChild(node);
+    }
+
+    // ポケット。角4つ
+    place(UI.el("div", { class: "pt-pocket" }), { left: "0", top: "0" });
+    place(UI.el("div", { class: "pt-pocket" }), { right: "0", top: "0" });
+    place(UI.el("div", { class: "pt-pocket" }), { left: "0", bottom: "0" });
+    place(UI.el("div", { class: "pt-pocket" }), { right: "0", bottom: "0" });
+    // サイドポケット。長辺の真ん中
+    place(UI.el("div", { class: "pt-pocket side" }), { left: "0", top: "50%" });
+    place(UI.el("div", { class: "pt-pocket side" }), { right: "0", top: "50%" });
+
+    // ポイント。短辺は3つずつ、長辺はサイドポケットを挟んで3つずつ（計18）
+    const RAIL = "4px";
+    [25, 50, 75].forEach(function (x) {
+      place(UI.el("div", { class: "pt-dot h" }), { left: x + "%", top: RAIL });
+      place(UI.el("div", { class: "pt-dot h" }), { left: x + "%", bottom: RAIL });
+    });
+    [12.5, 25, 37.5, 62.5, 75, 87.5].forEach(function (y) {
+      place(UI.el("div", { class: "pt-dot v" }), { top: y + "%", left: RAIL });
+      place(UI.el("div", { class: "pt-dot v" }), { top: y + "%", right: RAIL });
+    });
+
+    // 球より下に敷く
+    table.insertBefore(marks, table.firstChild);
   }
 
   function renderTable() {
+    renderMarks();
     const wrap = $("tableBalls");
     if (!wrap) return;
     UI.clear(wrap);
@@ -289,6 +435,12 @@ const LAYOUT = (function () {
 
   /* ---------- 保存と呼び出し ---------- */
 
+  /** 一言メモの中身。欄がまだ無いときは空文字 */
+  function memoValue() {
+    const box = $("layoutMemo");
+    return box ? String(box.value || "").trim() : "";
+  }
+
   function save() {
     if (!balls.length) {
       UI.toast("先に球を置いてください。", "warn");
@@ -304,6 +456,7 @@ const LAYOUT = (function () {
       id: editingId,
       name: (name || "").trim() || "名前なし",
       balls: balls,
+      note: memoValue(),
     });
     if (!saved) {
       UI.toast("保存できませんでした。", "warn");
@@ -340,6 +493,7 @@ const LAYOUT = (function () {
         UI.el("div", { class: "li-main" }, [
           UI.el("div", { class: "li-name", text: l.name }),
           UI.el("div", { class: "li-sub", text: l.balls.length + "個" }),
+          l.note ? UI.el("div", { class: "li-note", text: l.note }) : null,
         ]),
         UI.el("button", {
           class: "small primary",
@@ -373,6 +527,8 @@ const LAYOUT = (function () {
     balls = l.balls.map(function (b) { return { n: b.n, x: b.x, y: b.y }; });
     editingId = l.id;
     editingName = l.name;
+    const memo = $("layoutMemo");
+    if (memo) memo.value = l.note || "";
     const list = $("layoutList");
     if (list) list.hidden = true;
     render();

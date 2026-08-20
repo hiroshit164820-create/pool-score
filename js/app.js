@@ -2,6 +2,23 @@
  * app.js — 起動・画面遷移
  */
 (function () {
+  /**
+   * 追加ぶんのスタイルを読み込む。
+   *
+   * index.html に <link> を足すのが本来だが、同じ時間に別のセッションが
+   * index.html と style.css を編集していたため、書き込みの衝突で
+   * どちらかの変更が消えるのを避けてここから足している。
+   * 手が空いたら index.html の <link> に移してよい。
+   */
+  (function loadExtraCss() {
+    if (document.querySelector('link[data-v2css]')) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "css/v2.css";
+    link.setAttribute("data-v2css", "1");
+    document.head.appendChild(link);
+  })();
+
   function boot() {
     SETUP.init();
     UI.bindBackButton();
