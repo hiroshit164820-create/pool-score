@@ -103,9 +103,14 @@ with sync_playwright() as p:
     helpers.pick_game(pg, "rotation")
     pg.wait_for_timeout(300)
 
-    note = pg.text_content("#gameNote") or ""
-    check("ラックをまたいで" in note, "ラック跨ぎの得点だと案内される", note)
-    check("120点" in note, "1ラック120点だと分かる", note)
+    # ルール説明は本人指示（2026-08-20）で削除。文言ではなく data 側を見る。
+    check(pg.locator("#gameNote").count() == 0, "ルール説明は表示しない")
+    rd = pg.evaluate(
+        "() => { const b = BASE_RULES[GAMES['rotation'].base];"
+        " return { total: b.rackTotal, ends: b.rackEndsScoring }; }"
+    )
+    check(rd["total"] == 120, "1ラック120点のまま", rd)
+    check(rd["ends"] is False, "ラックをまたいで点が続くまま", rd)
 
     # ブレイク方式は選べない（規程で決まっているため）
     bt_field = pg.locator("#breakTypeToggle").locator("xpath=ancestor::div[@class='field'][1]")

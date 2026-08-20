@@ -346,16 +346,9 @@ const SETUP = (function () {
    * カテゴリごとの種目選択。
    * 選んだカテゴリだけを開き、ダブルスは切替スイッチにして行数を減らす。
    */
-  /** 注意書きの要素。描き直しで一度DOMから外れるため参照を持っておく */
-  let gameNoteEl = null;
-
   function renderGameGroups() {
     const wrap = $("gameGroups");
     if (!wrap) return;
-    if (!gameNoteEl) gameNoteEl = $("gameNote");
-    // 消される前に外へ退避する（clearは子を取り外すので参照が切れる）
-    if (gameNoteEl && gameNoteEl.parentNode === wrap) wrap.removeChild(gameNoteEl);
-    let noteHost = null;
     UI.clear(wrap);
 
     GAME_GROUPS.forEach(function (grp) {
@@ -421,16 +414,10 @@ const SETUP = (function () {
 
         // 注意書きは選んだ種目のすぐ下に出す。
         // カテゴリの外（一覧の末尾）に置くと「JPAの説明」に見えてしまう
-        if (active) noteHost = body;
       });
       wrap.appendChild(body);
     });
 
-    // 選択行があればその直下、無ければ元の位置（種目一覧の直後）へ戻す
-    if (gameNoteEl) {
-      if (noteHost) noteHost.appendChild(gameNoteEl);
-      else wrap.parentNode.insertBefore(gameNoteEl, wrap.nextSibling);
-    }
   }
 
   function selectGame(id) {
@@ -442,36 +429,8 @@ const SETUP = (function () {
     const g = GAMES[id];
     const base = BASE_RULES[g.base];
 
-    // 種目ごとの注意書き（規程に基づく事実のみ）
-    const notes = [];
-    if (!base.hasBreakAce && base.keyBall) {
-      notes.push(
-        base.label + "では" + base.keyBall + "番を必ずフットスポットに戻すため、ブレイクエースはありません。"
-      );
-    }
-    // セーフティコールの廃止は10ボールの改定なので、その種目にだけ出す。
-    // safetyCallable === false は他の種目（カイルン等）にも付くため条件を分ける
-    if (base.safetyCallable === false && g.base === "tenball") {
-      notes.push("10ボールは2026年6月のルール改定でセーフティコールが廃止されました。");
-    }
-    // 球の番号がそのまま得点になる種目（ローテーション）。
-    // rackTotal を持つ種目に限る（カイルンは当てて進めるゲームで番号得点ではない）
-    if (base.rackEndsScoring === false && base.rackTotal) {
-      // NBA第11章第4条第5項。ラックは盤面のリセット単位でしかない
-      notes.push(
-        base.label + "は球の番号がそのまま得点で、ラックをまたいで点が続きます。"
-          + "1ラックで合計" + base.rackTotal + "点です。"
-      );
-    }
-    // カイルンは公式競技規程が無い。何を根拠にしているかを明示する
-    if (base.isCarom) {
-      notes.push(
-        base.label + "は" + base.balls.join("・") + "番に当てて進める"
-          + base.steps + "段階のゲームです。公式競技規程が無いため、"
-          + "店ごとの決め方を下で選んでください。"
-      );
-    }
-    $("gameNote").textContent = notes.join(" ");
+    // 種目の注意書きは本人の指示（2026-08-20）で画面から削除した。
+    // data/ 側の note や規程の根拠は 04_種目ルール仕様.md に残してある。
 
     // ブレイク方式の既定値
     UI.setToggle($("breakTypeToggle"), base.defaultBreakType);
@@ -714,10 +673,6 @@ const SETUP = (function () {
     });
     wrap.appendChild(chips);
 
-    const cur = BALL_SETS[ballSet];
-    if (cur && cur.note) {
-      wrap.appendChild(UI.el("p", { class: "hint", text: cur.note }));
-    }
     wrap.appendChild(
       UI.el("p", {
         class: "hint",

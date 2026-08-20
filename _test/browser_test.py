@@ -56,9 +56,15 @@ def run():
         # ---------- 種目ごとのボタン出し分け ----------
         helpers.pick_game(page, "10ball")
         page.wait_for_timeout(150)
-        note = page.text_content("#gameNote") or ""
-        check("ブレイクエース" in note, "10ボールでブレイクエースなしの注意が出る", note)
-        check("セーフティコール" in note, "10ボールでセーフティ廃止の注意が出る", note)
+        # ルール説明は本人指示（2026-08-20）で削除。文言ではなく
+        # 挙動の根拠になっている data 側の値が生きていることを見る。
+        check(page.locator("#gameNote").count() == 0, "ルール説明は表示しない")
+        flags = page.evaluate(
+            "() => { const b = BASE_RULES[GAMES['10ball'].base];"
+            " return { ace: b.hasBreakAce, safety: b.safetyCallable }; }"
+        )
+        check(flags["ace"] is False, "10ボールはブレイクエース無しのまま", flags)
+        check(flags["safety"] is False, "10ボールはセーフティコール廃止のまま", flags)
         check(
             page.get_attribute('#breakTypeToggle button[data-v="alternate"]', "aria-pressed") == "true",
             "10ボールの既定はオルタネート",

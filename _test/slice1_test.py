@@ -160,32 +160,22 @@ with sync_playwright() as p:
     check("標準" in label, "「標準」も残っている（探せなくならないように）", label)
 
     # ================================================================
-    section("指示6: ルール説明が選んだ種目のすぐ下に出る")
-    helpers.pick_game(pg, "rotation")
-    pg.wait_for_timeout(200)
-    note_text = (pg.text_content("#gameNote") or "").strip()
-    check(len(note_text) > 0, "ローテーションで注意書きが出る", note_text[:40])
-    # 選択中の行と同じ group-body の中にあるか
-    inside = pg.evaluate("""() => {
-        const n = document.getElementById('gameNote');
-        const body = n && n.closest('.group-body');
-        if (!body) return 'group-bodyの外';
-        const active = body.querySelector('.game-row.active');
-        if (!active) return '選択行が同じbodyに無い';
-        // 注意書きは選択行より後ろ（＝下）にあること
-        const pos = active.compareDocumentPosition(n);
-        return (pos & Node.DOCUMENT_POSITION_FOLLOWING) ? 'ok' : '選択行より前にある';
-    }""")
-    check(inside == "ok", "注意書きが選んだ種目の行の直下にある", inside)
-
-    # カテゴリを閉じても注意書きが消えない（DOMから外れたまま迷子にならない）
-    pg.click(".group-head")
-    pg.wait_for_timeout(200)
-    still = pg.locator("#gameNote").count()
-    check(still == 1, "カテゴリを閉じても注意書きの要素が残る", still)
-    helpers.pick_game(pg, "9ball")
-    pg.wait_for_timeout(200)
-    check(pg.locator("#gameNote").count() == 1, "種目を選び直しても注意書きは1つだけ")
+    section("指示2(0820): 種目のルール説明を出さない")
+    # 本人指示（2026-08-20）でルール説明は全種目で削除した。
+    # 以前は「選んだ種目の直下に出る」ことを検査していた項目を、
+    # 「どの種目を選んでも出ない」に反転させて残している。
+    for gid in ("rotation", "9ball", "10ball"):
+        helpers.pick_game(pg, gid)
+        pg.wait_for_timeout(200)
+        check(
+            pg.locator("#gameNote").count() == 0,
+            "%s でルール説明の要素が無い" % gid,
+            pg.locator("#gameNote").count(),
+        )
+    # カイルン（ハウス設定を持つ種目）でも出さない
+    if helpers.pick_game(pg, "kailun") is not False:
+        pg.wait_for_timeout(200)
+        check(pg.locator("#gameNote").count() == 0, "カイルンでもルール説明が無い")
 
     # ================================================================
     section("指示1・8: ダブルスの選択表示と候補の除外")

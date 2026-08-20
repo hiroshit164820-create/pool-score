@@ -90,15 +90,18 @@ with sync_playwright() as p:
     check(any("ハウス" in g for g in groups), "ハウスゲームのカテゴリに入っている", groups)
 
     # ================================================================
-    section("2. 公式規程が無いことを案内する")
+    section("2. 規程が無い前提のハウス設定が出る")
     helpers.pick_game(pg, "kailun")
     pg.wait_for_timeout(400)
-    note = pg.text_content("#gameNote") or ""
-    check("公式競技規程が無い" in note, "規程が無いと明記する", note[:60])
-    check("1・3・11番" in note, "当てる球が書いてある", note[:60])
-    # ローテーションの説明が混ざらないこと（当てるゲームで番号得点ではない）
-    check("球の番号がそのまま得点" not in note, "他種目の説明が混ざらない", note[:60])
-    check("10ボール" not in note, "10ボールの説明が混ざらない", note[:60])
+    # ルール説明は本人指示（2026-08-20）で削除した。案内文の代わりに、
+    # 店ごとに決める設定そのものが出ていることを確認する。
+    check(pg.locator("#gameNote").count() == 0, "ルール説明は表示しない")
+    kd = pg.evaluate(
+        "() => { const b = BASE_RULES[GAMES['kailun'].base];"
+        " return { balls: b.balls, steps: b.steps, carom: b.isCarom }; }"
+    )
+    check(kd["carom"] is True, "カイルンは当てて進めるゲームのまま", kd)
+    check(kd["balls"] == [1, 3, 11], "当てる球は1・3・11番のまま", kd["balls"])
 
     # ================================================================
     section("3. ハウス設定を選べる")
