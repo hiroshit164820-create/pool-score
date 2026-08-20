@@ -2202,3 +2202,11 @@ button::after {
   color: var(--text-dim);
   white-space: nowrap;
 }
+
+/* 成績ページから「種目ごとの成績」へ入るボタン（本人の指示 2026-08-21）。
+   ホームのボタンを消したぶん、ここが唯一の入口になる */
+.stats-bygame {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 10px;
+}

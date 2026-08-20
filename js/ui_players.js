@@ -652,6 +652,18 @@ const PLAYERS = (function () {
       // 冒頭に「自分の成績」「他選手の成績」を1行で置く（本人の指示 2026-08-21・D）
       body.appendChild(statsSwitchRow(null));
 
+      // 「種目ごとの成績」はホームのボタンを消したため入る道が無くなっていた。
+      // 成績ページから開けるようにする（本人の指示 2026-08-21）
+      if (typeof GAMESTATS !== "undefined") {
+        body.appendChild(
+          UI.el("button", {
+            class: "ghost stats-bygame",
+            text: "種目ごとの成績を見る",
+            onclick: function () { GAMESTATS.open(); },
+          })
+        );
+      }
+
       // 全員の一覧（勝率順）
       const rows = players
         .map(function (p) { return { p: p, st: STORE.playerStats(p.id) }; })

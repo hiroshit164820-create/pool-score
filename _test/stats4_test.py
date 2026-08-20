@@ -111,6 +111,28 @@ with sync_playwright() as p:
     check(not any("種目ごとの成績" in b for b in btns),
           "ホームに「種目ごとの成績を見る」が無い", btns)
 
+    # ---- 入口は成績ページに移した（本人の指示 2026-08-21）----
+    section("1b. 成績ページから種目ごとの成績を開ける")
+    pg.click("#tabStats")
+    pg.wait_for_timeout(700)
+    bg = pg.locator(".stats-bygame")
+    check(bg.count() == 1, "成績ページにボタンがある", bg.count())
+    check((bg.text_content() or "").strip() == "種目ごとの成績を見る",
+          "文言が「種目ごとの成績を見る」", bg.text_content())
+    bh = bg.bounding_box()
+    check(bh and bh["height"] >= 44, "44px以上", bh)
+    bg.click()
+    pg.wait_for_timeout(600)
+    check(pg.is_visible("#screenGameStats"), "押すと種目ごとの成績が開く")
+    gtxt = pg.inner_text("#gameStatsBody")
+    check("9ボール" in gtxt, "中身が出ている", gtxt[:120])
+    pg.click("#backFromGameStatsBtn")
+    pg.wait_for_timeout(600)
+    check(pg.is_visible("#screenStats"), "「戻る」で成績ページに帰る")
+    check(pg.locator(".stats-switch").count() == 1, "成績ページの一覧に戻っている")
+    pg.click("#tabHome")
+    pg.wait_for_timeout(500)
+
     # ================= 12. ホームの直近の試合は5件（E）=================
     section("12. ホームの直近の試合は5件")
     rows = pg.eval_on_selector_all("#homeBody .home-row", "e => e.length")

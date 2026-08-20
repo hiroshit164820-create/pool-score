@@ -22,7 +22,10 @@ const GAMESTATS = (function () {
     if (bound) return;
     bound = true;
     $("backFromGameStatsBtn").addEventListener("click", function () {
-      UI.showScreen("screenHome");
+      // 入口はホームから成績ページに移した（本人の指示 2026-08-21）ので、
+      // 戻り先も成績ページにする。押した場所へ戻らないと迷子になる
+      if (typeof PLAYERS !== "undefined" && PLAYERS.openStats) PLAYERS.openStats(null);
+      else UI.showScreen("screenHome");
     });
     $("csvGameStatsBtn").addEventListener("click", UI.guard(function () {
       if (!lastStats) return;
