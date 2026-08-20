@@ -176,7 +176,13 @@
         <h1 id="matchTitle">9ボール</h1>
         <div class="sub" id="matchSubtitle"></div>
       </div>
-      <button id="quitMatchBtn" class="small ghost">中断</button>
+      <!-- 中断と試合終了は上の帯の右に置く（本人の指示 2026-08-21）。
+           縦・横どちらでも、どの種目でも同じ場所にする。
+           ラック数などを差し込む syncMetaPlace はこの並びの手前に入れる -->
+      <div class="tb-actions">
+        <button id="quitMatchBtn" class="small ghost">中断</button>
+        <button id="finishBtn" class="small">試合終了</button>
+      </div>
     </div>
 
     <div class="scoreboard">
@@ -230,44 +236,6 @@
         <div class="panel-flags" id="panelFlagsB" hidden></div>
       </div>
 
-    </div>
-
-    <!-- ラック情報と帯。
-         スコアボード（縮む・はみ出しを隠す）の中に入れていたため、
-         名前が長いダブルスなどで潰れて読めなくなっていた。
-         縮まない外側に出して、必ず読める高さを確保する -->
-    <div class="match-info">
-      <div class="meta-line">
-        <!-- 数字は1つのまとまりにして、行が増えないようにする。
-             セーフティ数は試合結果・成績・履歴に出す（ここに出すと帯が3行になり、
-             下の操作ボタンが画面からはみ出す） -->
-        <span class="meta-chips">
-          <span id="rackInfo">ラック 1</span>
-          <span id="inningInfo" class="inning-info" hidden></span>
-          <!-- マスワリが出るまでは出さない（出ていないのに0と書くと紛らわしいため） -->
-          <span id="masuwariInfo" class="masuwari-info" hidden></span>
-        </span>
-        <!-- JPA9ボールは無効球があり、10点に届かないままラックが終わることがある。
-             その場合に手で次のラックへ進める -->
-        <button id="nextRackBtn" class="small ghost" hidden>次のラック</button>
-        <button id="breakToggleBtn" class="break-toggle">
-          <span class="bt-label">ブレイク</span>
-          <span class="bt-name" id="breakToggleName">—</span>
-          <span class="bt-swap">入れ替え</span>
-        </button>
-      </div>
-      <!-- いま誰がブレイクかを、台の脇から見て一目で分かるように大きく出す -->
-      <div class="break-banner" id="breakBanner">
-        <span class="bb-icon" aria-hidden="true"></span>
-        <span class="bb-text"><b id="breakBannerName">—</b> のブレイク</span>
-      </div>
-
-      <!-- いま誰が撞いているか。JPAのようにイニングを数える種目では
-           これが分からないと記録できない -->
-      <div class="turn-banner" id="turnBanner" hidden>
-        <span class="tb-label">いまの番</span>
-        <b class="tb-name" id="turnBannerName">—</b>
-      </div>
     </div>
 
     <!-- 公式スコアシートに沿った表示（JPA・ボウラード） -->
@@ -324,10 +292,49 @@
       <div id="flagButtons" class="flag-buttons"></div>
     </div>
 
+    <!-- ラック情報と帯。
+         スコアボード（縮む・はみ出しを隠す）の中に入れていたため、
+         名前が長いダブルスなどで潰れて読めなくなっていた。
+         縮まない外側に出して、必ず読める高さを確保する -->
+    <div class="match-info">
+      <div class="meta-line">
+        <!-- 数字は1つのまとまりにして、行が増えないようにする。
+             セーフティ数は試合結果・成績・履歴に出す（ここに出すと帯が3行になり、
+             下の操作ボタンが画面からはみ出す） -->
+        <span class="meta-chips">
+          <span id="rackInfo">ラック 1</span>
+          <span id="inningInfo" class="inning-info" hidden></span>
+          <!-- マスワリが出るまでは出さない（出ていないのに0と書くと紛らわしいため） -->
+          <span id="masuwariInfo" class="masuwari-info" hidden></span>
+        </span>
+        <!-- JPA9ボールは無効球があり、10点に届かないままラックが終わることがある。
+             その場合に手で次のラックへ進める -->
+        <button id="nextRackBtn" class="small ghost" hidden>次のラック</button>
+        <button id="breakToggleBtn" class="break-toggle">
+          <span class="bt-label">ブレイク</span>
+          <span class="bt-name" id="breakToggleName">—</span>
+          <span class="bt-swap">入れ替え</span>
+        </button>
+      </div>
+      <!-- いま誰がブレイクかを、台の脇から見て一目で分かるように大きく出す -->
+      <div class="break-banner" id="breakBanner">
+        <span class="bb-icon" aria-hidden="true"></span>
+        <span class="bb-text"><b id="breakBannerName">—</b> のブレイク</span>
+      </div>
+
+      <!-- いま誰が撞いているか。JPAのようにイニングを数える種目では
+           これが分からないと記録できない -->
+      <div class="turn-banner" id="turnBanner" hidden>
+        <span class="tb-label">いまの番</span>
+        <b class="tb-name" id="turnBannerName">—</b>
+      </div>
+    </div>
+
+
+    <!-- 取り消しは削除した（本人の指示 2026-08-21）。
+         記録の取り消しは「訂正」から、どの記録でも選んでできる -->
     <div class="bottom-bar">
-      <button id="undoBtn">⟲ 取り消し</button>
       <button id="reviseBtn" class="ghost">⋯ 訂正</button>
-      <button id="finishBtn" class="ghost">試合終了</button>
     </div>
   </section>
 

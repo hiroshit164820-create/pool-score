@@ -203,7 +203,7 @@ with sync_playwright() as p:
           pg.text_content("#scoreA"))
 
     # 取り消せる
-    pg.click("#undoBtn")
+    helpers.undo_last(pg)
     pg.wait_for_timeout(400)
     check(pg.text_content("#scoreB") == "0", "取り消しで戻る", pg.text_content("#scoreB"))
     check(not pg.is_disabled('#ballGrid .ball-btn[data-ball="3"]'), "取り消した球は盤面に戻る")

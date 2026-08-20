@@ -22,6 +22,10 @@ const MONEYUI = (function () {
   let shots = [];
   /** ラックの区切り [{ at, runoutBy }] */
   let racks = [];
+  // いま進んでいるラックで撞き切った人（マスワリ）。
+  // 名前の下のボタンで選ぶ。選んだ時点でそのラックの得点が倍になる
+  // （本人の指示 2026-08-21）
+  let pendingRunout = null;
   /** いま選んでいる「落とした人」 */
   let shooter = null;
   /** 保存する結果のID。同じ試合を何度保存しても1件にまとまるよう持つ */
@@ -54,6 +58,9 @@ const MONEYUI = (function () {
     }
     shots = [];
     racks = [];
+    pendingRunout = null;
+    pendingRunout = null;
+    pendingRunout = null;
     shooter = null;
     $("moneySetupTitle").textContent = game.label;
     renderSetup();
@@ -364,11 +371,25 @@ const MONEYUI = (function () {
   }
 
   /** 持ち点。プラスマイナスが一目で分かるようにする */
+  /**
+   * 集計に渡すラックの区切り。
+   *
+   * まだ終えていないラックでマスワリを選んでいるときは、
+   * 仮の区切りを足して「いまの点」に倍を反映させる。
+   * ここで足した仮の区切りは保存しない（endRack で本物を積む）。
+   */
+  function liveRacks() {
+    if (!pendingRunout) return racks;
+    const from = racks.length ? racks[racks.length - 1].at : 0;
+    if (shots.length <= from) return racks;
+    return racks.concat([{ at: shots.length, runoutBy: pendingRunout }]);
+  }
+
   function renderScores() {
     const wrap = $("moneyScores");
     if (!wrap) return;
     UI.clear(wrap);
-    const r = MONEY.tally(game, players, shots, handicaps, racks);
+    const r = MONEY.tally(game, players, shots, handicaps, liveRacks());
     players.forEach(function (p) {
       const v = r.totals[p.id] || 0;
       const card = UI.el("div", {
@@ -386,6 +407,24 @@ const MONEYUI = (function () {
           UI.el("div", { class: "ms-hc", text: "ハンデ " + hb.join("・") + "番" })
         );
       }
+      // マスワリ。押すとこのラックの得点が倍になる（本人の指示 2026-08-21）。
+      // 誰の記録かを置き場所で示すため、その人の名前の下に置く
+      const on = pendingRunout === p.id;
+      card.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "ms-masu" + (on ? " is-on" : ""),
+          "aria-pressed": on ? "true" : "false",
+          text: on ? "マスワリ ✓" : "マスワリ",
+          onclick: function () {
+            pendingRunout = on ? null : p.id;
+            renderMatch();
+            UI.toast(on
+              ? nameOf(p.id) + " のマスワリを取り消しました。"
+              : nameOf(p.id) + " のマスワリ。このラックの得点が倍になります。");
+          },
+        })
+      );
       wrap.appendChild(card);
     });
   }
@@ -467,51 +506,23 @@ const MONEYUI = (function () {
       UI.toast("このラックはまだ記録がありません。", "warn");
       return;
     }
-    // このラックで得点した人だけがマスワリの候補になる
-    const inRack = shots.slice(from).filter(function (s) { return !s.voided; });
-    const cands = players.filter(function (p) {
-      return inRack.some(function (s) { return s.by === p.id; });
-    });
-
-    const names = cands.map(function (p) { return p.name; }).join(" / ");
-    const ans = window.prompt(
-      "このラックを撞き切った人（マスワリ）がいれば名前を入れてください。\n"
-        + "いなければ空のままOKを押してください。\n"
-        + "候補: " + names,
-      ""
-    );
-    if (ans === null) return; // キャンセル
-
-    let runoutBy = null;
-    const typed = (ans || "").trim();
-    if (typed) {
-      const hit = players.find(function (p) { return p.name === typed; });
-      if (!hit) {
-        UI.toast("「" + typed + "」が見つかりません。ラックはそのまま終了しました。", "warn");
-      } else {
-        runoutBy = hit.id;
-      }
-    }
-    // ブレイクエース（ブレイクで直接キーボールを入れた）かどうか。
-    // 撞き切った人がいるときだけ聞く（本人の指示 2026-08-21・種目別の成績で使う）
-    let breakAce = false;
-    if (runoutBy) {
-      breakAce = window.confirm(
-        nameOf(runoutBy) + " のブレイクエース（ブレイクで直接入れた）でしたか？"
-      );
-    }
-    racks.push({ at: shots.length, runoutBy: runoutBy, breakAce: breakAce });
+    // 撞き切った人は、名前の下の「マスワリ」で選んである。
+    // ここで聞き直さない（本人の指示 2026-08-21）
+    const runoutBy = pendingRunout;
+    racks.push({ at: shots.length, runoutBy: runoutBy });
+    pendingRunout = null;
     renderMatch();
     UI.toast(runoutBy
-      ? nameOf(runoutBy) + (breakAce ? " のブレイクエース。" : " のマスワリ。")
-        + "このラックの得点が倍になりました。"
+      ? nameOf(runoutBy) + " のマスワリ。このラックの得点が倍になりました。"
       : "次のラックへ進みました。");
   }
 
   function undo() {
     // ラックの区切りが最後なら、それを先に戻す
     if (racks.length && racks[racks.length - 1].at >= shots.length) {
-      racks.pop();
+      const gone = racks.pop();
+      // 選んでいたマスワリごと戻す（選び直さずに済むように）
+      pendingRunout = (gone && gone.runoutBy) || null;
       renderMatch();
       UI.toast("ラックの終了を取り消しました。");
       return;
@@ -541,7 +552,7 @@ const MONEYUI = (function () {
     if (!wrap) return;
     UI.clear(wrap);
     if (!shots.length) return;
-    const bounds = MONEY.rackBounds(shots.length, racks);
+    const bounds = MONEY.rackBounds(shots.length, liveRacks());
     bounds.forEach(function (rk, i) {
       const items = [];
       for (let k = rk.from; k < rk.to; k++) {
@@ -571,7 +582,7 @@ const MONEYUI = (function () {
    */
   function saveResult() {
     if (!shots.length) return null;
-    const r = MONEY.tally(game, players, shots, handicaps, racks);
+    const r = MONEY.tally(game, players, shots, handicaps, liveRacks());
     const saved = STORE.saveMoneyResult({
       id: matchId,
       gameId: game.id,
@@ -579,14 +590,14 @@ const MONEYUI = (function () {
       createdAt: startedAt,
       racks: racks.length + (shots.length > (racks.length ? racks[racks.length - 1].at : 0) ? 1 : 0),
       players: players.map(function (p) {
-        // マスワリ・ブレイクエースの回数。ラックの区切りに残してある
-        // （本人の指示 2026-08-21・種目別の成績で使う）
-        const mine = racks.filter(function (rk) { return rk.runoutBy === p.id; });
+        // マスワリの回数。ラックの区切りに残してある
+        // （本人の指示 2026-08-21・種目別の成績で使う）。
+        // 途中でやめたときのために、まだ確定していないラックぶんも数える
+        const mine = liveRacks().filter(function (rk) { return rk.runoutBy === p.id; });
         return {
           name: p.name,
           score: r.totals[p.id] || 0,
           masuwari: mine.length,
-          breakAce: mine.filter(function (rk) { return !!rk.breakAce; }).length,
           handicapBalls: (handicapOn[p.id] && handicaps[p.id]) || [],
         };
       }),

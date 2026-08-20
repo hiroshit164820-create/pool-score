@@ -157,16 +157,20 @@ with sync_playwright() as p:
     check(fs >= 44, "数字が44px以上", fs)
     pg.screenshot(path=os.path.join(SHOTS, "land_scoreboard.png"))
 
-    section("横向き: 記録のボタンはスコアの横")
-    for sd in ["A", "B"]:
-        pos = pg.evaluate("""(sd) => {
-          const p = document.getElementById('panel' + sd).getBoundingClientRect();
-          const f = document.getElementById('panelFlags' + sd).getBoundingClientRect();
-          return {panelRight: Math.round(p.right), flagsLeft: Math.round(f.left),
-                  flagsTop: Math.round(f.top), panelTop: Math.round(p.top)};
-        }""", sd)
-        check(pos["flagsLeft"] >= pos["panelRight"] - 2,
-              sd + "側のボタンがスコアの右にある", pos)
+    section("横向き: 記録のボタンはスコアの外側")
+    # 2026-08-21 の指示で「外側に置く」に変えた。
+    # 内側（2つのスコアの間）に置くと数字と重なって読めないため
+    pos = pg.evaluate("""() => {
+      const pa = document.getElementById('panelA').getBoundingClientRect();
+      const fa = document.getElementById('panelFlagsA').getBoundingClientRect();
+      const pb = document.getElementById('panelB').getBoundingClientRect();
+      const fb = document.getElementById('panelFlagsB').getBoundingClientRect();
+      return {aOut: fa.right <= pa.left + 2, bOut: fb.left >= pb.right - 2,
+              fa: Math.round(fa.right), pa: Math.round(pa.left),
+              fb: Math.round(fb.left), pb: Math.round(pb.right)};
+    }""")
+    check(pos["aOut"], "A側のボタンがスコアの左（外側）にある", pos)
+    check(pos["bOut"], "B側のボタンがスコアの右（外側）にある", pos)
     labels_l = flag_labels(pg, "A")
     check(labels_l == ["マスワリ", "ブレイクエース", "セーフティ"],
           "横向きでも3つ並ぶ", labels_l)

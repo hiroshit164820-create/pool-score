@@ -67,7 +67,10 @@ const MATCH = (function () {
     ["A", "B"].forEach(function (sd) {
       bindPanelPress($("panel" + sd), sd);
     });
-    $("undoBtn").addEventListener("click", UI.guard(onUndo));
+    // 取り消しボタンは削除した（本人の指示 2026-08-21）。
+    // 残っている画面でも動くよう、あるときだけ結ぶ
+    const undoBtn = $("undoBtn");
+    if (undoBtn) undoBtn.addEventListener("click", UI.guard(onUndo));
     $("reviseBtn").addEventListener("click", UI.guard(openRevise));
     $("finishBtn").addEventListener("click", UI.guard(openFinish));
     $("breakToggleBtn").addEventListener("click", UI.guard(toggleBreakSide));
@@ -1564,12 +1567,45 @@ const MATCH = (function () {
     }
   }
 
+  /**
+   * 自分で押していない記録か。
+   *
+   * 次ラックの開始と、ショットクロックの経過時間は、得点を入れたときに
+   * 自動で積まれる。訂正の一覧に出しても選ぶ意味がなく、
+   * これを選んでも得点は戻らない（取り消しボタンを消したあと、
+   * 一覧の先頭がこれになって「訂正しても戻らない」状態になっていた）。
+   */
+  function isAutoEvent(e) {
+    if (!e) return false;
+    if (e.t === "RACK_START" && e.d && e.d.auto) return true;
+    if (e.t === "SHOT_CLOCK" && e.d && e.d.event === "shot") return true;
+    return false;
+  }
+
+  /**
+   * ある記録を取り消したとき、その直後に自動で積まれた記録も一緒に消す。
+   * 得点だけ消して自動の記録が残ると、平均タイムやブレイク側が1つぶんずれる。
+   */
+  function voidTrailingAuto(fromSeq) {
+    const evs = match.events;
+    const at = evs.findIndex(function (e) { return e.seq === fromSeq; });
+    if (at < 0) return;
+    for (let i = at + 1; i < evs.length; i++) {
+      const e = evs[i];
+      if (e.voided || e.t === "VOID") continue;
+      if (!isAutoEvent(e)) break;
+      voidEvent(match, e.seq, "訂正に伴う自動取り消し", new Date());
+    }
+  }
+
   function openRevise() {
     const list = $("evList");
     UI.clear(list);
     const evs = match.events.slice().reverse();
     evs.forEach(function (e) {
       if (e.t === "VOID" || e.t === "MATCH_START") return;
+      // 自動の記録は選ばせない（選んでも得点は戻らないため）
+      if (isAutoEvent(e)) return;
       const row = UI.el("div", { class: "ev-item" + (e.voided ? " voided" : "") }, [
         UI.el("span", { class: "ev-seq", text: "#" + e.seq }),
         UI.el("span", { class: "ev-desc", text: describeEvent(e) }),
@@ -1581,6 +1617,8 @@ const MATCH = (function () {
             text: "取り消す",
             onclick: function () {
               voidEvent(match, e.seq, "訂正", new Date());
+              // 直後に自動で積まれた記録も一緒に消す
+              voidTrailingAuto(e.seq);
               save();
               render();
               openRevise();

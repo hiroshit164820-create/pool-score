@@ -226,3 +226,19 @@ def fill_doubles(page, side, name1, name2):
     open_second_member(page, side)
     page.fill("#inName%s2" % side, name2)
     page.wait_for_timeout(150)
+
+
+def undo_last(pg):
+    """いちばん新しい記録を1つ取り消す。
+
+    「取り消し」ボタンは 2026-08-21 に削除した（本人の指示）。
+    記録の取り消しは「訂正」から行う。
+    """
+    pg.click("#reviseBtn")
+    pg.wait_for_timeout(400)
+    btn = pg.locator("#evList button", has_text="取り消す")
+    if btn.count():
+        btn.first.click()
+        pg.wait_for_timeout(500)
+    pg.click("#closeReviseBtn")
+    pg.wait_for_timeout(300)

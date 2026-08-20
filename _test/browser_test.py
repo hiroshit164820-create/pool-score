@@ -167,7 +167,7 @@ def run():
         check(page.text_content("#breakMarkB") == "BREAK", "勝者ブレイク: ブレイク権がBに移る")
 
         # ---------- 取り消し ----------
-        page.click("#undoBtn")
+        helpers.undo_last(page)
         page.wait_for_timeout(300)
         check(page.text_content("#scoreB") == "0", "取り消しでBのスコアが戻る")
         check(page.text_content("#breakMarkA") == "BREAK", "取り消しでブレイク権も戻る")
@@ -329,7 +329,7 @@ def run():
         check(page.text_content("#scoreA") == "2", "ファウルで1点減点される", page.text_content("#scoreA"))
 
         # 取り消しで戻る
-        page.click("#undoBtn")
+        helpers.undo_last(page)
         page.wait_for_timeout(300)
         check(page.text_content("#scoreA") == "3", "減点も取り消せる", page.text_content("#scoreA"))
         page.screenshot(path=os.path.join(SHOT_DIR, "12_straight.png"), full_page=True)

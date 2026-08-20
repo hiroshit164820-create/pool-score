@@ -149,7 +149,7 @@ with sync_playwright() as p:
     check(wins[0]["side"] == breaker, "ブレイクした側の取得になる", wins)
     check(wins[0]["masuwari"] is True, "マスワリとして記録される", wins)
 
-    pg.click("#undoBtn")
+    helpers.undo_last(pg)
     pg.wait_for_timeout(500)
     check(pg.text_content("#score" + breaker) == "0", "取り消しで元に戻る",
           pg.text_content("#score" + breaker))

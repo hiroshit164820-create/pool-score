@@ -1524,3 +1524,243 @@ button::after {
 .resume-card .rc-main {
   padding-right: 52px;
 }
+
+/* 配置図の球の番号が、まだ下に寄って見える（本人の指摘 2026-08-21）。
+   枠のちょうど真ん中に置くと、数字の見た目の重心が下に来るため1px上げる */
+.tb-ball .bb-num,
+.tray-ball .bb-num {
+  transform: translateY(-1px);
+}
+/* 掴んでいる最中は既存の指定（translateY(-2px)）が勝つので、そちらに合わせる */
+.tb-ball.dragging .bb-num {
+  transform: translateY(-3px);
+}
+
+/* ============ 試合画面の作り直し（本人の指示 2026-08-21） ============ */
+/* 上の帯の右に「中断」と「試合終了」を並べる。縦・横・種目を問わず同じ場所 */
+#screenMatch .tb-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+#screenMatch .tb-actions button {
+  /* 押せる大きさ（44px）は上の帯でも下げない */
+  min-height: 44px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+/* 試合終了は押し間違えたくないので、中断とは色を分ける */
+#screenMatch #finishBtn {
+  background: var(--coin);
+  border: var(--bw) solid var(--ink);
+  font-weight: 900;
+}
+/* 種目名は帯の中で縮む側にする（ボタンは必ず押せる大きさを残す） */
+#screenMatch .topbar > div:first-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 下の帯は「訂正」だけになったので、幅を取りすぎないようにする */
+#screenMatch .bottom-bar {
+  justify-content: center;
+}
+#screenMatch .bottom-bar button {
+  flex: 0 1 220px;
+}
+
+/* ラック情報の帯は画面の下（交代ボタンの下）へ移した。
+   マスワリの表示が出ても行が崩れないよう、折り返し方を決めておく */
+#screenMatch .match-info {
+  flex: 0 0 auto;
+}
+#screenMatch .meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+#screenMatch .meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+#screenMatch .meta-chips > span {
+  white-space: nowrap;
+}
+#screenMatch .meta-line > button {
+  flex: 0 0 auto;
+}
+#screenMatch .break-toggle {
+  max-width: 100%;
+}
+
+/* ---- 横向き ---- */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* マスワリ・エース・セーフティは台の外側へ。
+     内側（2つのスコアの間）に置くと、数字と重なって読めない
+     （本人の指摘 2026-08-21・画像1） */
+  #screenMatch .panel-wrap.side-a {
+    flex-direction: row-reverse;
+  }
+  #screenMatch .panel-wrap.side-b {
+    flex-direction: row;
+  }
+  /* 数字がボタンの下へはみ出さないよう、枠の中で必ず収める */
+  #screenMatch .score-panel {
+    overflow: hidden;
+  }
+  #screenMatch .score-panel .val-row {
+    overflow: hidden;
+  }
+  /* 下の帯とラック情報は横向きでは詰める */
+  #screenMatch .bottom-bar button {
+    flex: 0 1 200px;
+  }
+}
+
+/* 横向きは高さが足りない。記録のボタン3つ（44px×3）が入る高さをスコアに
+   回すため、他の帯から余白だけを削る。押せる大きさ（44px）は下げない */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .topbar {
+    padding: 2px 12px;
+  }
+  #screenMatch .tb-actions button {
+    min-height: 44px;
+    font-size: 13px;
+    padding: 2px 8px;
+  }
+  /* スコアシートは縦を食うので、横向きでは1行ぶんに抑える */
+  #screenMatch .sheet-area {
+    max-height: 58px;
+  }
+  #screenMatch .play-fixed {
+    padding: 0 12px 2px;
+    gap: 2px;
+  }
+  #screenMatch .turn-btn {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  #screenMatch .match-info {
+    padding: 1px 12px;
+    gap: 2px;
+  }
+  #screenMatch .match-info button {
+    min-height: 40px;
+  }
+  #screenMatch .bottom-bar {
+    padding: 2px 12px calc(2px + env(safe-area-inset-bottom));
+  }
+  #screenMatch .bottom-bar button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  /* ボタン3つが入りきるよう、記録の列の隙間だけ詰める */
+  #screenMatch .panel-flags {
+    gap: 2px;
+  }
+}
+
+/* まだ記録のボタン列（44px×3）が16pxはみ出していたので、さらに削る。
+   削るのは余白と文字の大きさだけで、押せる大きさ（44px）は保つ */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .topbar {
+    padding: 0 12px;
+  }
+  #screenMatch .sheet-area {
+    max-height: 50px;
+  }
+  #screenMatch .bottom-bar {
+    padding: 0 12px env(safe-area-inset-bottom);
+  }
+  /* 余った高さはスコアの枠に回す */
+  #screenMatch .scoreboard {
+    flex: 1 1 auto;
+  }
+}
+
+/* ラック情報の帯を下へ移したぶん、縦の短い端末で下の帯が画面から出た
+   （layout_fit_test が 360x640 の14-1 で12pxはみ出しを検出）。
+   余白だけを削って戻す。押せる大きさ（44px）は下げない */
+@media (max-height: 820px) {
+  #screenMatch .match-info {
+    padding: 2px 12px;
+    gap: 2px;
+  }
+  #screenMatch .match-info button {
+    min-height: 44px;
+  }
+  #screenMatch .bottom-bar {
+    padding: 2px 12px calc(2px + env(safe-area-inset-bottom));
+  }
+  #screenMatch .bottom-bar button {
+    min-height: 44px;
+  }
+  #screenMatch .play-fixed {
+    gap: 4px;
+    padding: 0 12px 2px;
+  }
+}
+
+/* 上の帯のボタンを44pxに戻したぶん、横向きで記録のボタン列が14pxはみ出した。
+   スコアシートは1行ぶんに詰め、入りきらないときはその中で送る */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .sheet-area {
+    max-height: 40px;
+    overflow-y: auto;
+  }
+}
+
+/* あと4px。スコアボードの上下の余白を詰めて記録のボタン列を収める */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .scoreboard {
+    padding: 2px 12px 0;
+    gap: 4px;
+  }
+  #screenMatch .panel-flags {
+    gap: 1px;
+  }
+}
+
+/* 横向きのスコアシートは、切れて見えないよう1行ぶんに詰める。
+   余白と文字を小さくして、40pxの中に収まるようにする */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .sheet-area {
+    margin: 0 12px 2px;
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  #screenMatch .sheet-title {
+    font-size: 12px;
+    margin-bottom: 0;
+  }
+  #screenMatch .sheet-side {
+    margin-bottom: 0;
+  }
+  #screenMatch .sheet-head {
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+}
+
+/* スコアシートの中身は44pxのボタン1つ。押せる大きさを守る必要があるので、
+   枠のほうを中身に合わせる（切って見えなくするのは本末転倒） */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .sheet-area {
+    max-height: 50px;
+    padding: 1px 8px;
+    margin-bottom: 0;
+    overflow: hidden;
+  }
+  /* シートのボタンは44pxを保ちつつ、上下の余白だけ削る */
+  #screenMatch .sheet-toggle {
+    min-height: 44px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}

@@ -326,7 +326,7 @@ with sync_playwright() as p:
       if (!t) return [];
       const tr = t.getBoundingClientRect();
       const hidden = [];
-      ['#undoBtn', '#reviseBtn', '#finishBtn', '#turnBtn'].forEach(sel => {
+      ['#reviseBtn', '#finishBtn', '#turnBtn'].forEach(sel => {
         const el = document.querySelector(sel);
         if (!el || el.offsetParent === null) return;
         const r = el.getBoundingClientRect();
@@ -346,7 +346,7 @@ with sync_playwright() as p:
     # 押せなくなる（画面には出ているのに反応しない、という最悪の壊れ方をする）
     blocked = pg.evaluate("""() => {
       const out = [];
-      ['#undoBtn', '#reviseBtn', '#finishBtn'].forEach(sel => {
+      ['#reviseBtn', '#finishBtn'].forEach(sel => {
         const el = document.querySelector(sel);
         if (!el || el.offsetParent === null) return;
         const r = el.getBoundingClientRect();
@@ -369,12 +369,11 @@ with sync_playwright() as p:
         before_score = pg.text_content("#scoreA")
         check(pre_tap != before_score, "%d回目: タップで加点される" % (_try + 1),
               (pre_tap, before_score))
-        pg.click("#undoBtn")
-        pg.wait_for_timeout(300)
+        helpers.undo_last(pg)
         after_score = pg.text_content("#scoreA")
-        check(before_score != after_score, "%d回目: 取り消しボタンが実際に効く" % (_try + 1),
+        check(before_score != after_score, "%d回目: 訂正からの取り消しが実際に効く" % (_try + 1),
               (before_score, after_score))
-        check(after_score == pre_tap, "%d回目: 取り消すと押す前の点に戻る" % (_try + 1),
+        check(after_score == pre_tap, "%d回目: 訂正で押す前の点に戻る" % (_try + 1),
               (pre_tap, after_score))
 
     # ================================================================

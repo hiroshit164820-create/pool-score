@@ -599,11 +599,15 @@ const STORE = (function () {
       }
       g.scExt += st.shotClockExtensions || 0;
 
-      // JPAのチームポイント。率はその試合で動いた全ポイントに対する割合
+      // JPAのチームポイント。
+      // 率は「1試合の満点 × 試合数」に対する割合（本人の指示 2026-08-21）。
+      // 例: 5試合して累計73ポイントなら 73 ÷ 100 = 73%
+      //   9ボール … 勝者と敗者で合計20ポイント（data/handicap_data.js）
+      //   8ボール … 3-0 / 2-1 / 2-0 の3通りなので満点は3
       if (r.jpa && r.jpa.teamPoints && r.jpa.teamPoints[side] !== undefined) {
         g.jpaMatches++;
         g.jpaPoints += r.jpa.teamPoints[side];
-        g.jpaFull += (r.jpa.teamPoints.A || 0) + (r.jpa.teamPoints.B || 0);
+        g.jpaFull += m.gameId === "jpa_8ball" ? 3 : 20;
       }
 
       // あがりまでのイニング数（勝った試合だけ）

@@ -225,12 +225,22 @@ with sync_playwright() as p:
 
     # ============================================================
     section("8. マスワリはそのラックの得点が倍")
-    pg._answer = "あ"  # プロンプトに「あ」と答える
-    pg.click("#moneyRackBtn")
-    pg.wait_for_timeout(400)
+    # 2026-08-21 の指示で、名前を打ち込む窓はやめて
+    # プレーヤー名の下の「マスワリ」ボタンで選ぶ形にした
+    masu = pg.locator(".money-score").filter(
+        has=pg.locator(".ms-name", has_text="あ")).locator(".ms-masu").first
+    check(masu.count() == 1, "名前の下にマスワリのボタンがある")
+    masu.click()
+    pg.wait_for_timeout(500)
     sc = scores(pg)
     check(sc.get("あ") == 8, "マスワリで倍（4→8）", sc)
-    pg._answer = ""
+    # ラックを終えても倍のまま残る
+    pg.click("#moneyRackBtn")
+    pg.wait_for_timeout(500)
+    sc = scores(pg)
+    check(sc.get("あ") == 8, "ラックを終えても倍のまま", sc)
+    check(pg.locator(".ms-masu.is-on").count() == 0,
+          "次のラックではマスワリの選択が外れている")
 
     # ============================================================
     section("9. 5-10は10番が2点")
