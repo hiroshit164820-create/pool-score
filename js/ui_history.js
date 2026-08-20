@@ -12,6 +12,12 @@ const HISTORY = (function () {
   // 絞り込みの状態。画面を閉じても覚えておく（探している最中に消えると使いにくい）
   let filter = { gameId: "", opponent: "" };
 
+  // 1ページに出す件数と、いま何ページ目か（本人の指示 2026-08-21・F）。
+  // 全部を一度に描くとカードが増えるほど重くなるので、既定は10件にする
+  const PAGE_SIZES = [10, 50, 100];
+  let pageSize = 10;
+  let page = 0;
+
   function bindOnce() {
     if (bound) return;
     bound = true;
@@ -27,14 +33,17 @@ const HISTORY = (function () {
 
     $("histGameFilter").addEventListener("change", function (e) {
       filter.gameId = e.target.value;
+      page = 0;
       render();
     });
     $("histOppFilter").addEventListener("change", function (e) {
       filter.opponent = e.target.value;
+      page = 0;
       render();
     });
     $("histFilterClear").addEventListener("click", function () {
       filter = { gameId: "", opponent: "" };
+      page = 0;
       render();
     });
   }
@@ -239,6 +248,14 @@ const HISTORY = (function () {
       return;
     }
 
+    // 表示件数の選択（10 / 50 / 100）。本人の指示 2026-08-21・F
+    const total = Math.max(items.length, moneyItems.length);
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    if (page > pages - 1) page = pages - 1;
+    if (page < 0) page = 0;
+
+    list.appendChild(pageSizeRow());
+
     // 簡易サマリ（確定した試合のみ対象）
     const done = items.filter(function (m) { return m.finished; });
     if (done.length) {
@@ -251,7 +268,8 @@ const HISTORY = (function () {
       );
     }
 
-    items.forEach(function (m) {
+    const from = page * pageSize;
+    items.slice(from, from + pageSize).forEach(function (m) {
       const card = UI.el("div", { class: "match-card" });
 
       const top = UI.el("div", { class: "mc-top" }, [
@@ -296,14 +314,34 @@ const HISTORY = (function () {
       // JPA以外（一般種目）は、代わりにクラスのバッジを出す
       // （本人の指示 2026-08-21：クラスは一般種目で使い、JPAはSLの表示のみ）
       const sl = m.skillLevel || {};
+      // 名前・スキルレベル・W-L を1行に並べると名前が1文字しか出ないので、
+      // スキルレベルの札は下の段（JPAポイントの横）へ移した
+      // （本人の指示 2026-08-21・F）。
+      // ダブルスは「たいら・きりの」と1行に入れると切れるので2段に分ける
       function nameCell(side) {
         const cls = "mc-nm" + (m.winner === side ? " win" : "");
-        const box = UI.el("span", { class: cls }, [
-          UI.el("span", { text: m.names[side] }),
-        ]);
-        if (sl[side] != null) {
-          box.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
-        } else if (typeof PLAYERS !== "undefined" && PLAYERS.classBadgeOfName) {
+        const box = UI.el("span", { class: cls });
+        const ids = (m.playerIds && m.playerIds[side]) || [];
+        const parts = String(m.names[side] || "").split("・");
+        const doubles = ids.length > 1 || parts.length > 1;
+        if (doubles) {
+          box.classList.add("is-doubles");
+          const stack = UI.el("span", { class: "mc-nm-stack" });
+          parts.forEach(function (nm) {
+            const line = UI.el("span", { class: "mc-nm-line" }, [
+              UI.el("span", { class: "mc-nm-text", text: nm }),
+            ]);
+            if (typeof PLAYERS !== "undefined" && PLAYERS.classBadgeOfName && sl[side] == null) {
+              const bd = PLAYERS.classBadgeOfName(nm);
+              if (bd) line.appendChild(bd);
+            }
+            stack.appendChild(line);
+          });
+          box.appendChild(stack);
+          return box;
+        }
+        box.appendChild(UI.el("span", { class: "mc-nm-text", text: m.names[side] }));
+        if (sl[side] == null && typeof PLAYERS !== "undefined" && PLAYERS.classBadgeOfName) {
           const badge = PLAYERS.classBadgeOfName(m.names[side]);
           if (badge) box.appendChild(badge);
         }
@@ -336,21 +374,32 @@ const HISTORY = (function () {
         card.appendChild(UI.el("span", { class: "badge mc-badge", text: "進行中" }));
       }
 
-      if (m.finished) {
-        // JPAポイント。「P」は付けず、上のスコアと列をそろえる（本人の指示 2026-08-21）
-        const jp = (m.jpa && m.jpa.teamPoints) || null;
-        if (jp) {
-          // 上のスコアと数字の位置をそろえるため、W/L と同じ幅の空きを左右に置く
-          card.appendChild(UI.el("div", { class: "mc-main mc-jpa" }, [
-            UI.el("span", { class: "mc-jpa-label", text: "JPAポイント" }),
-            UI.el("span", { class: "mc-score" }, [
-              UI.el("span", { class: "mc-wl is-blank" }),
-              UI.el("span", { class: "mc-num", text: jp.A + " - " + jp.B }),
-              UI.el("span", { class: "mc-wl is-blank" }),
-            ]),
-            UI.el("span", {}),
+      // スキルレベルの札は、名前の横ではなく W-L の下の段に置く
+      // （本人の指示 2026-08-21・F）。JPAポイントがあればその左右に並ぶ
+      const jp0 = (m.finished && m.jpa && m.jpa.teamPoints) ? m.jpa.teamPoints : null;
+      function slCell(side) {
+        const cell = UI.el("span", { class: "mc-slcell" });
+        if (sl[side] != null) {
+          cell.appendChild(UI.el("span", { class: "mc-sl", text: "SL" + sl[side] }));
+        }
+        return cell;
+      }
+      if (jp0 || sl.A != null || sl.B != null) {
+        const center = UI.el("span", { class: "mc-score mc-jpa-center" });
+        if (jp0) {
+          center.appendChild(UI.el("span", { class: "mc-jpa-label", text: "JPAポイント" }));
+          center.appendChild(UI.el("span", { class: "mc-jpa-nums" }, [
+            UI.el("span", { class: "mc-wl is-blank" }),
+            UI.el("span", { class: "mc-num", text: jp0.A + " - " + jp0.B }),
+            UI.el("span", { class: "mc-wl is-blank" }),
           ]));
         }
+        card.appendChild(UI.el("div", { class: "mc-main mc-jpa" }, [
+          slCell("A"), center, slCell("B"),
+        ]));
+      }
+
+      if (m.finished) {
 
         // マスワリ・セーフティは、出した人の名前の下に置く（本人の指示 2026-08-21）
         const ms = m.masuwari || {};
@@ -385,7 +434,59 @@ const HISTORY = (function () {
       list.appendChild(card);
     });
 
-    renderMoneyResults(list, moneyItems);
+    renderMoneyResults(list, moneyItems.slice(from, from + pageSize));
+
+    // ページ送り。1ページに収まっているときは出さない
+    if (pages > 1) list.appendChild(pagerRow(page, pages, total));
+  }
+
+  /** 「直近10件 / 50件 / 100件」の選択（本人の指示 2026-08-21・F） */
+  function pageSizeRow() {
+    const row = UI.el("div", { class: "hist-size" });
+    row.appendChild(UI.el("span", { class: "hs-label", text: "表示件数" }));
+    PAGE_SIZES.forEach(function (n) {
+      row.appendChild(
+        UI.el("button", {
+          class: "small" + (pageSize === n ? " primary" : " ghost"),
+          "aria-pressed": String(pageSize === n),
+          text: "直近" + n + "件",
+          onclick: function () {
+            pageSize = n;
+            page = 0;
+            render();
+          },
+        })
+      );
+    });
+    return row;
+  }
+
+  /** ページ送り。表示件数に収まらないぶんはここで前後に動かす */
+  function pagerRow(cur, pages, total) {
+    const row = UI.el("div", { class: "hist-pager" });
+    row.appendChild(
+      UI.el("button", {
+        class: "small ghost",
+        text: "← 前",
+        disabled: cur <= 0 ? "disabled" : null,
+        onclick: function () { page = Math.max(0, page - 1); render(); },
+      })
+    );
+    row.appendChild(
+      UI.el("span", {
+        class: "hp-now",
+        text: (cur + 1) + " / " + pages + " ページ（全" + total + "件）",
+      })
+    );
+    row.appendChild(
+      UI.el("button", {
+        class: "small ghost",
+        text: "次 →",
+        disabled: cur >= pages - 1 ? "disabled" : null,
+        onclick: function () { page = Math.min(pages - 1, page + 1); render(); },
+      })
+    );
+    return row;
   }
 
   /**

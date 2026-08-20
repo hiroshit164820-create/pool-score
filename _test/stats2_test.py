@@ -203,11 +203,14 @@ with sync_playwright() as p:
     pg.click("#tabHome")
     pg.wait_for_timeout(400)
     btns = pg.eval_on_selector_all("#homeBody button", "e => e.map(x => x.textContent)")
-    check(any("種目ごとの成績" in b for b in btns), "ホームにボタンがある", btns)
+    # ホームの「種目ごとの成績を見る」は本人の指示（2026-08-21・D）で削除した。
+    # 画面そのものは残っているので、ここでは直接開いて中身を確かめる
+    check(not any("種目ごとの成績" in b for b in btns),
+          "ホームに「種目ごとの成績を見る」は置かない", btns)
     # 「新しい試合を始める」は本人の指示（2026-08-21）で削除した
     check(pg.eval_on_selector_all("#homeBody .home-new", "e => e.length") == 0,
           "「新しい試合を始める」は置かない")
-    pg.locator("#homeBody button", has_text="種目ごとの成績を見る").click()
+    pg.evaluate("() => GAMESTATS.open()")
     pg.wait_for_timeout(400)
     check(pg.is_visible("#screenGameStats"), "種目ごとの成績が開く")
     body = pg.inner_text("#gameStatsBody")
@@ -266,7 +269,7 @@ with sync_playwright() as p:
 
     pg.click("#tabHome")
     pg.wait_for_timeout(400)
-    pg.locator("#homeBody button", has_text="種目ごとの成績を見る").click()
+    pg.evaluate("() => GAMESTATS.open()")
     pg.wait_for_timeout(400)
     body2 = pg.inner_text("#gameStatsBody")
     check("パートナーごとの成績" in body2, "パートナーごとの成績の見出しが出る", body2[-200:])

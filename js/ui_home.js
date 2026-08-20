@@ -108,7 +108,8 @@ const HOME = (function () {
     }
 
     // ---- 直近の試合 ----
-    const done = matches.filter(function (m) { return m.finished; }).slice(0, 3);
+    // 直近の試合は5件まで（本人の指示 2026-08-21・E。以前は3件）
+    const done = matches.filter(function (m) { return m.finished; }).slice(0, 5);
     if (done.length) {
       const card = UI.el("div", { class: "home-card" }, [
         UI.el("div", { class: "hc-title", text: "直近の試合" }),
@@ -162,18 +163,8 @@ const HOME = (function () {
       );
     }
 
-    // 種目ごとの成績。どの種目が得意かは人ごとの成績では読み取れないため、
-    // ホームから1タップで開けるようにする（本人の指示 2026-08-20）。
-    // 確定した試合が1件も無いうちは出さない（開いても空になるため）
-    if (done.length) {
-      body.appendChild(
-        UI.el("button", {
-          class: "ghost home-gamestats",
-          text: "種目ごとの成績を見る",
-          onclick: function () { GAMESTATS.open(); },
-        })
-      );
-    }
+    // 「種目ごとの成績を見る」ボタンは本人の指示（2026-08-21・D）で削除した。
+    // 種目ごとの数字は、成績ページの「種目別でさらに詳しく」で見る
 
     const sub = $("homeSub");
     if (sub) {

@@ -59,6 +59,11 @@ def open_detail(pg, name):
     # 一覧から名前を押す
     pg.locator("#statsBody .match-card", has_text=name).first.click()
     pg.wait_for_timeout(600)
+    # 2026-08-21・D でカードを既定で閉じるようにしたので、読む前に全部開く
+    pg.evaluate("""() => {
+      document.querySelectorAll('#statsBody details').forEach(d => { d.open = true; });
+    }""")
+    pg.wait_for_timeout(250)
     return pg.inner_text("#statsBody")
 
 

@@ -597,6 +597,41 @@ const PLAYERS = (function () {
     return v === null || v === undefined ? "—" : v.toFixed(1) + "秒";
   }
 
+  /**
+   * 成績ページの冒頭に置く「自分の成績」「他選手の成績」の1行。
+   * current は今見ている人（null なら一覧）。
+   */
+  function statsSwitchRow(current) {
+    const me = STORE.getSelf();
+    const onSelf = !!(me && current && current.id === me.id);
+    const row = UI.el("div", { class: "stats-switch" });
+    row.appendChild(
+      UI.el("button", {
+        class: "small" + (onSelf ? " primary" : " ghost"),
+        "aria-pressed": String(onSelf),
+        text: "自分の成績",
+        onclick: function () {
+          const self = STORE.getSelf();
+          if (!self) {
+            UI.toast("先に「自分」を登録してください。", "warn");
+            PLAYERS.openSelfRegister();
+            return;
+          }
+          openStats(self);
+        },
+      })
+    );
+    row.appendChild(
+      UI.el("button", {
+        class: "small" + (current ? " ghost" : " primary"),
+        "aria-pressed": String(!current),
+        text: "他選手の成績",
+        onclick: function () { openStats(null); },
+      })
+    );
+    return row;
+  }
+
   /** 成績画面。player を渡すとその人、null なら全員の一覧 */
   function openStats(player) {
     bindOnce();
@@ -614,6 +649,9 @@ const PLAYERS = (function () {
     }
 
     if (!player) {
+      // 冒頭に「自分の成績」「他選手の成績」を1行で置く（本人の指示 2026-08-21・D）
+      body.appendChild(statsSwitchRow(null));
+
       // 全員の一覧（勝率順）
       const rows = players
         .map(function (p) { return { p: p, st: STORE.playerStats(p.id) }; })
@@ -656,8 +694,15 @@ const PLAYERS = (function () {
       return;
     }
 
-    // 個人の詳細
+    // 個人の詳細（本人の指示 2026-08-21・D で並びを決め直した）
+    //   1. 総合成績（既定閉じ）
+    //   2. 一般種目とJPAの内訳（既定閉じ）
+    //   3. 対戦相手別（既定閉じ・直近5人＋開くと全数）
+    //   4. パートナー別（既定閉じ・直近5人＋開くと全数）
+    //   5. 種目別でさらに詳しく（色違い・記録の無い種目も出す）
     const st = STORE.playerStats(player.id);
+    body.appendChild(statsSwitchRow(player));
+
     const head = UI.el("h2", { class: "stats-head", style: "margin:0 0 12px;font-size:20px" }, [
       UI.el("span", { class: "pc-name-text", text: player.name }),
     ]);
@@ -672,14 +717,18 @@ const PLAYERS = (function () {
           UI.el("p", { text: "試合を作るときに、この名前を選んでください。" }),
         ])
       );
+      // 記録が無くても「種目別でさらに詳しく」は出す（どの種目が未記録かを見せる）
+      appendGameDetail(body, player);
+      body.appendChild(backToListBtn());
       UI.showScreen("screenStats");
       return;
     }
 
-    // 主要な数字
+    // ---- 1. 総合成績 ----
+    // 獲得スコア・イニング数・1試合あたりのイニング数・JPA獲得ポイントは
+    // 本人の指示（2026-08-21）で外した
     const main = [
       ["試合数", st.matches + "試合"],
-      // 勝敗はW-Lでも書く（本人の指示 2026-08-20）
       ["W-L", st.wins + " - " + st.losses],
       ["勝率", pct(st.winRate) + "（" + st.wins + "勝" + st.losses + "敗）"],
       ["ラック取得率", pct(st.rackWinRate)],
@@ -687,21 +736,10 @@ const PLAYERS = (function () {
       ["ブレイクエース", st.breakAce + "回"],
       ["セーフティ", st.safety + "回"],
       ["ファウル", st.fouls + "回"],
-      ["獲得スコア（合計）", st.score + "点"],
-      ["イニング数（合計）", st.innings + "イニング"],
-      ["1試合あたりのイニング数",
-        st.matches ? String(Math.round((st.innings / st.matches) * 10) / 10) : "—"],
     ];
-    // JPAのチームポイントは、やった人にだけ意味がある数字なので条件付きで出す
-    if (st.jpaMatches) {
-      main.push(["JPA獲得ポイント",
-        st.jpaPoints + "P（" + st.jpaMatches + "試合・1試合平均 "
-        + (Math.round((st.jpaPoints / st.jpaMatches) * 10) / 10) + "P）"]);
-    }
-    body.appendChild(statTable("成績（総合）", main));
+    body.appendChild(foldTable("成績（総合）", main));
 
-    // 一般種目とJPAの内訳。点の付け方も勝ち方も違うので分けて出す
-    // （本人の指示 2026-08-21）。総合はそのまま上に残してある
+    // ---- 2. 一般種目とJPAの内訳 ----
     const split = [];
     function splitRow(label, b) {
       if (!b || !b.matches) return;
@@ -711,62 +749,99 @@ const PLAYERS = (function () {
     }
     splitRow("一般種目", st.general);
     splitRow("JPA", st.jpa);
-    if (split.length) body.appendChild(statTable("一般種目とJPAの内訳", split));
+    if (split.length) body.appendChild(foldTable("一般種目とJPAの内訳", split));
 
-    // ショットクロックの平均タイム
+    // ---- 3. 対戦相手別（直近5人＋開くと全数） ----
+    const oppRows = recentFirst(st.opponents).map(function (e) {
+      const o = e.v;
+      return [e.k, o.matches + "試合 " + o.wins + "勝（" + pct(o.winRate) + "）"];
+    });
+    if (oppRows.length) body.appendChild(foldTable("対戦相手別", oppRows, 5));
+
+    // ---- 4. パートナー別（勝敗数・勝率・マスワリ回数／率） ----
+    const partRows = recentFirst(st.partners).map(function (e) {
+      const pt = e.v;
+      return [e.k,
+        pt.wins + "勝" + pt.losses + "敗（勝率 " + pct(pt.winRate) + "）"
+        + "／マスワリ " + cntRate(pt.masuwari, pt.breaks)];
+    });
+    if (partRows.length) body.appendChild(foldTable("パートナー別", partRows, 5));
+
+    // ---- 5. 種目別でさらに詳しく ----
+    appendGameDetail(body, player);
+
+    // ショットクロックは上の5つに入っていないが、記録した数字を捨てないため下に残す
     if (st.shotClockShots) {
       body.appendChild(
-        statTable("ショットクロック", [
+        foldTable("ショットクロック", [
           ["平均タイム", sec(st.avgShotSec)],
           ["計測したショット", st.shotClockShots + "回"],
           ["時間切れ", st.shotClockViolations + "回"],
           ["延長の使用", st.shotClockExtensions + "回"],
         ])
       );
-    } else {
-      body.appendChild(
-        UI.el("p", {
-          class: "hint",
-          text: "ショットクロックの平均タイムは、ショットクロックを使った試合でのみ記録されます。",
-        })
-      );
     }
 
-    // 種目別
-    const byGame = Object.keys(st.byGame).map(function (k) {
-      const g = st.byGame[k];
-      return [g.label, g.matches + "試合 " + g.wins + "勝（" + Math.round((g.wins / g.matches) * 100) + "%）"];
-    });
-    if (byGame.length) body.appendChild(statTable("種目別", byGame));
-
-    // 種目別でさらに詳しく（本人の指示 2026-08-21）。既定は閉じておく
-    appendGameDetail(body, player);
-
-    // パートナー別（ダブルスで組んだ相手）
-    const byPartner = Object.keys(st.partners).map(function (k) {
-      const pt = st.partners[k];
-      return [k, pt.wins + "勝" + pt.losses + "敗（" + pt.matches + "試合・勝率 "
-        + pct(pt.winRate) + "）"];
-    });
-    if (byPartner.length) body.appendChild(statTable("パートナー別", byPartner));
-
-    // 対戦相手別
-    const byOpp = Object.keys(st.opponents).map(function (k) {
-      const o = st.opponents[k];
-      return [k, o.matches + "試合 " + o.wins + "勝（" + Math.round((o.wins / o.matches) * 100) + "%）"];
-    });
-    if (byOpp.length) body.appendChild(statTable("対戦相手別", byOpp));
-
-    body.appendChild(
-      UI.el("button", {
-        class: "ghost",
-        style: "width:100%;margin-top:12px",
-        text: "一覧に戻る",
-        onclick: function () { openStats(null); },
-      })
-    );
+    body.appendChild(backToListBtn());
 
     UI.showScreen("screenStats");
+  }
+
+  /** 「一覧に戻る」ボタン */
+  function backToListBtn() {
+    return UI.el("button", {
+      class: "ghost",
+      style: "width:100%;margin-top:12px",
+      text: "一覧に戻る",
+      onclick: function () { openStats(null); },
+    });
+  }
+
+  /**
+   * オブジェクト（相手名 → 成績）を、直近に当たった順の配列にする。
+   * 日付を持っていない古い記録は後ろにまとめ、名前順にする。
+   */
+  function recentFirst(map) {
+    return Object.keys(map || {}).map(function (k) {
+      return { k: k, v: map[k] };
+    }).sort(function (a, b) {
+      const ta = a.v.last || "";
+      const tb = b.v.last || "";
+      if (ta && tb && ta !== tb) return tb.localeCompare(ta);
+      if (ta && !tb) return -1;
+      if (!ta && tb) return 1;
+      return a.k.localeCompare(b.k, "ja");
+    });
+  }
+
+  /**
+   * 既定で閉じているカード（本人の指示 2026-08-21・D）。
+   * limit を渡すと、開いたときはまず limit 件だけ出し、
+   * 残りは中の「ほかN件を見る」を押したときに出す。
+   */
+  function foldTable(title, rows, limit) {
+    const box = UI.el("details", { class: "match-card fold-card" });
+    box.appendChild(UI.el("summary", { class: "stat-title", text: title }));
+    const head = (limit && rows.length > limit) ? rows.slice(0, limit) : rows;
+    head.forEach(function (r) {
+      box.appendChild(statRow(r));
+    });
+    if (limit && rows.length > limit) {
+      const more = UI.el("details", { class: "fold-more" });
+      more.appendChild(
+        UI.el("summary", { class: "stat-title", text: "ほか" + (rows.length - limit) + "人を見る" })
+      );
+      rows.slice(limit).forEach(function (r) { more.appendChild(statRow(r)); });
+      box.appendChild(more);
+    }
+    return box;
+  }
+
+  function statRow(r) {
+    return UI.el("div", { class: "stat-row" }, [
+      UI.el("span", { class: "stat-key", text: r[0] }),
+      UI.el("span", { class: "stat-val", text: String(r[1]) }),
+    ]);
   }
 
   /* ---------- 種目別でさらに詳しく ---------- */
@@ -797,6 +872,24 @@ const PLAYERS = (function () {
     }
     function inningRow() {
       rows.push(["1ラックあたりの平均イニング数", avg(g.innings, g.racks)]);
+    }
+    // 対戦相手のクラス別（本人の指示 2026-08-21・D）。
+    // 一般種目だけに出す（JPAはスキルレベルで見る）。
+    // クラスは選手登録の「いまの値」なので、登録前の試合は数に入らない
+    function classRows() {
+      const order = (STORE.PLAYER_CLASSES || []);
+      const keys = order.filter(function (c) { return g.byClass && g.byClass[c]; });
+      if (!keys.length) {
+        rows.push(["対戦クラス別の勝敗数・勝率",
+          "記録がありません（相手にクラスを登録すると出ます）"]);
+        return;
+      }
+      keys.forEach(function (c) {
+        const b = g.byClass[c];
+        rows.push(["対戦クラス " + c + " の勝敗数・勝率",
+          b.wins + "勝" + b.losses + "敗（" + b.matches + "試合・"
+          + (b.matches ? pct(b.wins / b.matches) : "—") + "）"]);
+      });
     }
     function shotClockRows() {
       rows.push(["ショットクロック平均タイム",
@@ -843,6 +936,7 @@ const PLAYERS = (function () {
         cntRate(g.aHighRun, g.brokeFirst)]);
       rows.push(["Bハイラン数／率（相手がブレイクした" + g.oppBrokeFirst + "試合中）",
         cntRate(g.bHighRun, g.oppBrokeFirst)]);
+      classRows();
       safetyRows();
       inningRow();
       shotClockRows();
@@ -854,6 +948,7 @@ const PLAYERS = (function () {
       rows.push(["勝敗数", wl]);
       rows.push(["勝率", rate]);
       rows.push(["ハイラン", g.highRun + "点"]);
+      classRows();
       shotClockRows();
       return rows;
     }
@@ -898,6 +993,7 @@ const PLAYERS = (function () {
     if (id.indexOf("9ball") === 0) {
       rows.push(["ブレイクエース", g.breakAce + "回"]);
     }
+    classRows();
     safetyRows();
     inningRow();
     shotClockRows();
@@ -929,27 +1025,48 @@ const PLAYERS = (function () {
    * 「種目別でさらに詳しく」のカード。
    *
    * 項目が多いので既定では閉じておく（本人の指示 2026-08-21）。
-   * details/summary を使って、押したときだけ開くようにする。
+   * 2026-08-21・D で次のように変えた:
+   *   ・種目ごとにカードを切り分ける（1枚に全種目を詰めない）
+   *   ・まだ記録がない種目も出す（グレーに塗って、押しても中身が無いと分かる）
+   *   ・並び順は種目選択と同じ（SETUP.gameOrder が唯一の出どころ）
    */
   function appendGameDetail(body, player) {
     if (!STORE.gameDetail) return;
     const d = STORE.gameDetail(player.id);
-    const ids = Object.keys(d.byGame);
-    const houseIds = Object.keys(d.byHouse);
-    if (!ids.length && !houseIds.length) return;
 
     const box = UI.el("details", { class: "match-card detail-card" });
     box.appendChild(UI.el("summary", { class: "stat-title", text: "種目別でさらに詳しく" }));
 
-    ids.forEach(function (id) {
+    const order = (typeof SETUP !== "undefined" && SETUP.gameOrder)
+      ? SETUP.gameOrder() : [];
+    // 並び順に載っていない種目（あとから足したもの）も落とさず後ろに付ける
+    const known = {};
+    order.forEach(function (id) { known[id] = true; });
+    const extra = Object.keys(d.byGame).concat(Object.keys(d.byHouse))
+      .filter(function (id) { return !known[id]; });
+
+    order.concat(extra).forEach(function (id) {
       const g = d.byGame[id];
-      box.appendChild(UI.el("div", { class: "dc-game", text: g.label }));
-      box.appendChild(detailTable(detailRows(g)));
-    });
-    houseIds.forEach(function (id) {
       const h = d.byHouse[id];
-      box.appendChild(UI.el("div", { class: "dc-game", text: h.label }));
-      box.appendChild(detailTable(houseRows(h)));
+      const label = (g && g.label) || (h && h.label)
+        || ((typeof GAMES !== "undefined" && GAMES[id]) ? GAMES[id].label : id);
+      const has = !!(g || h);
+
+      const card = UI.el("details", {
+        class: "match-card game-card" + (has ? "" : " is-empty"),
+      });
+      card.appendChild(UI.el("summary", { class: "dc-game" }, [
+        UI.el("span", { class: "dc-game-name", text: label }),
+        UI.el("span", { class: "dc-game-note", text: has ? "" : "記録なし" }),
+      ]));
+      if (has) {
+        card.appendChild(detailTable(g ? detailRows(g) : houseRows(h)));
+      } else {
+        card.appendChild(
+          UI.el("p", { class: "hint", text: "まだこの種目の記録がありません。" })
+        );
+      }
+      box.appendChild(card);
     });
 
     body.appendChild(box);

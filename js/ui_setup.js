@@ -1890,5 +1890,14 @@ const SETUP = (function () {
     MATCH.open(match);
   }
 
-  return { init: init };
+  /**
+   * 種目選択と同じ並び順のID一覧（成績画面などから使う）。
+   * ここを唯一の出どころにして、画面ごとに並びがずれないようにする。
+   * ダブルスは親種目のすぐ後ろに入れる。
+   */
+  function gameOrder() {
+    return AVAILABLE.slice();
+  }
+
+  return { init: init, gameOrder: gameOrder };
 })();

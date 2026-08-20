@@ -539,10 +539,18 @@ const STORE = (function () {
         if (pid === playerId) return;
         const nm = memberNames[i] || (findPlayerById(pid) || {}).name;
         if (!nm) return;
-        const pt = out.partners[nm] || { matches: 0, wins: 0, losses: 0 };
+        const pt = out.partners[nm]
+          || { matches: 0, wins: 0, losses: 0, masuwari: 0, breaks: 0, last: "" };
         pt.matches++;
         if (r.winner === side) pt.wins++;
         else if (r.winner) pt.losses++;
+        // マスワリは「その人と組んだ試合での自分のマスワリ」（本人の指示 2026-08-21）。
+        // 率の分母は他の画面と同じく、自分がブレイクした回数
+        pt.masuwari += st.masuwari || 0;
+        pt.breaks += st.breaks || 0;
+        // 直近5人を出すために、いつ組んだかを持つ
+        const at = idx.createdAt || m.createdAt || "";
+        if (at > pt.last) pt.last = at;
         out.partners[nm] = pt;
       });
 
@@ -577,9 +585,13 @@ const STORE = (function () {
 
       // 対戦相手別
       const oppName = m.sides[opp === "A" ? 0 : 1].name;
-      const o = out.opponents[oppName] || { matches: 0, wins: 0 };
+      const o = out.opponents[oppName] || { matches: 0, wins: 0, losses: 0, last: "" };
       o.matches++;
       if (r.winner === side) o.wins++;
+      else if (r.winner) o.losses++;
+      // 直近5人を出すために、いつ当たったかを持つ
+      const oppAt = idx.createdAt || m.createdAt || "";
+      if (oppAt > o.last) o.last = oppAt;
       out.opponents[oppName] = o;
     });
 
@@ -590,6 +602,11 @@ const STORE = (function () {
     Object.keys(out.partners).forEach(function (k) {
       const pt = out.partners[k];
       pt.winRate = pt.matches ? pt.wins / pt.matches : null;
+      pt.masuwariRate = pt.breaks ? pt.masuwari / pt.breaks : null;
+    });
+    Object.keys(out.opponents).forEach(function (k) {
+      const o = out.opponents[k];
+      o.winRate = o.matches ? o.wins / o.matches : null;
     });
     out.rackWinRate = out.racks ? out.rackWins / out.racks : null;
     out.masuwariRate = out.breaks ? out.masuwari / out.breaks : null;
@@ -625,6 +642,10 @@ const STORE = (function () {
           jpaMatches: 0, jpaPoints: 0, jpaFull: 0,
           winInnMin: null, winInnMax: null,
           oppSlSum: 0, oppSlCount: 0, bySl: {},
+          // 対戦相手のクラス別（本人の指示 2026-08-21・D）。
+          // クラスは選手登録の「いまの値」を見る（試合ごとには保存していない）ため、
+          // クラスを登録する前の試合は数に入らない
+          byClass: {},
           byGoal: {},
           // ローテーションのハイラン（Aは自分のブレイクから、Bは相手のブレイクの次から）
           aHighRun: 0, bHighRun: 0, brokeFirst: 0, oppBrokeFirst: 0,
@@ -699,6 +720,21 @@ const STORE = (function () {
         if (r.winner === side) b.wins++;
         else if (r.winner) b.losses++;
         g.bySl[sl] = b;
+      }
+
+      // 対戦相手のクラス別の勝敗（本人の指示 2026-08-21・D）。
+      // 相手が2人いるダブルスは、どちらのクラスで数えるか決まらないので入れない
+      const oppIds = (m.sides[opp === "A" ? 0 : 1].playerIds) || [];
+      if (oppIds.length === 1) {
+        const oppPlayer = findPlayerById(oppIds[0]);
+        const oppCls = oppPlayer && oppPlayer.cls ? oppPlayer.cls : null;
+        if (oppCls) {
+          const c = g.byClass[oppCls] || { matches: 0, wins: 0, losses: 0 };
+          c.matches++;
+          if (r.winner === side) c.wins++;
+          else if (r.winner) c.losses++;
+          g.byClass[oppCls] = c;
+        }
       }
 
       // 目標点ごとの勝敗（ローテーション）

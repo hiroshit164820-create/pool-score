@@ -69,7 +69,30 @@ def open_detail(pg, name):
 
 
 def card_text(pg):
+    """カードの中身を全部読む。
+
+    2026-08-21・D で種目ごとのカードに切り分け、中は閉じた状態で出すように
+    したので、読む前に全部開く（記録の無い種目もグレーで並ぶ）。
+    """
+    pg.evaluate("""() => {
+      document.querySelectorAll('.detail-card details').forEach(d => { d.open = true; });
+    }""")
+    pg.wait_for_timeout(200)
     return pg.inner_text(".detail-card")
+
+
+def seg_text(pg, name):
+    """種目名で1つのカードを取り出して、その中身だけ読む"""
+    return pg.evaluate("""(name) => {
+      const cards = [...document.querySelectorAll('.detail-card .game-card')];
+      const c = cards.find(x => {
+        const t = x.querySelector('.dc-game-name');
+        return t && t.textContent.trim() === name;
+      });
+      if (!c) return null;
+      c.open = true;
+      return c.innerText;
+    }""", name)
 
 
 with sync_playwright() as p:
@@ -198,10 +221,10 @@ with sync_playwright() as p:
       STORE.saveMoneyResult({gameId:'kailun', gameLabel:'カイルン', racks:0,
         players:[{name:'たいら', score:5, handicapBalls:[], maxRun:3},
                  {name:'みなみ', score:2, handicapBalls:[], maxRun:1}]});
-      STORE.saveMoneyResult({gameId:'money_9ball', gameLabel:'5-9', racks:4,
+      STORE.saveMoneyResult({gameId:'59', gameLabel:'5-9', racks:4,
         players:[{name:'たいら', score:6, handicapBalls:[], masuwari:2, breakAce:1},
                  {name:'みなみ', score:-6, handicapBalls:[], masuwari:0, breakAce:0}]});
-      STORE.saveMoneyResult({gameId:'money_9ball', gameLabel:'5-9', racks:2,
+      STORE.saveMoneyResult({gameId:'59', gameLabel:'5-9', racks:2,
         players:[{name:'たいら', score:-3, handicapBalls:[], masuwari:0, breakAce:0},
                  {name:'みなみ', score:3, handicapBalls:[], masuwari:1, breakAce:0}]});
       return STORE.listMoneyResults().length;
@@ -283,11 +306,7 @@ with sync_playwright() as p:
     check(dbl and dbl["matches"] == 1, "ダブルスも1試合ぶん数えている", dbl and dbl["matches"])
     # ダブルスの節だけを取り出して見る。
     # 文字列を頭から切ると、後ろに続く別の種目の節まで入ってしまう
-    seg = pg.evaluate("""() => {
-      const heads = [...document.querySelectorAll('.detail-card .dc-game')];
-      const h = heads.find(e => e.textContent.indexOf('ダブルス') >= 0);
-      return h && h.nextElementSibling ? h.nextElementSibling.innerText : null;
-    }""")
+    seg = seg_text(pg, "JPA 9ボールダブルス")
     check(seg is not None, "ダブルスの節がある", txt[:300])
     seg = seg or ""
     check("累計獲得ポイント数" not in seg, "ダブルスにポイントの行は出さない", seg[:200])
@@ -302,20 +321,16 @@ with sync_playwright() as p:
     house = detail["byHouse"]
     check(house.get("kailun", {}).get("maxRun") == 3, "カイルンの最大連続得点が3",
           house.get("kailun"))
-    check(house.get("money_9ball", {}).get("masuwari") == 2, "5-9のマスワリが2回",
-          house.get("money_9ball"))
-    check(house.get("money_9ball", {}).get("breakAce") == 1, "5-9のブレイクエースが1回",
-          house.get("money_9ball"))
-    check(house.get("money_9ball", {}).get("plays") == 2, "5-9は2回ぶん",
-          house.get("money_9ball"))
+    check(house.get("59", {}).get("masuwari") == 2, "5-9のマスワリが2回",
+          house.get("59"))
+    check(house.get("59", {}).get("breakAce") == 1, "5-9のブレイクエースが1回",
+          house.get("59"))
+    check(house.get("59", {}).get("plays") == 2, "5-9は2回ぶん",
+          house.get("59"))
     check("5-9" in txt, "5-9の節がある")
     # 5-9 / 5-10 はブレイクエースを入力する手立てが無く常に0になるため、行ごと消した
     # （本人の指示 2026-08-21）
-    seg9 = pg.evaluate("""() => {
-      const heads = [...document.querySelectorAll('.detail-card .dc-game')];
-      const h = heads.find(e => e.textContent.indexOf('5-9') >= 0);
-      return h && h.nextElementSibling ? h.nextElementSibling.innerText : null;
-    }""")
+    seg9 = seg_text(pg, "5-9")
     check(seg9 is not None, "5-9の節を取り出せる", txt[:300])
     seg9 = seg9 or ""
     check("ブレイクエース" not in seg9, "5-9にブレイクエースの行は出さない", seg9[:300])
@@ -327,8 +342,15 @@ with sync_playwright() as p:
     pg.click("#tabPlayers")
     pg.wait_for_timeout(400)
     open_detail(pg, "まだ記録なし")
-    check(pg.locator(".detail-card").count() == 0, "カードを出さない",
+    # 2026-08-21・D で「まだ記録がない種目も表示する」に変えたので、
+    # 記録が1件も無い人でもカードは出る（中身は全部グレーの「記録なし」）
+    check(pg.locator(".detail-card").count() == 1, "カードは出す",
           pg.locator(".detail-card").count())
+    pg.eval_on_selector(".detail-card", "e => { e.open = true; }")
+    pg.wait_for_timeout(200)
+    empt = pg.eval_on_selector_all(".detail-card .game-card",
+                                   "e => e.map(x => x.classList.contains('is-empty'))")
+    check(len(empt) >= 12 and all(empt), "全部の種目がグレーの「記録なし」", empt)
 
     section("エラー")
     check(not errs, "画面のエラーが無い", errs[:3])
