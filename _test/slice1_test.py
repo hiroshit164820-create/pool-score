@@ -212,8 +212,18 @@ with sync_playwright() as p:
     names2 = pg.locator(".team-field:has(#inNameA) #inNameA2").count()
     check(names2 == 1, "2人目の欄が出る", names2)
     cand2 = pg.evaluate(SECOND_CANDIDATES_JS)
-    check("あきら" not in cand2, "1人目に選んだ人が2人目の候補に出ない", cand2)
-    check(len(cand2) == 3, "2人目の候補は残り3人", cand2)
+    # 2026-08-21：候補から外す方式をやめた。
+    # 他の欄にいる人も出し、押すと入れ替わる（ペアの組み替えを1回で済ませるため）。
+    # 代わりに「どこにいるか」の札で分かるようにしてある
+    check(len(cand2) == 4, "2人目の候補には全員が出る", cand2)
+    at = pg.evaluate("""() => {
+      const inp = document.getElementById('inNameA2');
+      const w = inp.closest('.member-row').nextElementSibling;
+      const b = [...w.querySelectorAll('.picker-chip')]
+        .find(x => (x.querySelector('.pc-name') || {}).textContent === 'あきら');
+      return b ? (b.querySelector('.pc-at') || {}).textContent : null;
+    }""")
+    check(at == "A1", "1人目に選んだ人には「A1」の札が付く", at)
 
     pg.evaluate(PICK_SECOND_JS, "いすず")
     pg.wait_for_timeout(350)
@@ -223,8 +233,14 @@ with sync_playwright() as p:
           "描き直しても1人目の名前が消えない", pg.input_value("#inNameA"))
 
     candB = pg.evaluate(TEAM_B_CANDIDATES_JS)
-    check("あきら" not in candB and "いすず" not in candB,
-          "チームAで選んだ2人はチームBの候補にも出ない", candB)
+    check(len(candB) == 4, "チームBの候補にも全員が出る（押すと入れ替わる）", candB)
+    # 同じ人が2つの欄に同時に入らないことは、入れ替えで守られている
+    dup = pg.evaluate("""() => {
+      const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+      const list = ['inNameA', 'inNameA2', 'inNameB', 'inNameB2'].map(v).filter(Boolean);
+      return list.length !== new Set(list).size;
+    }""")
+    check(not dup, "同じ人が2つの欄に入っていない", dup)
 
     pg.evaluate(PICK_TEAM_B_JS, "うたの")
     pg.wait_for_timeout(350)

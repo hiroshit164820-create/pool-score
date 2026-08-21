@@ -2503,3 +2503,184 @@ button::after {
 .home-row + .home-row {
   border-top: 2px dotted var(--ink);
 }
+
+/* プルダウンで先取数を選んだときは、ボタンと同じ金色にする
+   （本人の指示 2026-08-21）。選んだ場所が一目で分かるようにするため */
+select.goal-more.is-picked {
+  background: var(--block);
+  color: var(--ink);
+  font-weight: 900;
+  border-color: var(--ink);
+}
+/* 左右別のときは枠だけその側の色にする（段階4の決めに合わせる） */
+.field.side-a select.goal-more.is-picked { border-color: var(--side-a); }
+.field.side-b select.goal-more.is-picked { border-color: var(--side-b); }
+
+/* ============ 横向きの時計は上の帯へ（本人の指摘 2026-08-21・画像1） ============
+   横向きは高さが足りず、時計の帯（70px）が1本入るだけで
+   スコアボードが 240px → 160px まで潰れ、下のボタンが窮屈になっていた。
+   上の帯には横の余白が300pxほど余っているので、そこへ寄せる */
+#screenMatch .topbar .shotclock.in-topbar,
+#screenMatch .topbar .chessclock.in-topbar {
+  margin: 0;
+  padding: 0 8px;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  border-width: 2px;
+  /* 上の帯は文字が白なので、時計は地を白・文字を黒に戻さないと数字が読めない */
+  background: var(--surface);
+  color: var(--ink);
+}
+#screenMatch .topbar .shotclock.in-topbar .time,
+#screenMatch .topbar .shotclock.in-topbar .sc-info,
+#screenMatch .topbar .chessclock.in-topbar .cc-name,
+#screenMatch .topbar .chessclock.in-topbar .cc-time {
+  color: var(--ink);
+  text-shadow: none;
+}
+/* 残り時間が減ったときの色は、上の帯でも今までどおり出す */
+#screenMatch .topbar .shotclock.in-topbar.warn { background: #ffe9b8; }
+#screenMatch .topbar .shotclock.in-topbar.over { background: #ffdedf; }
+#screenMatch .topbar .shotclock.in-topbar .time {
+  font-size: 24px;
+  min-width: 1.6em;
+}
+/* 状態（停止中・延長中）は短い語だけ。残り回数は延長ボタンの中に入れてある */
+#screenMatch .topbar .shotclock.in-topbar .sc-info {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 5.5em;
+}
+#screenMatch .topbar .shotclock.in-topbar .sc-btns button,
+#screenMatch .topbar .chessclock.in-topbar button {
+  /* 押せる大きさ（44px）は横向きでも下げない */
+  min-height: 44px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+#screenMatch .topbar .chessclock.in-topbar .cc-side {
+  padding: 0 6px;
+}
+#screenMatch .topbar .chessclock.in-topbar .cc-name {
+  font-size: 11px;
+  max-width: 5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#screenMatch .topbar .chessclock.in-topbar .cc-time {
+  font-size: 18px;
+}
+/* 上の帯が2行に折り返すと元も子もないので、必ず1行に収める */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .topbar {
+    flex-wrap: nowrap;
+  }
+  #screenMatch .topbar > div:first-child {
+    min-width: 0;
+  }
+}
+
+/* ============ 横向きの盤面は1行に並べる（本人の指示 2026-08-21） ============
+   全数で測ったところ、横向きのローテーションとボウラードだけ、
+   盤面が「交代」「スコア修正」のボタンに重なっていた（時計を入れると画面外にも出た）。
+   横向きは横が844pxあるので、縦に積まず1行に並べて高さを空ける。
+   押せる大きさ（44px）は下げない */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* ローテーションの球（1〜15番） */
+  #screenMatch .bg-balls {
+    grid-template-columns: repeat(15, minmax(0, 1fr));
+    gap: 4px;
+  }
+  #screenMatch .ball-btn {
+    min-height: 46px;
+    font-size: 16px;
+    padding: 2px;
+  }
+  #screenMatch .ball-grid {
+    gap: 4px;
+  }
+  #screenMatch .ball-grid .bg-who {
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  /* ボウラードの投球（0〜10） */
+  #screenMatch .bp-nums {
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    gap: 4px;
+  }
+  #screenMatch .bp-btn {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  #screenMatch .bowl-pad .bp-who {
+    margin-bottom: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  /* 盤面が入りきらないときは、盤面の中だけスクロールさせる。
+     下のボタンを押し出さないための歯止め */
+  #screenMatch .play-area {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+/* 上の帯に時計を入れたぶん、種目名が長い種目（14-1・JPA）で
+   「延長」が「中断」に重なっていた（全数の測定で検出）。
+   縮めるのは種目名の側だけにして、押すものは縮めない */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .topbar > div:first-child {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #screenMatch .topbar h1,
+  #screenMatch .topbar .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #screenMatch .topbar .sub {
+    white-space: nowrap;
+  }
+  /* 時計・ラック数・操作ボタンは縮めない（押し間違いのもとになるため） */
+  #screenMatch .topbar .shotclock.in-topbar,
+  #screenMatch .topbar .chessclock.in-topbar,
+  #screenMatch .topbar .tb-actions {
+    flex: 0 0 auto;
+  }
+  #screenMatch .topbar .meta-chips.in-topbar {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}
+
+/* ============ 選手の選び方（本人の指示 2026-08-21） ============
+   選んだあとは、その人のチップと「選び直す」だけを出す。
+   候補を出しっぱなしにすると、誰を選んだのか読み取りづらいため */
+.picked-row {
+  align-items: center;
+}
+.picker-change {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+/* その人が別の欄にいるときの札。押すと入れ替わることを示す */
+.picker-chip.is-elsewhere {
+  border-style: dashed;
+}
+.picker-chip .pc-at {
+  margin-left: 6px;
+  padding: 0 5px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.picker-chip.is-chosen .pc-at {
+  background: rgba(0, 0, 0, .35);
+}

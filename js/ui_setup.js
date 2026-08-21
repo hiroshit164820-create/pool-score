@@ -188,7 +188,10 @@ const UI = (function () {
       if (tab === "screenPlayers" && typeof PLAYERS !== "undefined") { PLAYERS.open(); return; }
       if (tab === "screenHistory" && typeof HISTORY !== "undefined") { HISTORY.open(); return; }
       if (tab === "screenStats" && typeof PLAYERS !== "undefined" && PLAYERS.openStats) {
-        PLAYERS.openStats(null);
+        // 既定は自分の成績（本人の指示 2026-08-21）。
+        // 自分をまだ登録していないときだけ、他選手の一覧を出す
+        const me = (typeof STORE !== "undefined" && STORE.getSelf) ? STORE.getSelf() : null;
+        PLAYERS.openStats(me || null);
         return;
       }
       if (tab === "screenHome" && typeof HOME !== "undefined") { HOME.open(); return; }
@@ -570,6 +573,9 @@ const SETUP = (function () {
     // 種目が変わったらダブルスの段階表示を初期化する
     secondOpen.A = false;
     secondOpen.B = false;
+    // 候補の開閉も戻す（別の種目では選び直すことが多いため）
+    pickerOpenFor = null;
+
     // イニングの数え方は種目ごとに選び直す。
     // 選べる種目の既定は「数えない」。ただし 14-1 はイニングが実力の指標なので
     // games_data.js の inningsDefault で既定を「数える」にしてある。
@@ -809,20 +815,13 @@ const SETUP = (function () {
   let nameSnapshot = null;
   const NAME_IDS = ["inNameA", "inNameA2", "inNameB", "inNameB2"];
 
+  // 候補の一覧を開いている名前欄のID（本人の指示 2026-08-21）。
+  // 選んだあとは畳んで、選んだ名前だけを出す
+  let pickerOpenFor = null;
+
   function currentName(id) {
     if (nameSnapshot) return (nameSnapshot[id] || "").trim();
     return readName(id, "");
-  }
-
-  /** いま名前欄に入っている人の一覧（自分の欄は除く）。同じ人の二重選択を防ぐ */
-  function takenNames(exceptId) {
-    const out = [];
-    NAME_IDS.forEach(function (id) {
-      if (id === exceptId) return;
-      const v = currentName(id);
-      if (v) out.push(v);
-    });
-    return out;
   }
 
   /**
@@ -868,71 +867,147 @@ const SETUP = (function () {
     return { quick: quick, rest: rest };
   }
 
+  /** 名前欄のIDを「A」「A2」のような短い名札にする（どこに誰がいるかを示す用） */
+  function slotLabel(id) {
+    const g = GAMES[selectedGame];
+    const side = id.indexOf("A") >= 0 ? "A" : "B";
+    if (!g || g.playersPerSide !== 2) return side;
+    return side + (id.slice(-1) === "2" ? "2" : "1");
+  }
+
+  /** その名前がいま入っている欄のID。無ければ null */
+  function slotOfName(name, exceptId) {
+    if (!name) return null;
+    let hit = null;
+    NAME_IDS.forEach(function (id) {
+      if (id === exceptId || hit) return;
+      if (currentName(id) === name) hit = id;
+    });
+    return hit;
+  }
+
+  /**
+   * 名前欄に人を入れる。
+   *
+   * その人が別の欄にいるときは、その欄と**入れ替える**（本人の指示 2026-08-21）。
+   * ダブルスでペアを組み替えるとき、いちいち相手側を空にしてから
+   * 選び直す手間があったため、1回押すだけで組み替わるようにした。
+   */
+  function assignPlayer(targetId, player, side) {
+    const from = slotOfName(player.name, targetId);
+    const prev = currentName(targetId);
+
+    if (from) {
+      // 入れ替え：相手の欄には、いまこの欄に入っている人を移す（空なら空にする）
+      const fromNode = $(from);
+      if (fromNode) fromNode.value = prev;
+      if (prev) {
+        const prevPlayer = STORE.listPlayers().find(function (x) { return x.name === prev; });
+        if (prevPlayer) applyPlayerSkill(prevPlayer, from.indexOf("A") >= 0 ? "A" : "B");
+      }
+    }
+    const node = $(targetId);
+    if (node) node.value = player.name;
+    applyPlayerSkill(player, side);
+
+    // ダブルスで1人目を選んだら、続けて2人目を選べるようにする
+    const g2 = GAMES[selectedGame];
+    if (g2.playersPerSide === 2 && targetId === "inName" + side) {
+      secondOpen[side] = true;
+    }
+    // 選び終わったら候補は畳む（選んだ名前だけを残す）
+    pickerOpenFor = null;
+    renderPlayerFields();
+  }
+
+  /**
+   * 選手を選ぶ部品。
+   *
+   * 選んだあとは**その人のチップだけ**を出し、候補の一覧は畳む
+   * （本人の指示 2026-08-21：選択した名前のみ表示する）。
+   * 「選び直す」を押すと候補が戻る。
+   */
   function playerPicker(targetId, side) {
     const all = STORE.listPlayers();
     if (!all.length) return null;
 
-    const wrap = UI.el("div", { class: "picker-wrap" });
-    wrap.appendChild(UI.el("div", { class: "picker-label", text: "登録した人から選ぶ" }));
-
-    const taken = takenNames(targetId);
     const chosen = currentName(targetId);
-    const split = splitPlayers(all);
-    const players = split.quick;
+    const chosenPlayer = chosen
+      ? all.find(function (p) { return p.name === chosen; }) : null;
+    const open = pickerOpenFor === targetId || !chosenPlayer;
 
-    const chips = UI.el("div", { class: "chips picker" });
-    players.forEach(function (p) {
-      // 他の欄で選ばれている人は候補から外す（1人目に選んだ人が2人目に出ない）
-      if (taken.indexOf(p.name) >= 0) return;
+    const wrap = UI.el("div", { class: "picker-wrap" });
+
+    /** 1人ぶんのチップを作る */
+    function chipFor(p, isChosen) {
       const sk = p.skill || {};
       const slTag = jpaKind() === "eight" ? sk.eight : sk.nine;
-      const isChosen = !!chosen && chosen === p.name;
-      chips.appendChild(
+      // その人が別の欄にいるなら、どこにいるかを札で出す（押すと入れ替わる合図）
+      const at = slotOfName(p.name, targetId);
+      return UI.el("button", {
+        type: "button",
+        class: "chip small-chip picker-chip"
+          + (isChosen ? " is-chosen side-" + String(side || "a").toLowerCase() : "")
+          + (at ? " is-elsewhere" : ""),
+        "aria-pressed": String(!!isChosen),
+        title: at ? p.name + " は " + slotLabel(at) + " にいます。押すと入れ替えます" : p.name,
+        onclick: function () { assignPlayer(targetId, p, side); },
+      }, [
+        UI.el("span", { class: "pc-name", text: p.name }),
+        jpaKind() && slTag ? UI.el("span", { class: "pc-sl", text: "SL" + slTag }) : null,
+        at ? UI.el("span", { class: "pc-at", text: slotLabel(at) }) : null,
+      ]);
+    }
+
+    // ---- 選んだあと（畳んだ状態）----
+    if (!open) {
+      // 見出し（「選んだ人」）は出さない。
+      // 選んだ人のチップ自体が答えなので、行を1本減らして縦を空ける
+      // （ダブルスでは4欄あるので、ここが効く）
+      const row = UI.el("div", { class: "chips picker picked-row" });
+      row.appendChild(chipFor(chosenPlayer, true));
+      row.appendChild(
         UI.el("button", {
           type: "button",
-          class: "chip small-chip picker-chip"
-            + (isChosen ? " is-chosen side-" + String(side || "a").toLowerCase() : ""),
-          "aria-pressed": String(isChosen),
+          class: "small ghost picker-change",
+          text: "選び直す",
           onclick: function () {
-            const node = $(targetId);
-            if (node) node.value = p.name;
-            applyPlayerSkill(p, side);
-            // ダブルスで1人目を選んだら、続けて2人目を選べるようにする
-            const g2 = GAMES[selectedGame];
-            if (g2.playersPerSide === 2 && targetId === "inName" + side) {
-              secondOpen[side] = true;
-            }
-            // 選んだ人を塗り、他の欄の候補から外すために描き直す
+            pickerOpenFor = targetId;
             renderPlayerFields();
           },
-        }, [
-          UI.el("span", { class: "pc-name", text: p.name }),
-          // JPA種目のときだけ、その人のスキルレベルを添えて選びやすくする
-          jpaKind() && slTag ? UI.el("span", { class: "pc-sl", text: "SL" + slTag }) : null,
-        ])
+        })
       );
+      wrap.appendChild(row);
+      return wrap;
+    }
+
+    // ---- 選ぶ途中（候補を出す）----
+    wrap.appendChild(UI.el("div", { class: "picker-label", text: "登録した人から選ぶ" }));
+
+    const split = splitPlayers(all);
+    const chips = UI.el("div", { class: "chips picker" });
+    // 他の欄で選ばれている人も出す。押すと入れ替わる（ペアの組み替え用）
+    split.quick.forEach(function (p) {
+      chips.appendChild(chipFor(p, !!chosen && chosen === p.name));
     });
     if (chips.children.length) wrap.appendChild(chips);
 
     // ボタンに出していない人はプルダウンから選ぶ（あいうえお順）
-    const rest = split.rest.filter(function (p) { return taken.indexOf(p.name) < 0; });
+    const rest = split.rest;
     if (rest.length) {
       const sel = UI.el("select", { class: "picker-select" });
       sel.appendChild(UI.el("option", { value: "", text: "ほかの人から選ぶ（" + rest.length + "人）" }));
       rest.forEach(function (p) {
-        sel.appendChild(UI.el("option", { value: p.id, text: p.name }));
+        const at = slotOfName(p.name, targetId);
+        sel.appendChild(UI.el("option", {
+          value: p.id,
+          text: p.name + (at ? "（" + slotLabel(at) + " と入れ替え）" : ""),
+        }));
       });
       sel.addEventListener("change", function () {
         const p = rest.find(function (x) { return x.id === sel.value; });
         if (!p) return;
-        const node = $(targetId);
-        if (node) node.value = p.name;
-        applyPlayerSkill(p, side);
-        const g2 = GAMES[selectedGame];
-        if (g2.playersPerSide === 2 && targetId === "inName" + side) {
-          secondOpen[side] = true;
-        }
-        renderPlayerFields();
+        assignPlayer(targetId, p, side);
       });
       wrap.appendChild(sel);
     }
@@ -1167,10 +1242,12 @@ const SETUP = (function () {
       holder.appendChild(chips);
     }
 
-    // ボタンに出していない値はプルダウンで選ぶ
+    // ボタンに出していない値はプルダウンで選ぶ。
+    // プルダウンの値を選んでいるときは、ボタンと同じ金色にして
+    // 「ここで選んである」ことを見て分かるようにする（本人の指示 2026-08-21）
     const more = moreGoalValues(unit);
-    const sel = UI.el("select", { class: "goal-more" });
     const isQuick = quick.indexOf(value) >= 0;
+    const sel = UI.el("select", { class: "goal-more" + (isQuick ? "" : " is-picked") });
     sel.appendChild(
       UI.el("option", { value: "", text: isQuick ? "その他…" : "選択中: " + value + unit })
     );

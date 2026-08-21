@@ -126,6 +126,10 @@ with sync_playwright() as p:
     section("6. 他選手の成績に自分は出ない")
     pg.click("#tabStats")
     pg.wait_for_timeout(700)
+    # 2026-08-21 から、成績タブの既定は「自分の成績」になった（本人の指示）。
+    # ここで見たいのは他選手の一覧なので、切り替えてから確かめる
+    pg.locator(".stats-switch button", has_text="他選手の成績").click()
+    pg.wait_for_timeout(600)
     check(pg.locator(".stats-bygame").count() == 0,
           "「種目ごとの成績を見る」のボタンが無い")
     names = pg.eval_on_selector_all("#statsBody .stats-card .pc-name-text",
@@ -154,6 +158,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     pg.click("#tabStats")
     pg.wait_for_timeout(700)
+    pg.locator(".stats-switch button", has_text="他選手の成績").click()
+    pg.wait_for_timeout(600)
     body = pg.inner_text("#statsBody")
     check("自分のほかに登録された選手がいません" in body, "断り書きが出る", body[:120])
     check(pg.locator(".stats-switch").count() == 1, "切り替えの行は残る")

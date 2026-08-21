@@ -396,7 +396,18 @@ const MATCH = (function () {
           (s.extensionScope === "rack" ? "（このラック）" : "")
       );
     }
-    $("scInfo").textContent = info.join(" ・ ");
+    // 横向きで上の帯に寄せているときは、長い説明文の場所が無い。
+    // 残り回数はボタンの中に入れて、状態だけを短く出す（本人の指摘 2026-08-21）
+    const tight = isTightLandscape();
+    const left = s.side ? s.extensionsLeft[s.side] : null;
+    if (tight) {
+      const st = info.length && !/^延長あと/.test(info[0]) ? info[0] : "";
+      $("scInfo").textContent = st;
+      $("scExtBtn").textContent = left === null ? "延長" : "延長 残" + left;
+    } else {
+      $("scInfo").textContent = info.join(" ・ ");
+      $("scExtBtn").textContent = "延長";
+    }
 
     $("scPauseBtn").textContent = s.paused ? "再開" : "一時停止";
     $("scPauseBtn").disabled = !s.running;
@@ -1599,6 +1610,15 @@ const MATCH = (function () {
   // 移すのはラック数とイニング数だけ。マスワリの合計は元の場所に残す
   const META_MOVE = ["rackInfo", "inningInfo"];
 
+  /**
+   * 横向きで高さが足りない状態か（css/v2.css の横向き用の指定と同じ条件）。
+   * ここが true のときだけ、時計の帯を上の帯へ寄せる
+   */
+  function isTightLandscape() {
+    return window.matchMedia
+      && window.matchMedia("(orientation: landscape) and (max-height: 560px)").matches;
+  }
+
   function syncMetaPlace() {
     // 上の帯に作る置き場も .meta-chips なので、元の場所を取り違えないよう
     // in-topbar が付いていないほうを指す
@@ -1627,6 +1647,30 @@ const MATCH = (function () {
     const row = document.querySelector("#screenMatch .turn-row");
     const bt = $("breakToggleBtn");
     if (row && bt && bt.parentNode !== row) row.appendChild(bt);
+
+    // 横向きは高さが足りない。時計の帯（70px）が1本入るだけで
+    // スコアボードが 240px → 160px まで潰れるので、上の帯へ寄せる
+    // （本人の指摘 2026-08-21・画像1）。縦向きでは元の場所に戻す
+    const tight = isTightLandscape();
+    const clockHome = document.querySelector("#screenMatch .match-body")
+      || document.querySelector("#screenMatch");
+    ["shotClockBar", "chessClockBar"].forEach(function (id) {
+      const bar = $(id);
+      if (!bar) return;
+      if (tight) {
+        if (bar.parentNode !== slot.parentNode || bar.previousElementSibling !== slot) {
+          topbar.insertBefore(bar, topbar.lastElementChild);
+        }
+        bar.classList.add("in-topbar");
+      } else if (bar.classList.contains("in-topbar")) {
+        bar.classList.remove("in-topbar");
+        // 元の場所（スコアシートの直後）へ戻す
+        const after = $("sheetArea");
+        if (after && after.parentNode) {
+          after.parentNode.insertBefore(bar, after.nextSibling);
+        }
+      }
+    });
 
     // 中身が全部よそへ移った行・帯は畳む。
     // 畳まないと、空の帯のぶんだけスコアボードが狭いままになる

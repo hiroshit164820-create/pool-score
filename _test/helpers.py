@@ -258,3 +258,19 @@ def set_innings(page, on):
     field.locator("button", has_text=label).first.click()
     page.wait_for_timeout(200)
     return True
+
+
+def pick_player(page, field_index, name):
+    """
+    試合作成のプレーヤー欄で、登録済みの人を選ぶ。
+
+    2026-08-21 から、選んだあとは候補を畳んで「選んだ人」だけを出すように
+    なった（本人の指示）。畳んでいるときは先に「選び直す」を押す。
+    """
+    field = page.locator("#playerFields .field").nth(field_index)
+    change = field.locator(".picker-change")
+    if change.count():
+        change.first.click()
+        page.wait_for_timeout(200)
+    field.locator(".picker-chip", has_text=name).first.click()
+    page.wait_for_timeout(200)
