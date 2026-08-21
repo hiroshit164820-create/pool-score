@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#c84c0c">
+<title>説明書 — ビリヤードスコア記録</title>
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+/* アプリ（style.css）と同じ配色トークン・同じ書体を使う。
+   ただし読み込みは独立させてある。アプリのCSSを直接読むと
+   画面遷移用の指定（.screen を隠す等）が説明書にも効いてしまうため */
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&family=DotGothic16&display=swap");
+
+:root {
+  --sky: #5c94fc;
+  --surface: #ffffff;
+  --surface-2: #fff3d6;
+  --ink: #1a1408;
+  --text-dim: #6b5c48;
+  --ground: #3aa63a;
+  --ground-dark: #1f7a1f;
+  --brick: #c84c0c;
+  --block: #fbd000;
+  --block-dark: #c79000;
+  --accent: #3aa63a;
+  --side-a: #0b63d6;
+  --side-b: #d43b12;
+  --danger: #d02020;
+  --bw: 3px;
+  --bw-thick: 4px;
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+  --font-pixel: "DotGothic16", "M PLUS Rounded 1c", "BIZ UDGothic", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif;
+  /* 非IT利用者も読むので本文は16pxを下回らせない */
+  font-size: 16px;
+  line-height: 1.8;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 地面。ページの下端に敷く */
+body::after {
+  content: "";
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 28px;
+  background:
+    linear-gradient(0deg, var(--ground-dark) 0 10px, var(--ground) 10px 100%);
+  border-top: var(--bw) solid var(--ink);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 14px 80px;
+}
+
+/* ---------- レンガのヘッダ ---------- */
+header {
+  margin: 0 -14px 20px;
+  padding: 20px 18px;
+  color: #fff;
+  border-bottom: var(--bw-thick) solid var(--ink);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 15px, rgba(0, 0, 0, .3) 15px 18px),
+    repeating-linear-gradient(90deg, transparent 0 34px, rgba(0, 0, 0, .3) 34px 37px),
+    var(--brick);
+}
+header h1 {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 24px;
+  line-height: 1.4;
+  letter-spacing: .02em;
+  text-shadow: 2px 2px 0 var(--ink);
+}
+header p {
+  margin: 6px 0 0;
+  font-size: 15px;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+/* ---------- 見出し＝ハテナブロックの看板 ---------- */
+h2 {
+  display: inline-block;
+  margin: 34px 0 14px;
+  padding: 8px 16px;
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  letter-spacing: .06em;
+  background: var(--block);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  background-image:
+    radial-gradient(circle at 7px 7px, var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at calc(100% - 7px) 7px, var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at 7px calc(100% - 7px), var(--block-dark) 0 2px, transparent 3px),
+    radial-gradient(circle at calc(100% - 7px) calc(100% - 7px), var(--block-dark) 0 2px, transparent 3px);
+}
+h3 {
+  margin: 22px 0 8px;
+  font-size: 17px;
+  font-weight: 900;
+  padding-left: 10px;
+  border-left: 6px solid var(--brick);
+}
+
+/* ---------- カード ---------- */
+.card {
+  background: var(--surface);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+.note {
+  background: var(--surface-2);
+  border-left: 6px solid var(--block-dark);
+}
+.warn {
+  background: #ffeceb;
+  border-left: 6px solid var(--danger);
+}
+
+/* ---------- 目次 ---------- */
+.toc ol { margin: 0; padding-left: 1.4em; }
+.toc a { color: var(--side-a); font-weight: 800; }
+
+/* ---------- 手順 ---------- */
+ol.steps { padding-left: 1.4em; }
+ol.steps > li { margin-bottom: 10px; }
+
+/* ---------- 表 ---------- */
+.table-scroll { overflow-x: auto; margin: 12px 0; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 460px;
+  background: var(--surface);
+  font-size: 15px;
+}
+th, td {
+  border: 2px solid var(--ink);
+  padding: 7px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--block);
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+tbody tr:nth-child(even) td { background: var(--surface-2); }
+
+/* ---------- コード ---------- */
+code, .path {
+  font-family: "Consolas", "SFMono-Regular", monospace;
+  font-size: 14px;
+  background: var(--surface-2);
+  border: 2px solid var(--ink);
+  padding: 0 5px;
+  white-space: nowrap;
+}
+pre {
+  overflow-x: auto;
+  background: var(--ink);
+  color: #f5e9c8;
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+  padding: 12px 14px;
+  font-family: "Consolas", "SFMono-Regular", monospace;
+  font-size: 14px;
+  line-height: 1.65;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  white-space: pre;
+  font-size: inherit;
+}
+
+/* ---------- 印（Aは青・Bは赤。アプリと同じ決め） ---------- */
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: #fff;
+  background: var(--ink);
+}
+.tag.a { background: var(--side-a); }
+.tag.b { background: var(--side-b); }
+.tag.ok { background: var(--accent); }
+.tag.no { background: var(--danger); }
+
+kbd {
+  display: inline-block;
+  padding: 1px 8px;
+  background: var(--block);
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hint { color: var(--text-dim); font-size: 14px; }
+
+footer {
+  margin-top: 40px;
+  padding: 14px 0 0;
+  border-top: var(--bw) solid var(--ink);
+  font-size: 15px;
+  color: var(--ink);
+}
+a { color: var(--side-a); }
+
+@media (max-width: 420px) {
+  header h1 { font-size: 19px; }
+  h2 { font-size: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>ビリヤードスコア記録 説明書</h1>
+  <p>使い方と、中の仕組み。この2つを1枚にまとめてあります。</p>
+</header>
+
+<div class="card toc">
+  <strong>目次</strong>
+  <ol>
+    <li><a href="#what">これは何か</a></li>
+    <li><a href="#start">はじめに（スマホに入れる）</a></li>
+    <li><a href="#flow">試合を記録する</a></li>
+    <li><a href="#screens">画面の案内</a></li>
+    <li><a href="#games">選べる種目</a></li>
+    <li><a href="#data">記録はどこにあるか</a></li>
+    <li><a href="#system">システム編：中の仕組み</a></li>
+    <li><a href="#addgame">システム編：種目を増やす</a></li>
+    <li><a href="#dev">システム編：検証と公開</a></li>
+    <li><a href="#trouble">困ったとき</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="what">1. これは何か</h2>
+
+<div class="card">
+  <p>ビリヤードの試合を、台の脇で片手で記録するための道具です。ブラウザで動きます。</p>
+  <ul>
+    <li>スコアの欄を押すだけで点が入ります</li>
+    <li>ハンデ・ブレイク方式・時計を試合ごとに決められます</li>
+    <li>終わった試合は自動で貯まり、勝率やマスワリ率が出ます</li>
+    <li><strong>電波が無くても動きます</strong>（一度開けば、そのあとは通信不要）</li>
+  </ul>
+  <p class="hint">アドレス: <a href="./">https://hiroshit164820-create.github.io/pool-score/</a></p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="start">2. はじめに（スマホに入れる）</h2>
+
+<div class="card">
+  <p>ブラウザのままでも使えますが、ホーム画面に入れておくと普通のアプリのように開けます。</p>
+  <h3>iPhone（Safari）</h3>
+  <ol class="steps">
+    <li>Safari で上のアドレスを開く</li>
+    <li>下の「共有」ボタン（□に↑）を押す</li>
+    <li>「ホーム画面に追加」を選ぶ</li>
+  </ol>
+  <h3>Android（Chrome）</h3>
+  <ol class="steps">
+    <li>Chrome で上のアドレスを開く</li>
+    <li>右上の「︙」を押す</li>
+    <li>「ホーム画面に追加」を選ぶ</li>
+  </ol>
+  <div class="card note" style="margin-top:14px">
+    <strong>最初にやっておくこと：自分を登録する</strong>
+    <p>「選手」の画面の上にある <kbd>★自分を登録</kbd> から、自分の名前を1つ登録します。
+      これを入れておくと、ホーム画面に自分の勝率が出て、成績が自分中心に読めるようになります。</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="flow">3. 試合を記録する</h2>
+
+<div class="card">
+  <h3>① 種目を選ぶ</h3>
+  <p>「種目」の画面で、上から順に決めていきます。カテゴリ（一般／JPA／ハウスゲーム）を
+    押すと中身が開きます。ダブルスは種目の右の <kbd>ダブルス</kbd> で切り替えます。</p>
+
+  <h3>② プレーヤーを入れる</h3>
+  <p>名前を打つか、下に並ぶ登録済みの人を押します。
+    <span class="tag a">A側は青</span> <span class="tag b">B側は赤</span> の枠線で、
+    どちらの欄かが色で分かります。JPAの種目では、その人のスキルレベルも一緒に入ります。</p>
+
+  <h3>③ 勝利条件を決める</h3>
+  <ul>
+    <li><strong>ハンデなし</strong>: 何ラック（何点）先取かを1つ選ぶ</li>
+    <li><strong>ハンデあり</strong>: A側とB側で別々の数字を選ぶ。強いほうを大きくします</li>
+    <li><strong>ボールハンデ</strong>: 「N番以上で1点」という形で、弱いほうの得点になる球を増やします</li>
+    <li><strong>JPA</strong>: スキルレベルを選ぶと、公式の表から持ち点が自動で決まります</li>
+    <li><strong>イニング</strong>: 交代の回数を数えるかどうか（下の囲み参照）</li>
+  </ul>
+
+  <div class="card note">
+    <strong>イニングを数える／数えない</strong>
+    <p>一般種目では、イニング（後攻から先攻に手番が戻った回数）を数えるかを選べます。</p>
+    <ul>
+      <li>9／10／8ボール・ダブルス・ローテーション … <strong>既定は「数えない」</strong></li>
+      <li>14-1（ストレートプール） … <strong>既定は「数える」</strong>（実力の指標になるため）</li>
+      <li>JPA … 公式スコアシートの土台なので<strong>常に数えます</strong>（選択欄は出ません）</li>
+    </ul>
+    <p class="hint">種目を選び直すと、その種目の既定に戻ります。
+      「数えない」にしても中では数えているので、記録が失われるわけではありません。
+      試合中の帯・試合結果・履歴・成績に出さなくなるだけです。</p>
+  </div>
+
+  <h3>④ ブレイクと時計</h3>
+  <p>ウィナーズ（勝った側が次も撞く）かオルタネート（交互）かを選び、
+    先にブレイクする人を決めます。時計は「使わない／ショットクロック／チェスクロック」の3択です。</p>
+
+  <h3>⑤ 内容を確かめて始める</h3>
+  <p>いちばん下の「この内容で始めます」に、決めた内容が並びます。
+    見て問題なければ <kbd>この内容で試合を始める</kbd> を押します。</p>
+</div>
+
+<div class="card">
+  <h3>試合中の画面</h3>
+  <ul>
+    <li><strong>大きなスコアの欄を押すと点が入ります</strong>（種目によっては球のボタンから入れます）</li>
+    <li>上の帯にラック数、いま何イニング目か（数える設定のとき）、マスワリの合計が出ます</li>
+    <li>いま撞いている側は、その人のパネルに印が付きます</li>
+  </ul>
+  <p>下の帯には4つのボタンが並びます。</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>ボタン</th><th>すること</th></tr></thead>
+      <tbody>
+        <tr><td>🛠 スコア修正</td><td>入れた記録の取り消し、イニングの増減。<strong>取り消した記録も残ります</strong>（競技規程の要件）</td></tr>
+        <tr><td>スコアシート</td><td>JPA公式と同じ形のスコアシートを開閉します。開いている間は記録のボタン列が隠れます</td></tr>
+        <tr><td>無効球</td><td>点にならずに落ちた球を数えます。点は増えません</td></tr>
+        <tr><td>次のラック</td><td>手でラックを進めます（点が満ちれば自動でも進みます）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">交代ボタンを押さなくても、A→B→A と入力すればイニングは1つ増えます。</p>
+
+  <h3>終わりかた</h3>
+  <p>勝利条件に届くと、確認の画面が出ます。内容（イニング数・セーフティ・マスワリ）を見て
+    <kbd>終了して保存</kbd> を押すと記録に残ります。まだ続けるなら「まだ続ける」を押します。</p>
+  <p>途中でやめた試合は「中断中の試合」としてホームと種目の画面の先頭に出ます。
+    あとから続きを記録できます。</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="screens">4. 画面の案内</h2>
+
+<div class="card">
+  <p>下のタブで移動します（試合中は誤操作を防ぐため隠れます）。</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>タブ</th><th>中身</th></tr></thead>
+      <tbody>
+        <tr><td>ホーム</td><td>中断中の試合、自分の勝率、直近の試合5件</td></tr>
+        <tr><td>種目</td><td>試合を作る画面。中断中の試合の再開もここ</td></tr>
+        <tr><td>選手</td><td>選手の登録・名前の変更・削除、JPAスキルレベル、所属店舗。上の帯から登録します</td></tr>
+        <tr><td>成績</td><td>「自分の成績」と「他選手の成績」。中は総合／内訳／対戦相手別／パートナー別／種目別</td></tr>
+        <tr><td>配置</td><td>練習の球配置を作って残しておく画面</td></tr>
+        <tr><td>履歴</td><td>終わった試合の一覧。表計算（CSV）に書き出せます</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">成績の一覧に自分は出ません（自分は「自分の成績」で見るため）。
+    選手一覧では、自分の名前の右に <span class="tag a">★</span> が付きます。</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="games">5. 選べる種目</h2>
+
+<div class="card">
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>区分</th><th>種目</th><th>決着</th><th>イニング</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="6">一般</td><td>9ボール（＋ダブルス）</td><td>ラック先取</td><td>選べる（既定：数えない）</td></tr>
+        <tr><td>10ボール（＋ダブルス）</td><td>ラック先取</td><td>選べる（既定：数えない）</td></tr>
+        <tr><td>8ボール</td><td>ラック先取</td><td>選べる（既定：数えない）</td></tr>
+        <tr><td>ローテーション</td><td>点数先取（球番号＝点）</td><td>選べる（既定：数えない）</td></tr>
+        <tr><td>14-1（ストレートプール）</td><td>点数先取（ラックを跨いで連続）</td><td>選べる（既定：数える）</td></tr>
+        <tr><td>ボウラード</td><td>1人・10フレーム・最高300点</td><td>—（1人でやる種目）</td></tr>
+        <tr><td rowspan="2">JPA</td><td>JPA 9ボール（＋ダブルス）</td><td>スキルレベル別の持ち点</td><td>常に数える</td></tr>
+        <tr><td>JPA 8ボール</td><td>公式対戦表のゲーム先取</td><td>常に数える</td></tr>
+        <tr><td rowspan="3">ハウスゲーム</td><td>カイルン</td><td>ステップ制・減点あり</td><td>常に数える</td></tr>
+        <tr><td>5-9</td><td>相手からもらうゼロサム（3人以上可）</td><td>専用画面で記録</td></tr>
+        <tr><td>5-10</td><td>同上</td><td>専用画面で記録</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card warn">
+    <strong>ハウスゲームは公式競技規程がありません。</strong>
+    カイルン・5-9・5-10 は店ごとに決め方が違うため、「この店のルール」で
+    その場の決め方を選んでから始めます。一般種目と同じ扱いに見えないよう、
+    種目一覧でも分けてあります。
+  </div>
+  <p class="hint">未実装：JCL（9ボール・8ボール）。ファーゴレートの換算式が非公開のため、
+    推測で実装していません。</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="data">6. 記録はどこにあるか</h2>
+
+<div class="card">
+  <p><strong>記録は、いま使っている端末のブラウザの中だけにあります。</strong>
+    サーバーには送っていません。</p>
+  <ul>
+    <li>別のスマホやパソコンで開いても、記録は共有されません</li>
+    <li>ブラウザの「サイトデータを消去」をすると<strong>記録も消えます</strong></li>
+    <li>残しておきたいときは、履歴や成績の「表計算へ」で CSV に書き出してください</li>
+  </ul>
+  <p class="hint">保存の仕組みは localStorage です。試合の本体と、一覧用の索引を分けて持っています。</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="system">7. システム編：中の仕組み</h2>
+
+<div class="card">
+  <h3>作りの考え方</h3>
+  <p>このアプリの土台は<strong>「出来事を並べて記録し、後ろから計算し直す」</strong>形です。
+    点数そのものは保存せず、「Aがラックを取った」「9番が落ちた」といった出来事（イベント）を
+    順番に積み、そこから毎回スコアを計算します。</p>
+  <ul>
+    <li>取り消しても記録は消えず、「無効になった」印が付くだけ（競技規程の要件）</li>
+    <li>後から数え方を直しても、過去の出来事から計算し直せる</li>
+    <li>種目ごとの違いは<strong>データ</strong>で表し、計算する部分は共通</li>
+  </ul>
+
+  <h3>ファイル構成</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>場所</th><th>役目</th></tr></thead>
+      <tbody>
+        <tr><td><span class="path">index.html</span></td><td>画面の骨組み。全画面が1枚に入っていて、表示を切り替える</td></tr>
+        <tr><td><span class="path">data/</span></td><td>種目・基礎ルール・点の付け方・ハンデ表・球の色。<strong>ここは全部データ</strong></td></tr>
+        <tr><td><span class="path">js/engine.js</span></td><td>スコア計算の中心。<strong>種目名による分岐を一切書かない</strong></td></tr>
+        <tr><td><span class="path">js/store.js</span></td><td>保存と読み出し、成績の集計</td></tr>
+        <tr><td><span class="path">js/ui_*.js</span></td><td>画面ごとの処理（設定・試合・履歴・選手・成績・配置・ハウスゲーム）</td></tr>
+        <tr><td><span class="path">js/shotclock.js</span> / <span class="path">chessclock.js</span></td><td>2種類の時計</td></tr>
+        <tr><td><span class="path">style.css</span> / <span class="path">css/v2.css</span></td><td>見た目。v2.css が後から上書きする</td></tr>
+        <tr><td><span class="path">sw.js</span></td><td>オフライン用。<strong>ファイルを変えたら CACHE_VERSION を上げる</strong></td></tr>
+        <tr><td><span class="path">_test/</span></td><td>検証。実ブラウザ40本＋計算だけの4本</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">おおよその規模：本体（js＋data）約12,100行、見た目（css）約5,900行、検証48本。</p>
+
+  <h3>種目を3つの軸に分けている</h3>
+  <p>12種目を <code>switch(gameId)</code> で分けると、種目が増えるたびに分岐が増えます。
+    そうならないよう、種目を次の3つの組み合わせとして表しています。</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>軸</th><th>置き場</th><th>例</th></tr></thead>
+      <tbody>
+        <tr><td>基礎種目（base）</td><td><span class="path">data/rules_data.js</span></td><td>nineball／tenball／eightball／rotation／straight／bowlard／kailun</td></tr>
+        <tr><td>点の付け方（scoring）</td><td><span class="path">data/scoring_data.js</span></td><td>rack（ラック単位）／straight（球1個＝1点）／bowlard／step</td></tr>
+        <tr><td>勝利条件（goal）</td><td><span class="path">data/games_data.js</span></td><td>free（自由）／jpaSL（JPA表）／jpaSL8／manual</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="addgame">8. システム編：種目を増やす</h2>
+
+<div class="card">
+  <p><strong>種目を増やしても、スコア計算（<span class="path">js/engine.js</span>）は触りません。</strong>
+    engine には種目名が1つも書かれていない決まりで、
+    <span class="path">_test/engine.test.js</span> の「設計ゲート」が自動で見張っています。
+    種目名を直書きすると検証が落ちます。</p>
+
+  <h3>触る場所は2つ</h3>
+  <ol class="steps">
+    <li><span class="path">data/games_data.js</span> に定義を1つ足す</li>
+    <li><span class="path">js/ui_setup.js</span> の <code>GAME_GROUPS</code> に1行足す
+      （種目一覧と、成績の種目別の並び順の<strong>唯一の出どころ</strong>）</li>
+  </ol>
+
+  <pre><code>// data/games_data.js
+"7ball": {
+  label: "7ボール",
+  base: "nineball",     // 基礎種目（rules_data.js）
+  scoring: "rack",      // 点の付け方（scoring_data.js）
+  goal: "free",
+  playersPerSide: 1,
+  mode: "rack",
+  goalType: "racks",
+  inningsOption: true,  // イニングを数えるかを設定で選べる
+  goalPresets: [{ label: "3先", v: 3 }, { label: "5先", v: 5 }],
+},
+
+// js/ui_setup.js の GAME_GROUPS（「一般」の items）
+{ id: "7ball", doubles: null },</code></pre>
+
+  <div class="card note">
+    <strong>この2か所だけで動くことは実際に確かめてあります。</strong>
+    上の「7ボール」を定義に足しただけで、engine を1行も触らずに
+    ラックの加算と勝敗判定が正しく動きました（2026-08-21 に実測）。
+  </div>
+
+  <h3>必要なときだけ足す場所</h3>
+  <ul>
+    <li>これまでに無い<strong>基礎種目</strong>（球の並べ方・反則の扱いが違う）→ <span class="path">data/rules_data.js</span></li>
+    <li>これまでに無い<strong>点の付け方</strong>→ <span class="path">data/scoring_data.js</span></li>
+    <li>新しい<strong>ハンデ表</strong>→ <span class="path">data/handicap_data.js</span></li>
+  </ul>
+
+  <div class="card warn">
+    <strong>気をつける点（正直に書いておきます）</strong>
+    <ul>
+      <li><strong>成績の種目別カードの中身</strong>は <span class="path">js/ui_players.js</span> が
+        種目IDで分岐しています（ボウラード／ローテーション／14-1／9ボール系）。
+        新しい種目は共通の行だけになります。壊れませんが、専用の行は出ません</li>
+      <li><strong>カイルンと5-9/5-10は engine と別系統</strong>です
+        （<span class="path">js/money_game.js</span>／<span class="path">js/ui_kailun.js</span>）。
+        A/Bの2サイドを前提にしない進行（3人以上など）はこちら側の作りになります</li>
+      <li><span class="path">js/store.js</span> に1か所だけ <code>jpa_8ball</code> の直書きがあります
+        （JPAポイントの満点を 3 と 20 で分けるところ）</li>
+      <li>ファイルを新しく増やしたら <span class="path">sw.js</span> の一覧と
+        <code>CACHE_VERSION</code> も更新します</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dev">9. システム編：検証と公開</h2>
+
+<div class="card">
+  <h3>検証</h3>
+  <p>変更したら、必ず検証を通してから公開します。</p>
+  <pre><code>cd D:\Claudecode\pool-score
+
+_test\run_all.bat          … 全部（44本・50分ほど）
+python _test\xxx_test.py   … 1本だけ
+python _test\live_test.py  … 公開されている実物を実ブラウザで確認（19項目）</code></pre>
+  <div class="card warn">
+    <strong>結果をパイプに通して読まないこと。</strong>
+    <code>テスト | tail</code> のように書くと、受け取る終了コードが tail のものになり、
+    落ちた検証を「成功」と読み違えます。1本ずつ実行して終了コードを直接見ます。
+  </div>
+
+  <h3>公開</h3>
+  <ol class="steps">
+    <li>アプリのファイルを変えたら <span class="path">sw.js</span> の <code>CACHE_VERSION</code> を上げる
+      （上げないと、スマホに古い画面が残ります）</li>
+    <li><code>main</code> に push すると、GitHub Pages が1〜2分で自動で作り直します</li>
+    <li><strong>「ビルドが成功した」と「配信されている中身が新しい」は別です。</strong>
+      次のコマンドで実物を見ます</li>
+  </ol>
+  <pre><code>curl -s -A "Mozilla/5.0" "https://hiroshit164820-create.github.io/pool-score/sw.js?cb=%RANDOM%" | findstr CACHE_VERSION</code></pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="trouble">10. 困ったとき</h2>
+
+<div class="card">
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>こうなった</th><th>こうする</th></tr></thead>
+      <tbody>
+        <tr><td>直したはずの画面が古いまま</td><td>スマホの場合はアプリを一度閉じて開き直す。それでも古ければ、ブラウザで開いてページを再読み込みする</td></tr>
+        <tr><td>点を押し間違えた</td><td>下の帯の <kbd>🛠 スコア修正</kbd> から取り消す</td></tr>
+        <tr><td>イニングの数が合わない</td><td>同じく「スコア修正」の中で ＋1／−1 で直せます</td></tr>
+        <tr><td>試合が途中で終わってしまった</td><td>ホームか種目の画面の先頭に「中断中の試合」が出ます。そこから続けられます</td></tr>
+        <tr><td>記録を残しておきたい</td><td>履歴・成績の「表計算へ」で CSV に書き出す</td></tr>
+        <tr><td>ボタンが効かない気がする</td><td>まず実物で1回試してください。過去に「効いていない」と思えた操作が、実際には動いていた例があります</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  <p>ビリヤードスコア記録 — 説明書。内容は 2026-08-21 時点（アプリの版 v40）のものです。</p>
+  <p class="hint">意匠について：既存ゲームの画像・ロゴ・スプライト・効果音は使っていません。
+    1980年代の横スクロールアクションの「様式」（空色・レンガ・金のブロック・ドット書体）だけを、
+    CSSの図形と自作の16×16ドット絵で表しています。</p>
+  <p><a href="./">アプリに戻る</a></p>
+</footer>
+
+</div>
+</body>
+</html>

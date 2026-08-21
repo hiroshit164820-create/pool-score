@@ -8,12 +8,14 @@
  *   CACHE_VERSION を上げると古いキャッシュを捨てて入れ替える。
  *   ファイルを変更したときは必ずこの数字を上げること。
  */
-const CACHE_VERSION = "v40";
+const CACHE_VERSION = "v41";
 const CACHE_NAME = "pool-score-" + CACHE_VERSION;
 
 const ASSETS = [
   "./",
   "./index.html",
+  // 説明書。電波が無い場所でも読めるようにキャッシュに入れる
+  "./manual.html",
   "./style.css",
   "./css/v2.css",
   "./manifest.json",
