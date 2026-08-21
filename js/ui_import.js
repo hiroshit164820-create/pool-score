@@ -266,6 +266,24 @@ const IMPORTUI = (function () {
   function renderPaste(body) {
     setHead("記録を受け取る", "送られてきたリンクを貼り付けてください");
 
+    // QRで受け取る（本人の指示 2026-08-22）。
+    // 同じ店で対面しているなら、相手の画面を写すのがいちばん早い
+    body.appendChild(
+      UI.el("button", {
+        class: "primary scan-open",
+        text: "QRを読み取る",
+        onclick: UI.guard(openScan),
+      })
+    );
+    body.appendChild(
+      UI.el("p", {
+        class: "hint",
+        text: "相手の履歴で「相手に送る」→「QRを表示する」を出してもらい、"
+          + "その画面を写します。",
+      })
+    );
+
+    body.appendChild(UI.el("div", { class: "section-title", text: "リンクを貼り付ける" }));
     body.appendChild(
       UI.el("p", {
         class: "hint",
@@ -459,5 +477,178 @@ const IMPORTUI = (function () {
     else UI.showScreen("screenSetup");
   }
 
-  return { checkHash: checkHash, open: open, openPaste: openPaste };
+  /* ---------- QRを写して取り込む（本人の指示 2026-08-22） ---------- */
+
+  // カメラの映像。止めるときに使うので取っておく
+  let stream = null;
+  // 毎フレームの読み取りを止めるための番号
+  let rafId = 0;
+  let scanBound = false;
+  // 読み取り用の作業台（画面には出さない）
+  let scanCanvas = null;
+
+  function scanBindOnce() {
+    if (scanBound) return;
+    scanBound = true;
+    const close = $("scanCloseBtn");
+    if (close) close.addEventListener("click", UI.guard(closeScan));
+    const back = $("qrScanModal");
+    if (back) {
+      back.addEventListener("click", function (e) {
+        if (e.target === back) closeScan();
+      });
+    }
+    const file = $("scanFile");
+    if (file) file.addEventListener("change", function (e) { readPhoto(e.target); });
+  }
+
+  function setScanMsg(text) {
+    const n = $("scanMsg");
+    if (n) n.textContent = text || "";
+  }
+
+  function openScan() {
+    scanBindOnce();
+    const m = $("qrScanModal");
+    if (!m) return;
+    setScanMsg("");
+    m.hidden = false;
+
+    if (typeof QRDECODE === "undefined") {
+      setScanMsg("この版では読み取れません。リンクを貼り付けてください。");
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setScanMsg("この端末ではカメラを開けません。下の「写真から読み取る」を使ってください。");
+      return;
+    }
+
+    // 背面カメラを頼む。QRは細かいので、取れるなら高い解像度をもらう
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 1280 },
+      },
+      audio: false,
+    }).then(function (s) {
+      stream = s;
+      const v = $("scanVideo");
+      v.srcObject = s;
+      // iOSは playsinline が無いと全画面になる（index.html 側で付けてある）
+      return v.play();
+    }).then(function () {
+      setScanMsg("QRが枠に収まるように近づけてください。");
+      tick();
+    }).catch(function (e) {
+      // 断られた／カメラが無い。理由が分かる言い方にする
+      const name = (e && e.name) || "";
+      if (name === "NotAllowedError") {
+        setScanMsg("カメラの使用が許可されていません。"
+          + "端末の設定でこのサイトのカメラを許可するか、下の「写真から読み取る」を使ってください。");
+      } else if (name === "NotFoundError") {
+        setScanMsg("カメラが見つかりません。下の「写真から読み取る」を使ってください。");
+      } else {
+        setScanMsg("カメラを開けませんでした（" + (name || "理由不明") + "）。"
+          + "下の「写真から読み取る」を使ってください。");
+      }
+    });
+  }
+
+  function closeScan() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    // 止め忘れるとカメラのランプが点いたままになる
+    if (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      stream = null;
+    }
+    const v = $("scanVideo");
+    if (v) v.srcObject = null;
+    const m = $("qrScanModal");
+    if (m) m.hidden = true;
+  }
+
+  /** 毎フレーム、映像を1枚取って読んでみる */
+  function tick() {
+    rafId = requestAnimationFrame(tick);
+    const v = $("scanVideo");
+    if (!v || !v.videoWidth) return;
+
+    if (!scanCanvas) scanCanvas = document.createElement("canvas");
+    // 大きすぎると1枚あたりが重い。長辺720までに抑える
+    const scale = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight));
+    const w = Math.round(v.videoWidth * scale);
+    const h = Math.round(v.videoHeight * scale);
+    if (scanCanvas.width !== w) { scanCanvas.width = w; scanCanvas.height = h; }
+    const ctx = scanCanvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, w, h);
+
+    let text = null;
+    try {
+      text = QRDECODE.fromImageData(ctx.getImageData(0, 0, w, h));
+    } catch (e) {
+      text = null;
+    }
+    if (text) gotScan(text);
+  }
+
+  /** 読めたときの処理。取り込みの確認へ進む */
+  function gotScan(text) {
+    const bodyStr = SHARE.readAny(text);
+    if (!bodyStr) {
+      // このアプリのQRではない。読み続ける
+      setScanMsg("このQRは試合の記録ではありません。");
+      return;
+    }
+    closeScan();
+    SHARE.decode(bodyStr).then(function (obj) {
+      open(obj, true);
+      UI.toast("QRを読み取りました。");
+    }).catch(function (e) {
+      openPaste();
+      setPasteMsg("読み取れましたが中身が読めませんでした（" + (e && e.message) + "）。");
+    });
+  }
+
+  /** カメラが使えない端末のための道。写真を1枚選んで読む */
+  function readPhoto(input) {
+    const f = input && input.files && input.files[0];
+    if (!f) return;
+    setScanMsg("写真を読んでいます…");
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = function () {
+      const c = document.createElement("canvas");
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      let text = null;
+      try {
+        text = QRDECODE.fromImageData(ctx.getImageData(0, 0, c.width, c.height));
+      } catch (e) {
+        text = null;
+      }
+      input.value = "";
+      if (text) { gotScan(text); return; }
+      setScanMsg("この写真からはQRを読み取れませんでした。"
+        + "QRが大きく写るように、明るい場所で撮り直してください。");
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      input.value = "";
+      setScanMsg("この写真を開けませんでした。");
+    };
+    img.src = url;
+  }
+
+  return {
+    checkHash: checkHash,
+    open: open,
+    openPaste: openPaste,
+    openScan: openScan,
+    closeScan: closeScan,
+  };
 })();

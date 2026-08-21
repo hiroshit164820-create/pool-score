@@ -1719,8 +1719,12 @@ body {
   padding: 6px 12px;
 }
 .screen.grid-mode .score-panel .val {
-  /* パネルの高さ(78px)から名前の行を引いた残りに収まる大きさにする */
-  font-size: min(13vw, 6vh, 44px);
+  /* パネルの高さから名前の行を引いた残りに収まる大きさにする。
+     44px 固定にしていたが、縦に余裕のある端末でも小さいままだった
+     （本人の指示 2026-08-22：点数はできるだけ大きく）。
+     実測した値（fitScoreFont が入れる --val-size）を優先し、
+     測る前の一瞬だけ従来の値を使う */
+  font-size: var(--val-size, min(13vw, 6vh, 44px));
 }
 .screen.grid-mode .score-panel .name {
   font-size: 17px;
@@ -2491,14 +2495,30 @@ button,
   min-height: clamp(150px, 30vh, 260px);
   overflow: hidden;
 }
-/* 盤面つきの種目（ローテーション）は、スコアボードの中に
-   パネル2つと帯（ラック情報・ブレイク・ターン）が全部入る。
-   高さを頭打ちにすると2つ目のパネルや帯が切り落とされて
-   「あるのに見えない」状態になるので、中身ぶんの高さを取らせる。
-   足りない縦は盤面（play-area）側がスクロールして吸収する */
+/* 盤面つきの種目（ローテーション）は、盤面（球のボタン）が
+   必ず全部押せる高さを取り、残った縦をスコアボードに回す
+   （本人の指示 2026-08-22：空いた縦はスコアボードに優先して回す）。
+
+   以前はスコアボードを中身ぶんの固定（flex:0 0 auto）にし、
+   足りない縦は盤面をスクロールさせて吸わせていた。
+   その結果、画面の下に空きがあってもスコア欄は 52px のままで、
+   名前と数字が1行に押し込まれていた（本人の指摘・実機のスクショ）。
+   逆に時計を入れると盤面が縮んで 11〜15番が交代ボタンの下に隠れていた */
 #screenMatch.grid-mode .scoreboard {
-  flex: 0 0 auto;
+  /* 伸びる（空いた縦を吸う）が、中身より縮みはしない。
+     縮ませると、はみ出したスコア欄が overflow:hidden で切られたまま
+     セーフティのボタンだけが下の帯に重なる（360x640＋時計で実測）。
+     足りないときは今までどおり盤面（play-area）側がスクロールして吸う */
+  flex: 1 0 auto;
   min-height: 0;
+}
+/* スコア欄はスコアボードの高さを半分ずつ分け合う。
+   css/v2.css で flex:0 0 auto にしてあるのを、伸びる側に戻す
+   （固定のままだと、上で広げたスコアボードの中に空きが残るだけになる） */
+#screenMatch.grid-mode .scoreboard .panel-wrap {
+  flex: 1 1 0;
+  /* 2段（上段＝名前の行 ≒20px、下段＝点数）が読める最低限 */
+  min-height: 68px;
 }
 /* 縦の短い端末では、スコアボードの中の帯（ラック情報・ブレイク・ターン）を
    詰めて盤面の球ボタンぶんの高さを空ける。
@@ -2508,27 +2528,45 @@ button,
     gap: 4px;
     padding: 6px 14px 2px;
   }
-  /* 縦が足りないときは、パネルを「名前と数字を横に並べた1行」にする。
-     縦に積むと、名前・数字・進捗バーで3段ぶんの高さが要り、
-     どれかが必ず切れる。横に並べれば1段で収まり、両方とも読める */
+  /* スコア欄は2段にする（本人の指示 2026-08-22）。
+     上段＝撞き番の印・BREAKの札・名前、下段＝点数（できるだけ大きく）。
+
+     ここは以前「名前と数字を横に並べた1行」にしていた。
+     縦が足りないときの逃げ道のつもりだったが、実機（375x667）で測ると
+     セーフティのボタンぶんの余白（padding-right:104px）と数字に幅を取られ、
+     名前の欄が 7px＝「た」1文字まで潰れていた（360x640 では 0px）。
+     余っていた縦（下部の空き）をスコアボードへ回して2段に戻す */
   #screenMatch.grid-mode .score-panel {
-    min-height: 52px;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
+    /* 高さは枠（.panel-wrap）が持つ。ここで下限を持つと、
+       時計の帯が入ったときにスコアボードが縮めず、
+       盤面の 11〜15番が交代ボタンの下に隠れる */
+    min-height: 0;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 10px;
   }
   #screenMatch.grid-mode .score-panel .sp-head {
-    flex: 1 1 auto;
+    /* 上段は必要な高さだけ。残りは全部下段（数字）に渡す */
+    flex: 0 0 auto;
     min-width: 0;
   }
-  #screenMatch.grid-mode .score-panel .val {
-    flex: 0 0 auto;
-    font-size: 30px;
+  /* 下段。ここが残りの高さを全部取り、数字はこの高さに合わせる */
+  #screenMatch.grid-mode .score-panel .val-row {
+    flex: 1 1 auto;
     min-height: 0;
   }
-  /* 進捗バーは横並びでは置き場が無いので、狭いときは出さない
-     （残り何点かは「/ 61」の表示で分かる） */
+  #screenMatch.grid-mode .score-panel .val {
+    /* 固定の30pxだと、縦に余裕がある端末でも小さいままだった。
+       実際の大きさは JS（fitScoreFont）がパネルの高さと
+       「/ 120」を除いた幅から決めて --val-size に入れる */
+    flex: 0 1 auto;
+    font-size: var(--val-size, 30px);
+    min-height: 0;
+  }
+  /* 進捗バーは2段のどちらにも入らないので出さない
+     （残り何点かは「/ 120」の表示で分かる） */
   #screenMatch.grid-mode .score-panel .progress {
     display: none;
   }
@@ -3373,4 +3411,90 @@ body.match-active .app {
 .mlr-body {
   flex: 1;
   min-width: 0;
+}
+
+
+/* ============================================================
+   横向きのローテーション（盤面つき＝grid-mode）の作り直し
+   本人の指示 2026-08-22（実機のスクリーンショットを見ての指示）
+
+   ・A側・B側とも「セーフティ」のボタンを左に置く
+     （B側だけ右にあり、左右で場所が違って押し間違えていた）
+   ・「交代」と「ブレイク入れ替え」はスコアボードの右・画面の右端に縦並び
+     （盤面の下に横並びだと、その高さぶんスコアボードが 116px まで潰れ、
+       名前と数字が1行に押し込まれて読めなかった）
+   ・空いた高さは盤面（球のボタン）を下げてスコアボードに回す
+
+   grid-mode が付くのはローテーションだけ（data/scoring_data.js の
+   ballValue だけが ballScore＋rackTotal かつ keyBall なし。
+   js/ui_match.js の usesBallGrid で確認）。他の種目には影響しない。
+   turn-row をスコアボードの中へ移すのは js/ui_match.js の syncMetaPlace。
+   ============================================================ */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* B側の記録ボタンも左へ。A側は css/v2.css で row-reverse になっている */
+  #screenMatch.grid-mode .panel-wrap.side-b {
+    flex-direction: row-reverse;
+  }
+
+  /* スコアボードを2列にする。
+     左の列にスコア欄2つ、右の列に交代・ブレイク入れ替えを縦に並べる。
+     余っている縦はここが吸って、スコア欄を大きくする */
+  #screenMatch.grid-mode .scoreboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 6px;
+  }
+  #screenMatch.grid-mode .scoreboard .panel-wrap.side-a {
+    grid-area: 1 / 1 / 2 / 2;
+    min-height: 0;
+  }
+  #screenMatch.grid-mode .scoreboard .panel-wrap.side-b {
+    grid-area: 2 / 1 / 3 / 2;
+    min-height: 0;
+  }
+  /* 右の列。上から「交代」→「ブレイク入れ替え」。
+     押せる大きさ（44px）は下げない */
+  #screenMatch.grid-mode .scoreboard .turn-row {
+    grid-area: 1 / 2 / 3 / 3;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+  }
+  #screenMatch.grid-mode .scoreboard .turn-row > button {
+    flex: 1 1 0;
+    min-height: 44px;
+    min-width: 0;
+  }
+  /* 縦並びになったので、札は横向きでも1行ずつ出す
+     （横並び用に「ブレイク」の字を消していた指定を戻す） */
+  #screenMatch.grid-mode .scoreboard .turn-row .break-toggle .bt-label {
+    display: block;
+    font-size: 10px;
+  }
+
+  /* 交代の行が出て行ったぶん、置き場の余白を畳む。
+     ローテーションでは flagButtons は空（記録ボタンはスコア欄の脇にある） */
+  #screenMatch.grid-mode .play-fixed {
+    padding-bottom: 0;
+    gap: 0;
+  }
+  #screenMatch.grid-mode .flag-buttons:empty {
+    display: none;
+  }
+
+  /* 盤面は交代の行が抜けたぶん下へ下がる（本人の指示 2026-08-22）。
+     入りきらないときに中でスクロールできるのは今までどおり */
+  #screenMatch.grid-mode .play-area {
+    padding-bottom: 4px;
+  }
+
+  /* 横向きのスコア欄も2段（上段＝撞き番・BREAK・名前、下段＝点数）。
+     @media (max-height: 820px) の指定がそのまま効くが、
+     高さの下限だけは横向きの実寸に合わせる */
+  #screenMatch.grid-mode .score-panel {
+    min-height: 64px;
+    padding: 2px 10px;
+  }
 }

@@ -62,6 +62,27 @@ const MATCH = (function () {
       if (match) { syncMetaPlace(); fitScoreFont(); }
     });
 
+    // 画面の大きさが変わらなくても、スコア欄の高さは動く。
+    // 「◯番（+n点）」の知らせは流れの中に出て 43px ぶん場所を取り、
+    // 数秒で消えたときにスコア欄が広がる（本人の指示 2026-08-22 の作り直しで、
+    // 空いた縦をスコアボードが吸うようにしたため差がはっきり出る）。
+    // このとき数字を測り直さないと、狭かったときの大きさのままになる
+    if (window.ResizeObserver) {
+      let refitting = false;
+      const ro = new ResizeObserver(function () {
+        if (!match || refitting) return;
+        refitting = true;
+        requestAnimationFrame(function () {
+          refitting = false;
+          if (match) fitScoreFont();
+        });
+      });
+      ["panelA", "panelB"].forEach(function (id) {
+        const el = $(id);
+        if (el) ro.observe(el);
+      });
+    }
+
     // スコア欄そのものがボタン。タップで1点（1ラック）加算し、
     // 長押しで1点戻す（本人の指示。加算と同じ場所で減算までできるようにする）
     ["A", "B"].forEach(function (sd) {
@@ -876,8 +897,25 @@ const MATCH = (function () {
       const slots = Math.max(0, panel.children.length - 1);
       const avail = box.height - padding - used - gap * slots;
 
-      // 幅の制約も見る（3桁になっても収まるように）
-      const byWidth = box.width * 0.42;
+      // 幅の制約も見る（3桁になっても収まるように）。
+      // 盤面つきの種目（ローテーション）は目標が「/ 120」と長く、
+      // セーフティのボタンぶんの余白（padding-right）も引かれるため、
+      // パネルの幅から一律に決めると数字と目標が重なる（本人の指摘 2026-08-22）。
+      // 数字が実際に何em幅かを測って、入る大きさを逆算する
+      let byWidth = box.width * 0.42;
+      if ($("screenMatch").classList.contains("grid-mode")) {
+        const rowCs = getComputedStyle(row);
+        const colGap = parseFloat(rowCs.columnGap || rowCs.gap) || 0;
+        const tg = panel.querySelector(".target");
+        const tgW = tg && !tg.hidden && getComputedStyle(tg).display !== "none"
+          ? tg.getBoundingClientRect().width + colGap
+          : 0;
+        const availW = row.clientWidth - tgW;
+        // いま出ている文字の横幅（em）。書体と桁数の両方が入った実測値になる
+        const curFont = parseFloat(getComputedStyle(val).fontSize) || 1;
+        const emW = Math.max(0.8, (val.scrollWidth || curFont) / curFont);
+        if (availW > 0) byWidth = availW / emW;
+      }
       // 0.9 は行の高さぶんの余裕。これを超えると上下が切れる。
       // 下限は台の脇から読める大きさ（32px）。
       // それも入らないほど狭いときは、パネル側の作りを見直すべきで
@@ -1652,6 +1690,24 @@ const MATCH = (function () {
     // スコアボードが 240px → 160px まで潰れるので、上の帯へ寄せる
     // （本人の指摘 2026-08-21・画像1）。縦向きでは元の場所に戻す
     const tight = isTightLandscape();
+
+    // 横向きの盤面つき種目（ローテーション）は、交代とブレイク入れ替えを
+    // スコアボードの右の列へ移す（本人の指示 2026-08-22）。
+    // 盤面の下に横並びで置くと、その高さぶんスコアボードが 116px まで潰れ、
+    // 名前と数字が1行に押し込まれて読めなかった。
+    // 置き場所は style.css の「横向きのローテーション」の節（grid）で決める。
+    // 縦向き・他の種目では元の場所（.play-fixed の先頭）へ戻す
+    const board = document.querySelector("#screenMatch .scoreboard");
+    const fixed = document.querySelector("#screenMatch .play-fixed");
+    const gridMode = $("screenMatch").classList.contains("grid-mode");
+    if (row && board && fixed) {
+      if (tight && gridMode) {
+        if (row.parentNode !== board) board.appendChild(row);
+      } else if (row.parentNode !== fixed) {
+        fixed.insertBefore(row, fixed.firstChild);
+      }
+    }
+
     const clockHome = document.querySelector("#screenMatch .match-body")
       || document.querySelector("#screenMatch");
     ["shotClockBar", "chessClockBar"].forEach(function (id) {

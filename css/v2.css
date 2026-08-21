@@ -2539,6 +2539,86 @@ button::after {
   }
 }
 
+/* ============ 記録を送る（リンク／QR）本人の指示 2026-08-22 ============
+   同じ店で対面しているならQR、離れているならリンク。
+   QRは細かいほど読み取りに失敗しやすいので、画面いっぱいに大きく出す */
+.share-modal .sub {
+  margin: -6px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.share-modal .share-way {
+  width: 100%;
+  min-height: 56px;
+  font-size: 17px;
+  margin-top: 6px;
+}
+.share-modal .hint {
+  margin: 4px 0 12px;
+}
+/* QRは白地のまま出す。枠の色を重ねると読み取りが落ちる */
+.qr-canvas {
+  display: block;
+  margin: 6px auto 10px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  /* 高い解像度で描いたものを縮めて出すので、補間はそのままにする。
+     pixelated にすると縮小時にマスの幅が揃わず、かえって読み取りが落ちる */
+  max-width: 100%;
+}
+
+/* QRを写して取り込む（本人の指示 2026-08-22）。
+   映像は正方形に切り出して出す。QRは正方形なので、
+   横長のまま出すと「枠に入れる」感覚と合わない */
+.scan-modal .sub {
+  margin: -6px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.scan-view {
+  position: relative;
+  width: 100%;
+  /* 正方形にする。古い端末向けに padding-top も併記 */
+  aspect-ratio: 1 / 1;
+  background: #000;
+  border: var(--bw) solid var(--ink);
+  overflow: hidden;
+}
+.scan-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* どこに合わせればよいかを示す枠 */
+.scan-frame {
+  position: absolute;
+  inset: 12%;
+  border: 3px solid rgba(255, 255, 255, .9);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .25);
+  pointer-events: none;
+}
+.scan-modal .scan-file {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 10px;
+  padding: 12px;
+  text-align: center;
+  border: var(--bw) solid var(--ink);
+  background: var(--surface-2);
+  font-weight: 900;
+  cursor: pointer;
+}
+#screenImport .scan-open {
+  width: 100%;
+  min-height: 56px;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
 /* 「保存した配置」は、その場で重ねて開くカードにした（本人の指示 2026-08-22）。
    以前は台と操作ボタンの下に伸びる作りで、押しても画面の外に開いていた */
 .layout-list-modal .layout-list {

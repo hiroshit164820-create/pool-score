@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>qrdecode 検証</title>
+</head>
+<body>
+<canvas id="cv" width="10" height="10"></canvas>
+<script src="../js/qr.js"></script>
+<script src="../js/qrdecode.js"></script>
+<script>
+var T = {
+  // QRを canvas に描く。scale=1マスの画素数, quiet=余白のマス数, deg=傾き(度)
+  render: function (text, opt) {
+    opt = opt || {};
+    var scale = opt.scale || 6;
+    var quiet = (opt.quiet == null) ? 4 : opt.quiet;
+    var deg = opt.deg || 0;
+    var q = QRCODE.make(text, opt.ec ? { ecLevel: opt.ec } : undefined);
+    var n = q.size;
+    var side = (n + quiet * 2) * scale;
+    var rad = deg * Math.PI / 180;
+    var W = Math.ceil(side * (Math.abs(Math.cos(rad)) + Math.abs(Math.sin(rad))));
+    var cv = document.getElementById('cv');
+    cv.width = W; cv.height = W;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, W);
+    g.save();
+    g.translate(W / 2, W / 2);
+    g.rotate(rad);
+    g.translate(-side / 2, -side / 2);
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, side, side);
+    g.fillStyle = '#000000';
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        if (q.modules[y][x]) {
+          g.fillRect((x + quiet) * scale, (y + quiet) * scale, scale, scale);
+        }
+      }
+    }
+    g.restore();
+    if (opt.blot) {
+      g.fillStyle = '#000000';
+      g.fillRect(opt.blot.x, opt.blot.y, opt.blot.w, opt.blot.h);
+    }
+    return { version: q.version, size: n, px: W, mode: q.mode, ec: q.ecLevel };
+  },
+
+  // 斜めから撮った写真の代わり。台形に歪ませて描く。
+  // canvas の 2D は台形の描画ができないので、いったん描いた絵を画素ごとに写し替える。
+  // shrink=0.4 なら上辺が下辺の60%の幅になる（＝かなり寝かせて撮った状態）
+  warp: function (text, opt) {
+    opt = opt || {};
+    var shrink = opt.shrink || 0.3;
+    var info = T.render(text, { scale: opt.scale || 6, quiet: opt.quiet == null ? 4 : opt.quiet });
+    var cv = document.getElementById('cv');
+    var W = cv.width;
+    var src = cv.getContext('2d').getImageData(0, 0, W, W);
+    // 変換元＝画像全体の四隅、変換先＝上辺を縮めた台形
+    var d = W * shrink / 2;
+    var t = T._quadToQuad(
+      [d, 0, W - d, 0, W, W, 0, W],   // 台形（描きたい形）
+      [0, 0, W, 0, W, W, 0, W]        // 元の正方形
+    );
+    var out = cv.getContext('2d').createImageData(W, W);
+    for (var y = 0; y < W; y++) {
+      for (var x = 0; x < W; x++) {
+        var den = t.a13 * (x + 0.5) + t.a23 * (y + 0.5) + t.a33;
+        var sx = Math.round((t.a11 * (x + 0.5) + t.a21 * (y + 0.5) + t.a31) / den);
+        var sy = Math.round((t.a12 * (x + 0.5) + t.a22 * (y + 0.5) + t.a32) / den);
+        var o = (y * W + x) * 4;
+        var v = 255;
+        if (sx >= 0 && sy >= 0 && sx < W && sy < W) v = src.data[(sy * W + sx) * 4];
+        out.data[o] = v; out.data[o + 1] = v; out.data[o + 2] = v; out.data[o + 3] = 255;
+      }
+    }
+    cv.getContext('2d').putImageData(out, 0, 0);
+    return info;
+  },
+
+  // 台形→正方形 の射影変換（検証で歪ませるためだけに使う小さな実装）
+  _squareToQuad: function (x0, y0, x1, y1, x2, y2, x3, y3) {
+    var dx3 = x0 - x1 + x2 - x3, dy3 = y0 - y1 + y2 - y3;
+    if (dx3 === 0 && dy3 === 0) {
+      return { a11: x1 - x0, a21: x2 - x1, a31: x0,
+               a12: y1 - y0, a22: y2 - y1, a32: y0, a13: 0, a23: 0, a33: 1 };
+    }
+    var dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2;
+    var den = dx1 * dy2 - dx2 * dy1;
+    var a13 = (dx3 * dy2 - dx2 * dy3) / den;
+    var a23 = (dx1 * dy3 - dx3 * dy1) / den;
+    return { a11: x1 - x0 + a13 * x1, a21: x3 - x0 + a23 * x3, a31: x0,
+             a12: y1 - y0 + a13 * y1, a22: y3 - y0 + a23 * y3, a32: y0,
+             a13: a13, a23: a23, a33: 1 };
+  },
+  _quadToQuad: function (from, to) {
+    var f = T._squareToQuad(from[0], from[1], from[2], from[3], from[4], from[5], from[6], from[7]);
+    var adj = { a11: f.a22 * f.a33 - f.a23 * f.a32, a21: f.a23 * f.a31 - f.a21 * f.a33,
+                a31: f.a21 * f.a32 - f.a22 * f.a31, a12: f.a13 * f.a32 - f.a12 * f.a33,
+                a22: f.a11 * f.a33 - f.a13 * f.a31, a32: f.a12 * f.a31 - f.a11 * f.a32,
+                a13: f.a12 * f.a23 - f.a13 * f.a22, a23: f.a13 * f.a21 - f.a11 * f.a23,
+                a33: f.a11 * f.a22 - f.a12 * f.a21 };
+    var s = T._squareToQuad(to[0], to[1], to[2], to[3], to[4], to[5], to[6], to[7]);
+    return { a11: s.a11 * adj.a11 + s.a21 * adj.a12 + s.a31 * adj.a13,
+             a21: s.a11 * adj.a21 + s.a21 * adj.a22 + s.a31 * adj.a23,
+             a31: s.a11 * adj.a31 + s.a21 * adj.a32 + s.a31 * adj.a33,
+             a12: s.a12 * adj.a11 + s.a22 * adj.a12 + s.a32 * adj.a13,
+             a22: s.a12 * adj.a21 + s.a22 * adj.a22 + s.a32 * adj.a23,
+             a32: s.a12 * adj.a31 + s.a22 * adj.a32 + s.a32 * adj.a33,
+             a13: s.a13 * adj.a11 + s.a23 * adj.a12 + s.a33 * adj.a13,
+             a23: s.a13 * adj.a21 + s.a23 * adj.a22 + s.a33 * adj.a23,
+             a33: s.a13 * adj.a31 + s.a23 * adj.a32 + s.a33 * adj.a33 };
+  },
+
+  // canvas を写真代わりに使わない場合（QRが写っていない画像）
+  noise: function (w) {
+    var cv = document.getElementById('cv');
+    cv.width = w; cv.height = w;
+    var g = cv.getContext('2d');
+    var img = g.createImageData(w, w);
+    var seed = 12345;
+    for (var i = 0; i < w * w; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      var v = (seed >> 16) & 255;
+      img.data[i * 4] = v; img.data[i * 4 + 1] = v;
+      img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return w;
+  },
+
+  blank: function (w) {
+    var cv = document.getElementById('cv');
+    cv.width = w; cv.height = w;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, w);
+    return w;
+  },
+
+  // canvas から読み戻す。かかった時間も返す
+  read: function (times) {
+    var cv = document.getElementById('cv');
+    var g = cv.getContext('2d', { willReadFrequently: true });
+    var img = g.getImageData(0, 0, cv.width, cv.height);
+    var n = times || 1;
+    var best = null, worst = 0, out = null;
+    for (var i = 0; i < n; i++) {
+      var t0 = performance.now();
+      out = QRDECODE.fromImageData(img);
+      var ms = performance.now() - t0;
+      if (best === null || ms < best) best = ms;
+      if (ms > worst) worst = ms;
+    }
+    return { text: out, ms: worst, best: best, px: cv.width };
+  },
+
+  // 升目から直接読む
+  matrix: function (text, ec) {
+    var q = QRCODE.make(text, ec ? { ecLevel: ec } : undefined);
+    return { text: QRDECODE.fromMatrix(q.modules), version: q.version, mode: q.mode };
+  }
+};
+</script>
+</body>
+</html>

@@ -558,14 +558,27 @@ const HISTORY = (function () {
   }
 
   /**
-   * 試合の記録をリンクにして相手に渡す（本人の指示 2026-08-21）。
+   * 試合の記録を相手に渡す（本人の指示 2026-08-21／2026-08-22）。
    *
    * サーバーを持たない作りなので、記録そのものをリンクに載せる。
-   * 「共有」が使える端末はLINE等に渡し、使えない端末は写して渡す。
+   * 2026-08-22 から「リンクで送る」と「QRを表示する」を選べるようにした
+   * （同じ店で対面しているならQRのほうが早く、他のアプリも要らないため）。
+   * 選ぶ画面と描画は qrview.js にある。
    */
   function sendMatch(id) {
     const full = STORE.loadMatch(id);
     if (!full) { UI.toast("記録が見つかりません。", "warn"); return; }
+
+    if (typeof QRVIEW !== "undefined") {
+      QRVIEW.openSend(full);
+      return;
+    }
+    // QRの部品が読み込めていないときは、今までどおりリンクだけで渡す
+    sendLinkOnly(full);
+  }
+
+  /** リンクだけで渡す道（QRが使えないときの受け皿） */
+  function sendLinkOnly(full) {
     const who = full.sides[0].name + " 対 " + full.sides[1].name;
     const g = (typeof GAMES !== "undefined" && GAMES[full.gameId]) || {};
     const title = (g.label || full.gameId) + "　" + who;

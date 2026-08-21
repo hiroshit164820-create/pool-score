@@ -52,3 +52,9 @@ python	pairpick_test.py	プレーヤーの選び方・ペアの組み替え（08
 python	share_test.py	試合の記録を相手に渡す（08-22 段階D）
 python	paste_test.py	リンクを貼り付けて取り込む（08-22・ホーム画面のアプリ対応）
 python	layoutcard_test.py	保存した配置をその場で開くカード（08-22）
+node	qr.test.js	QRコードの符号化（08-22）
+python	shortlink_test.py	共有リンクを短くする（08-22 版2・deflate-raw）
+python	qrsend_test.py	記録をリンクかQRで渡す（08-22）
+python	qrdecode_test.py	QRコードの読み取り（08-22）
+python	qrscan_test.py	QRを写して取り込む（08-22）
+python	rot_layout_test.py	ローテーションの試合画面のレイアウト（縦2段・横の右列、08-22）

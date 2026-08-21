@@ -489,6 +489,41 @@
     </div>
   </section>
 
+  <!-- QRを写して取り込む（本人の指示 2026-08-22）。
+       「受信側はQRを読み込むボタンを押せばカメラが起動する形」 -->
+  <div class="modal-backdrop" id="qrScanModal" hidden>
+    <div class="modal scan-modal">
+      <h2>QRを読み取る</h2>
+      <div class="sub" id="scanSub">相手の画面のQRに向けてください</div>
+      <div class="scan-view">
+        <video id="scanVideo" playsinline muted></video>
+        <div class="scan-frame" aria-hidden="true"></div>
+      </div>
+      <p class="hint" id="scanMsg"></p>
+      <!-- カメラが使えない端末のための逃げ道。写真を1枚選んで読ませる -->
+      <label class="scan-file" id="scanFileLabel">
+        写真から読み取る
+        <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+      </label>
+      <div class="modal-actions">
+        <button id="scanCloseBtn" class="ghost">やめる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 試合の記録を送る（本人の指示 2026-08-22）。
+       リンクで送るか、その場でQRを出して写してもらうかを選ぶ -->
+  <div class="modal-backdrop" id="shareModal" hidden>
+    <div class="modal share-modal">
+      <h2 id="shareTitle">記録を送る</h2>
+      <div class="sub" id="shareSub"></div>
+      <div id="shareBody"></div>
+      <div class="modal-actions">
+        <button id="shareCloseBtn" class="ghost">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 保存した配置の一覧（本人の指示 2026-08-22）。
        以前は台・球トレイ・操作ボタンの下に出していたため、
        上の帯のボタンを押しても画面の外に開いて気づけなかった。
@@ -695,11 +730,14 @@
 <script src="js/chessclock.js"></script>
 <script src="js/store.js"></script>
 <script src="js/share.js"></script>
+<script src="js/qr.js"></script>
+<script src="js/qrdecode.js"></script>
 <script src="js/ui_setup.js"></script>
 <script src="js/csv.js"></script>
 <script src="js/ui_sheet.js"></script>
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
+<script src="js/qrview.js"></script>
 <script src="js/ui_players.js"></script>
 <script src="js/ui_home.js"></script>
 <script src="js/ui_import.js"></script>

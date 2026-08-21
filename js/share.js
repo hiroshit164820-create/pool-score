@@ -17,14 +17,23 @@
  *     そのまま 8,651バイト → gzip 1,511バイト → リンクの文字数 約2,000字。
  *   長い試合でも入るよう、上限を超えたら「結果だけ」に落とす。
  *
+ *   短くした後の実測（2026-08-22・ローテーション120点18イベント・同じ試合）:
+ *     版1 1,258字（QR版26・121×121マス）→ 版2 450字（QR版15・77×77マス）。
+ *     64%減。QRのマスが粗くなるぶん、相手のカメラで読み取りやすくなる。
+ *
  * 形式: #m=<版>.<圧縮の種類>.<本体>
- *   版         … 1
- *   圧縮の種類 … g=gzip / r=そのまま（CompressionStream が無い端末）
+ *   版         … 1（初代）/ 2（短くした形。2026-08-22〜）
+ *   圧縮の種類 … d=deflate-raw / g=gzip / r=そのまま（圧縮に未対応の端末）
+ *
+ *   **版1のリンクも今までどおり読める**。すでに送ったリンクを死なせないため
+ *   （受け取り側は取り込むまで放置していることがある）。
  */
 const SHARE = (function () {
   "use strict";
 
-  const VERSION = "1";
+  // 作るときの版。読むほうは版1も受け付ける（下の READABLE）
+  const VERSION = "2";
+  const READABLE = { "1": true, "2": true };
   const HASH_KEY = "m";
   // これを超えたら「結果だけ」に落とす。
   // 長いリンクは送り先（SMS等）で切られることがあるため
@@ -47,15 +56,34 @@ const SHARE = (function () {
     return out;
   }
 
-  /* ---------- gzip（使える端末だけ） ---------- */
+  /* ---------- 圧縮（使える端末だけ） ---------- */
 
   function canGzip() {
     return typeof CompressionStream !== "undefined"
       && typeof DecompressionStream !== "undefined";
   }
 
-  function gzip(text) {
-    const cs = new CompressionStream("gzip");
+  /**
+   * deflate-raw が使えるか（2026-08-22 追加）。
+   * gzip は先頭と末尾に18バイトの飾りが付く。deflate-raw はそれが無いぶん短い。
+   * 対応していない端末では例外になるので、実際に作って確かめる。
+   */
+  let rawDeflateOk = null;
+  function canDeflateRaw() {
+    if (rawDeflateOk !== null) return rawDeflateOk;
+    if (!canGzip()) { rawDeflateOk = false; return false; }
+    try {
+      new CompressionStream("deflate-raw");
+      new DecompressionStream("deflate-raw");
+      rawDeflateOk = true;
+    } catch (e) {
+      rawDeflateOk = false;
+    }
+    return rawDeflateOk;
+  }
+
+  function gzip(text, algo) {
+    const cs = new CompressionStream(algo || "gzip");
     const w = cs.writable.getWriter();
     w.write(new TextEncoder().encode(text)).catch(function () {});
     w.close().catch(function () {});
@@ -63,8 +91,8 @@ const SHARE = (function () {
       .then(function (buf) { return new Uint8Array(buf); });
   }
 
-  function gunzip(bytes) {
-    const ds = new DecompressionStream("gzip");
+  function gunzip(bytes, algo) {
+    const ds = new DecompressionStream(algo || "gzip");
     const w = ds.writable.getWriter();
     // リンクが途中で切れていると、書き込む側でも別に失敗が起きる。
     // 理由は下の arrayBuffer 側で出すので、ここは黙って捨てる。
@@ -76,6 +104,334 @@ const SHARE = (function () {
       .catch(function () {
         throw new Error("リンクが途中で切れているようです");
       });
+  }
+
+  /* ---------- 版2: 送る形を短くする（本人の指示 2026-08-22） ----------
+   *
+   * 本人の困りごと:
+   *   「リンクを短くしてください。無理なら教えて」
+   *   リンクをQRにして相手に写してもらうので、マスが細かいほど読み取りに失敗する。
+   *
+   * 記録の中身は同じまま、**書き方だけ**を詰める。
+   *   ・at のISO文字列（1件33バイト）→ 1つ前からの経過ミリ秒
+   *   ・seq は並び順から出せるので、飛んでいるときだけ書く
+   *   ・voided:false / side:null / onBreak:false は既定値なので書かない
+   *   ・イベント名・キー名を1文字の符号にする
+   *   ・同じ種類の値を1本にまとめる（縦に並べたほうが圧縮が効く）
+   *
+   * **戻したときに1バイトも変わらないこと**を、作る側で毎回確かめる
+   *   （expandPayload(compactPayload(p)) を元と突き合わせる）。
+   *   合わなければその試合だけ版1の形で送る。だから壊れようがない。
+   */
+
+  // イベント名 → 1文字。ここに無い名前は "~" に逃がして別に持つ
+  const T_CODE = {
+    MATCH_START: "M", RACK_START: "R", POCKET: "P", TURN_END: "T",
+    FOUL: "F", SAFETY: "S", VOID: "V", MATCH_END: "E", RACK_WIN: "W",
+    SL: "L", SHOT_CLOCK: "C", INNING_ADJ: "I", DEAD_BALLS: "D", STEP: "X",
+  };
+  const T_NAME = (function () {
+    const o = {};
+    Object.keys(T_CODE).forEach(function (k) { o[T_CODE[k]] = k; });
+    return o;
+  })();
+
+  // d の中のキー → 1文字（A・B はそのまま使うので避ける）
+  const D_CODE = {
+    balls: "b", onBreak: "o", rackNo: "r", breakSide: "k", auto: "a",
+    manual: "m", continuation: "c", firstSide: "f", targetSeq: "q",
+    reason: "n", winner: "w", by: "y", hasUnresolvedError: "h",
+    event: "e", usedSec: "u", delta: "l", count: "x", safety: "s",
+    kind: "i", warned: "g", result: "z",
+  };
+  const D_NAME = (function () {
+    const o = {};
+    Object.keys(D_CODE).forEach(function (k) { o[D_CODE[k]] = k; });
+    return o;
+  })();
+
+  // 試合まるごとのキー → 短い名前
+  const P_CODE = {
+    id: "i", gameId: "g", createdAt: "c", updatedAt: "u",
+    rulesetVersion: "rv", sides: "s", goal: "gl", options: "o",
+    recordedBy: "rb", note: "n", result: "r", slim: "sl",
+  };
+  // 設定（options）・勝利条件（goal）のキー → 短い名前。入れ子にも当てる
+  const O_CODE = {
+    breakType: "bt", shotClock: "sc", chessClock: "cc", inputMode: "im",
+    enabled: "en", seconds: "se", extensions: "ex", minutes: "mn",
+    ballSet: "bs", countInnings: "ci", allowMultiScorePerInning: "am",
+    penaltyMode: "pm", stepResetOnMiss: "sr",
+    type: "ty", targets: "tg", sets: "st", ballHandicap: "bh",
+    memberHandicap: "mh", meta: "mt", points: "pt", races: "rc",
+  };
+  const O_NAME = (function () {
+    const o = {};
+    Object.keys(O_CODE).forEach(function (k) { o[O_CODE[k]] = k; });
+    return o;
+  })();
+
+  const DEFAULT_RULESET = "2026-06";
+
+  function isPlainObject(x) {
+    return x && typeof x === "object" && !Array.isArray(x);
+  }
+
+  /**
+   * 短い名前と元のキーがぶつかっていないか。
+   * ぶつかっていたら短くしない（戻せなくなるため）
+   */
+  function safeToShorten(x) {
+    if (Array.isArray(x)) return x.every(safeToShorten);
+    if (!isPlainObject(x)) return true;
+    return Object.keys(x).every(function (k) {
+      return !O_NAME[k] && safeToShorten(x[k]);
+    });
+  }
+
+  function mapKeys(x, table) {
+    if (Array.isArray(x)) return x.map(function (v) { return mapKeys(v, table); });
+    if (!isPlainObject(x)) return x;
+    const out = {};
+    Object.keys(x).forEach(function (k) { out[table[k] || k] = mapKeys(x[k], table); });
+    return out;
+  }
+
+  function shortenObj(x) {
+    return safeToShorten(x) ? mapKeys(x, O_CODE) : x;
+  }
+  function restoreObj(x) {
+    return mapKeys(x, O_NAME);
+  }
+
+  function sameJson(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  /** d を詰める。既定値（POCKETの onBreak:false）は落とす */
+  function packD(t, d) {
+    const out = {};
+    Object.keys(d).forEach(function (k) {
+      if (t === "POCKET" && k === "onBreak" && d[k] === false) return;
+      out[D_CODE[k] || k] = d[k];
+    });
+    // 落とした球だけの記録（いちばん多い）は、配列そのものにする
+    if (t === "POCKET") {
+      const keys = Object.keys(out);
+      if (keys.length === 1 && keys[0] === "b" && Array.isArray(out.b)) return out.b;
+    }
+    return out;
+  }
+
+  /** 詰めた d を戻す */
+  function unpackD(t, d) {
+    if (Array.isArray(d)) return { balls: d, onBreak: false };
+    const out = {};
+    Object.keys(d).forEach(function (k) { out[D_NAME[k] || k] = d[k]; });
+    if (t === "POCKET" && !("onBreak" in out)) out.onBreak = false;
+    return out;
+  }
+
+  /** イベント列を詰める。縦（同じ種類ごと）に並べる */
+  function packEvents(events) {
+    const evs = events || [];
+    if (!evs.length) return { n: 0 };
+    const base = Date.parse(evs[0].at);
+    const out = {
+      n: evs.length,
+      t0: evs[0].at,     // 1件目はそのまま持つ（戻すときの基準）
+      k: "",             // イベント名（1文字ずつ）
+      s: "",             // 手番（- = 無し / A / B / ? = それ以外）
+      dt: [],            // 1つ前からの経過ミリ秒
+      d: [],             // 中身（空なら 0）
+    };
+    const kx = [];       // 符号に無いイベント名
+    const sx = [];       // A・B 以外の手番
+    const vd = [];       // 無効にした記録の位置
+    const sq = {};       // 並び順から出せない seq
+    const ax = {};       // 経過ミリ秒から戻せない at
+    let prev = base;
+    evs.forEach(function (e, idx) {
+      const code = T_CODE[e.t];
+      if (code) { out.k += code; } else { out.k += "~"; kx.push(e.t); }
+
+      if (e.side === null || e.side === undefined) out.s += "-";
+      else if (e.side === "A" || e.side === "B") out.s += e.side;
+      else { out.s += "?"; sx.push(e.side); }
+
+      const ms = Date.parse(e.at);
+      if (isNaN(ms) || new Date(ms).toISOString() !== e.at) {
+        ax[idx] = e.at;
+        out.dt.push(0);
+      } else {
+        out.dt.push(ms - prev);
+        prev = ms;
+      }
+
+      if (e.voided) vd.push(idx);
+      if (e.seq !== idx + 1) sq[idx] = e.seq;
+
+      const d = e.d || {};
+      const packed = packD(e.t, d);
+      // 戻したときに一致しないものは、そのまま持つ（壊さないため）
+      out.d.push(sameJson(unpackD(e.t, packed), d) ? packed : { "~": d });
+    });
+    // 空の入れ物は書かない
+    if (kx.length) out.kx = kx;
+    if (sx.length) out.sx = sx;
+    if (vd.length) out.vd = vd;
+    if (Object.keys(sq).length) out.sq = sq;
+    if (Object.keys(ax).length) out.ax = ax;
+    if (out.d.every(function (d) { return !Array.isArray(d) && !Object.keys(d).length; })) {
+      delete out.d;
+    }
+    if (!/[^-]/.test(out.s)) delete out.s;
+    return out;
+  }
+
+  /** 詰めたイベント列を戻す */
+  function unpackEvents(c) {
+    const n = c && c.n ? c.n : 0;
+    if (!n) return [];
+    const kx = (c.kx || []).slice();
+    const sx = (c.sx || []).slice();
+    const vd = c.vd || [];
+    const sq = c.sq || {};
+    const ax = c.ax || {};
+    const ds = c.d || [];
+    const sides = c.s || "";
+    let prev = Date.parse(c.t0);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const code = c.k.charAt(i);
+      const t = code === "~" ? kx.shift() : T_NAME[code];
+      const sc = sides.charAt(i) || "-";
+      const side = sc === "-" ? null : (sc === "?" ? sx.shift() : sc);
+      let at;
+      if (Object.prototype.hasOwnProperty.call(ax, i)) {
+        at = ax[i];
+      } else {
+        prev = prev + (c.dt[i] || 0);
+        at = new Date(prev).toISOString();
+      }
+      const raw = ds[i] || {};
+      const d = (!Array.isArray(raw) && Object.prototype.hasOwnProperty.call(raw, "~"))
+        ? raw["~"] : unpackD(t, raw);
+      out.push({
+        seq: Object.prototype.hasOwnProperty.call(sq, i) ? sq[i] : i + 1,
+        t: t,
+        side: side,
+        at: at,
+        voided: vd.indexOf(i) >= 0,
+        d: d,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 結果（result）は、イベント列から engine が計算し直せる値。
+   * 実測でリンクの中でいちばん重い（版2の中身1,526バイトのうち852バイト）ので、
+   * **計算し直したものが送る側の結果と1文字も違わないときだけ**落とす。
+   * 終わった時刻（endedAt）だけは計算では出せないので残す。
+   *
+   * @returns 落としてよければ endedAt の文字列。だめなら null
+   */
+  function droppableResult(p) {
+    if (!p.result || !p.events || !p.events.length) return null;
+    if (typeof buildResult !== "function") return null;
+    const endedAt = p.result.endedAt;
+    if (!endedAt) return null;
+    try {
+      const again = rebuildResult(p, endedAt);
+      return sameJson(again, p.result) ? endedAt : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** イベント列から結果を計算し直す */
+  function rebuildResult(p, endedAt) {
+    return buildResult({
+      id: p.id, gameId: p.gameId, rulesetVersion: p.rulesetVersion,
+      sides: p.sides, goal: p.goal, options: p.options || {},
+      recordedBy: p.recordedBy, events: p.events,
+    }, new Date(endedAt));
+  }
+
+  /** 試合まるごとを詰める（版2の中身） */
+  function compactPayload(p) {
+    const out = { v: 2 };
+    const evs = p.events || [];
+    const firstAt = evs.length ? evs[0].at : null;
+    const lastAt = evs.length ? evs[evs.length - 1].at : null;
+    const endedAt = droppableResult(p);
+    Object.keys(p).forEach(function (k) {
+      if (k === "v" || k === "events") return;
+      const val = p[k];
+      if (k === "note" && !val) return;
+      // 時刻はイベント列から出せるものは書かない
+      if (k === "createdAt" && val === firstAt) return;
+      if (k === "updatedAt" && (val === p.createdAt || val === lastAt)) return;
+      if (k === "rulesetVersion" && val === DEFAULT_RULESET) return;
+      if (k === "result" && endedAt) return;
+      if (k === "options" || k === "goal") {
+        out[P_CODE[k]] = shortenObj(val);
+        return;
+      }
+      out[P_CODE[k] || k] = val;
+    });
+    if (endedAt) out.re = endedAt;            // 結果は計算し直す。終わった時刻だけ持つ
+    if (p.updatedAt && p.updatedAt === lastAt && p.updatedAt !== p.createdAt) out.ul = 1;
+    out.s = (p.sides || []).map(function (s) {
+      const o = { i: s.sideId, n: s.name };
+      if (s.teamLabel) o.t = s.teamLabel;
+      if (s.members) o.m = s.members;
+      if (s.guest) o.g = 1;
+      return o;
+    });
+    out.e = packEvents(p.events);
+    return out;
+  }
+
+  /** 詰めた中身を元の形に戻す */
+  function expandPayload(c) {
+    const out = { v: 1 };
+    const back = {};
+    Object.keys(P_CODE).forEach(function (k) { back[P_CODE[k]] = k; });
+    Object.keys(c).forEach(function (k) {
+      if (k === "v" || k === "e" || k === "s" || k === "re" || k === "ul") return;
+      out[back[k] || k] = c[k];
+    });
+    if ("options" in out) out.options = restoreObj(out.options);
+    if ("goal" in out) out.goal = restoreObj(out.goal);
+    out.sides = (c.s || []).map(function (s) {
+      return {
+        sideId: s.i, name: s.n,
+        teamLabel: s.t || null, members: s.m || null,
+        guest: !!s.g,
+      };
+    });
+    if (!("rulesetVersion" in out)) out.rulesetVersion = DEFAULT_RULESET;
+    if (!("note" in out)) out.note = "";
+    out.events = unpackEvents(c.e);
+    const evs = out.events;
+    if (!("createdAt" in out) && evs.length) out.createdAt = evs[0].at;
+    if (!("updatedAt" in out)) {
+      out.updatedAt = (c.ul && evs.length) ? evs[evs.length - 1].at : out.createdAt;
+    }
+    if (c.re) {
+      if (typeof buildResult !== "function") {
+        throw new Error("この端末では開けません。アプリを更新してください");
+      }
+      out.result = rebuildResult(out, c.re);
+    }
+    // 元と同じ並びに整える（突き合わせやすさのため）
+    const order = ["v", "id", "gameId", "createdAt", "updatedAt",
+      "rulesetVersion", "sides", "goal", "options", "recordedBy",
+      "note", "events", "result", "slim"];
+    const sorted = {};
+    order.forEach(function (k) { if (k in out) sorted[k] = out[k]; });
+    Object.keys(out).forEach(function (k) { if (!(k in sorted)) sorted[k] = out[k]; });
+    return sorted;
   }
 
   /* ---------- 送るときの中身 ---------- */
@@ -126,14 +482,28 @@ const SHARE = (function () {
     const base = (baseUrl || location.href).split("#")[0];
 
     function pack(obj) {
-      const json = JSON.stringify(obj);
+      // 版2の形に詰める。戻したときに元と1バイトも変わらないことを毎回確かめ、
+      // 合わなければその試合だけ版1の形で送る（壊れたものを送らないため）
+      let ver = VERSION;
+      let body = obj;
+      if (VERSION === "2") {
+        const c = compactPayload(obj);
+        if (sameJson(expandPayload(c), obj)) {
+          body = c;
+        } else {
+          ver = "1";
+        }
+      }
+      const json = JSON.stringify(body);
       if (!canGzip()) {
         return Promise.resolve(
-          VERSION + ".r." + bytesToB64url(new TextEncoder().encode(json))
+          ver + ".r." + bytesToB64url(new TextEncoder().encode(json))
         );
       }
-      return gzip(json).then(function (bytes) {
-        return VERSION + ".g." + bytesToB64url(bytes);
+      const algo = canDeflateRaw() ? "deflate-raw" : "gzip";
+      const code = algo === "deflate-raw" ? "d" : "g";
+      return gzip(json, algo).then(function (bytes) {
+        return ver + "." + code + "." + bytesToB64url(bytes);
       });
     }
 
@@ -181,7 +551,7 @@ const SHARE = (function () {
     // 日本語の文章がくっついていてもそこで切れる
     const m = t.match(new RegExp("(?:^|[#&?])" + HASH_KEY + "=([0-9A-Za-z._-]+)"));
     if (m) return m[1];
-    if (/^[0-9]+\.[gr]\.[0-9A-Za-z._-]+$/.test(t)) return t;
+    if (/^[0-9]+\.[a-z]\.[0-9A-Za-z._-]+$/.test(t)) return t;
     return null;
   }
 
@@ -189,16 +559,27 @@ const SHARE = (function () {
   function decode(body) {
     const parts = (body || "").split(".");
     if (parts.length < 3) return Promise.reject(new Error("形式が違います"));
-    if (parts[0] !== VERSION) {
+    const ver = parts[0];
+    if (!READABLE[ver]) {
       return Promise.reject(new Error("このアプリより新しい形式です。更新してください"));
     }
     const bytes = b64urlToBytes(parts.slice(2).join("."));
-    const text = parts[1] === "g"
-      ? (canGzip() ? gunzip(bytes)
-        : Promise.reject(new Error("この端末では開けません（圧縮に未対応）")))
-      : Promise.resolve(new TextDecoder().decode(bytes));
+    let text;
+    if (parts[1] === "g" || parts[1] === "d") {
+      const algo = parts[1] === "d" ? "deflate-raw" : "gzip";
+      if (parts[1] === "d" && !canDeflateRaw()) {
+        return Promise.reject(new Error("この端末では開けません（圧縮に未対応）"));
+      }
+      text = canGzip() ? gunzip(bytes, algo)
+        : Promise.reject(new Error("この端末では開けません（圧縮に未対応）"));
+    } else {
+      text = Promise.resolve(new TextDecoder().decode(bytes));
+    }
     return Promise.resolve(text).then(function (json) {
-      const obj = JSON.parse(json);
+      let obj = JSON.parse(json);
+      // 版2は詰めた形なので、ここで元の形に戻す。
+      // これより先（取り込み・保存・集計）は版1のときと同じものを見る
+      if (ver === "2") obj = expandPayload(obj);
       if (!obj || !obj.id || !obj.gameId) throw new Error("中身が読めません");
       return obj;
     });
@@ -305,6 +686,11 @@ const SHARE = (function () {
     alreadyHave: alreadyHave,
     guessPlayer: guessPlayer,
     canGzip: canGzip,
+    canDeflateRaw: canDeflateRaw,
+    VERSION: VERSION,
+    // 検証用（版2の詰め方を単体で確かめるため）
+    _compact: compactPayload,
+    _expand: expandPayload,
     MAX_CHARS: MAX_CHARS,
   };
 })();
