@@ -284,6 +284,10 @@ const SETUP = (function () {
   let goalValues = { A: 5, B: 5 };
   // 何セット先取で試合の勝ちにするか。既定は1（＝今までどおり1本勝負）
   let setsToWin = 1;
+  // イニングを数えるか（本人の指示 2026-08-21）。
+  // 一般種目（games_data.js の inningsOption）でだけ選べる。
+  // 既定は数える＝それまでの動きと同じ。JPA・JCLは公式スコアシートの土台なので常に数える
+  let countInnings = true;
   // JPA用。スキルレベルから持ち点を自動算出する。
   // シングルスは skillLevels、ダブルスは memberSkills（2人ぶん）を使う。
   // skillLevels にはダブルスでも合計を入れておく（記録とチームポイントの算出に使う）
@@ -565,6 +569,8 @@ const SETUP = (function () {
     // 種目が変わったらダブルスの段階表示を初期化する
     secondOpen.A = false;
     secondOpen.B = false;
+    // イニングの数え方も種目ごとに選び直す（既定は数える）
+    countInnings = true;
 
     // 先取点を出さない種目ではハンデも使わないので、状態を戻しておく
     if (g.goalHidden) {
@@ -1197,6 +1203,43 @@ const SETUP = (function () {
     return true;
   }
 
+  /**
+   * イニングを数えるかどうかの選択（本人の指示 2026-08-21）。
+   *
+   * 一般種目ではイニングは公式の指標ではないので、要らない人は切れるようにする。
+   * 切っても engine は内部で数えている（あとから数え直せるようにするため）。
+   * 変わるのは「試合中の帯・試合結果・成績に出すかどうか」。
+   */
+  function renderInningsField(wrap, g) {
+    if (!g.inningsOption) return;
+    const toggle = UI.el("div", { class: "toggle-group" }, [
+      UI.el("button", {
+        type: "button", "data-v": "on",
+        "aria-pressed": String(countInnings), text: "数える",
+      }),
+      UI.el("button", {
+        type: "button", "data-v": "off",
+        "aria-pressed": String(!countInnings), text: "数えない",
+      }),
+    ]);
+    UI.bindToggle(toggle, function (v) {
+      countInnings = v === "on";
+      renderGoalArea();
+    });
+    wrap.appendChild(
+      UI.el("div", { class: "field" }, [
+        UI.el("label", { text: "イニング" }),
+        toggle,
+        UI.el("p", {
+          class: "hint",
+          text: countInnings
+            ? "交代の回数を数えて、試合中と結果に出します。"
+            : "数えません。試合中も結果にも出しません。",
+        }),
+      ])
+    );
+  }
+
   function renderSetsField(wrap, g) {
     if (!setsAllowed(g)) return;
     const chips = UI.el("div", { class: "chips sets-chips" });
@@ -1324,6 +1367,7 @@ const SETUP = (function () {
       if (goalTitle) goalTitle.hidden = true;
       wrap.hidden = true;
       renderSetsField(wrap, g);
+      renderInningsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1334,6 +1378,7 @@ const SETUP = (function () {
     if (g.goal === "jpaSL" || g.goal === "jpaSL8") {
       renderJpaGoalArea(g, wrap);
       renderSetsField(wrap, g);
+      renderInningsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1396,6 +1441,7 @@ const SETUP = (function () {
       });
 
       renderSetsField(wrap, g);
+      renderInningsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1409,6 +1455,7 @@ const SETUP = (function () {
         })
       );
       renderSetsField(wrap, g);
+      renderInningsField(wrap, g);
       renderBallHandicap();
       return;
     }
@@ -1443,6 +1490,7 @@ const SETUP = (function () {
     }
 
     renderSetsField(wrap, g);
+    renderInningsField(wrap, g);
     // ハンデの有無に連動してボールハンデの欄も出し入れする
     renderBallHandicap();
   }
@@ -1822,6 +1870,9 @@ const SETUP = (function () {
       }
     }
 
+    // イニングを数えるか（選べる種目でだけ出す）
+    if (g.inningsOption) add("イニング", countInnings ? "数える" : "数えない");
+
     // ブレイク。方式が決まっている種目では選ばせていないので出さない
     if (!g.solo && !(g.breakTypeFixed || base.breakTypeFixed)) {
       const bt = UI.toggleValue($("breakTypeToggle"));
@@ -1874,6 +1925,8 @@ const SETUP = (function () {
         shotClock: buildShotClock(),
         chessClock: buildChessClock(),
         inputMode: g.mode,
+        // イニングを数えるか（一般種目だけ選べる。他は常に数える）
+        countInnings: g.inningsOption ? countInnings : true,
         // ハウス設定（公式規程が無い種目でのみ使う）
         penaltyMode: houseRule.penaltyMode || BASE_RULES[g.base].defaultPenaltyMode,
         stepResetOnMiss: houseRule.stepResetOnMiss,

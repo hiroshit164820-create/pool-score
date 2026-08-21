@@ -232,6 +232,15 @@ const MATCH = (function () {
     renderChessClock();
   }
 
+  /**
+   * この試合でイニングを出すか（本人の指示 2026-08-21）。
+   * 一般種目では設定で切れる。古い記録には印が無いので、
+   * 無いときは「数える」として扱う（それまでの表示を変えないため）。
+   */
+  function inningsShown() {
+    return !(match && match.options && match.options.countInnings === false);
+  }
+
   /** ターン交代（チェスクロックの切替と、イニング計算の土台になる） */
   /**
    * ダブルスのチーム内交代。
@@ -1029,10 +1038,11 @@ const MATCH = (function () {
     $("rackInfo").textContent = (nSets2 > 1 ? st.setNo + "セット目　" : "")
       + "ラック " + Math.max(1, st.rackNo);
 
-    // イニング表示。イニングは全種目で数えているので、試合中も常に出す
-    // （本人の指示 2026-08-20。以前は14-1とJPAだけだった）
+    // イニング表示。イニングは全種目で数えているが、
+    // 一般種目では「数えない」を選べるので、そのときは出さない
+    // （本人の指示 2026-08-21。2026-08-20の「常に出す」からの変更）
     const inningNode = $("inningInfo");
-    inningNode.hidden = false;
+    inningNode.hidden = !inningsShown();
     // 1イニング目を戦っている間は「1イニング目」と出す
     // （engine は完了した回数を数えるため +1 して表示する）
     inningNode.textContent = (st.innings + 1) + "イニング目";
@@ -1854,10 +1864,8 @@ const MATCH = (function () {
   function renderReviseInning() {
     const box = $("reviseInning");
     if (!box) return;
-    const r = resolveGame(match.gameId);
-    // イニングを数える種目でだけ出す
-    // イニングは全種目で数えているので、常に直せるようにする（2026-08-20の決め）
-    const show = true;
+    // 数えると決めた試合でだけ直せるようにする（本人の指示 2026-08-21）
+    const show = inningsShown();
     box.hidden = !show;
     if (!show) return;
     const st = reduceMatch(match);
@@ -1947,8 +1955,11 @@ const MATCH = (function () {
         ["スペア", tally.spare + "回"],
         ["ミス", tally.miss + "回"],
       ];
-    } else {
+    } else if (inningsShown()) {
       lines = [["イニング数", String(st.innings + 1)]];
+    } else {
+      // 「数えない」を選んだ試合ではイニングの行を出さない
+      lines = [];
     }
     if (r0.base.safetyCallable) {
       lines.push(["セーフティ数", (sfA + sfB) + "（" + sideName("A") + " " + sfA

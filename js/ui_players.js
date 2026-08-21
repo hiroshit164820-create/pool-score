@@ -892,7 +892,11 @@ const PLAYERS = (function () {
       rows.push(["1試合あたりの平均セーフティ数", avg(g.safety, g.matches)]);
     }
     function inningRow() {
-      rows.push(["1ラックあたりの平均イニング数", avg(g.innings, g.racks)]);
+      // 分母は「イニングを数えた試合」のラック数だけ（本人の指示 2026-08-21）。
+      // 数えない試合が混ざると平均が薄まるため。古い集計には無いので racks で補う
+      const den = g.inningRacks != null ? g.inningRacks : g.racks;
+      if (!den) return; // 数えた試合が1つも無ければ行ごと出さない
+      rows.push(["1ラックあたりの平均イニング数", avg(g.innings, den)]);
     }
     // 対戦相手のクラス別（本人の指示 2026-08-21・D）。
     // 一般種目だけに出す（JPAはスキルレベルで見る）。

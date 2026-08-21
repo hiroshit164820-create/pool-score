@@ -7,6 +7,9 @@
  *
  * goal:  free（自由設定）| jpaSL（JPA 9ボールSL表）| jpaSL8（JPA 8ボール対戦表）| manual（手入力）
  * mode:  rack（ラック単位・軽い）| inning（イニング単位・JPA公式スコアシート相当）
+ * inningsOption: true を書いた種目は、イニングを数えるかどうかを試合の設定で選べる。
+ *   書かない種目は常に数える（JPA・JCLは公式スコアシートの土台なので切れない）。
+ *   ボウラードは1人でやるためイニングの概念が無く、engine 側で数えていない。
  */
 
 const GAMES = {
@@ -15,6 +18,10 @@ const GAMES = {
     base: "nineball", scoring: "rack", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
+    // 一般種目はイニングが公式の指標ではないので、数えるかどうかを
+    // 試合の設定で選べるようにする（本人の指示 2026-08-21）。
+    // 既定は数える（それまでの動きを変えないため）
+    inningsOption: true,
     goalPresets: [
       { label: "3先", v: 3 },
       { label: "5先", v: 5 },
@@ -27,6 +34,7 @@ const GAMES = {
     base: "nineball", scoring: "rack", goal: "free",
     playersPerSide: 2, mode: "rack",
     goalType: "racks",
+    inningsOption: true,
     goalPresets: [
       { label: "3先", v: 3 },
       { label: "5先", v: 5 },
@@ -39,6 +47,7 @@ const GAMES = {
     base: "tenball", scoring: "rack", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
+    inningsOption: true,
     goalPresets: [
       { label: "3先", v: 3 },
       { label: "5先", v: 5 },
@@ -52,6 +61,7 @@ const GAMES = {
     base: "tenball", scoring: "rack", goal: "free",
     playersPerSide: 2, mode: "rack",
     goalType: "racks",
+    inningsOption: true,
     goalPresets: [
       { label: "3先", v: 3 },
       { label: "5先", v: 5 },
@@ -65,6 +75,7 @@ const GAMES = {
     base: "eightball", scoring: "rack", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "racks",
+    inningsOption: true,
     goalPresets: [
       { label: "3先", v: 3 },
       { label: "5先", v: 5 },
@@ -77,6 +88,7 @@ const GAMES = {
     base: "rotation", scoring: "ballValue", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "score",
+    inningsOption: true,
     // 目標点は複数ラックを通して決める（1ラック=120点）。
     // 選択肢は一次情報で裏の取れた値だけを並べる:
     //   JAPA第71回全日本アマ … A級180点 / B級・女子級120点（JAPA71で本文確認）
@@ -97,10 +109,11 @@ const GAMES = {
     base: "straight", scoring: "straight", goal: "free",
     playersPerSide: 1, mode: "rack",
     goalType: "score",
-    // 14-1はイニング（交代の回数）が実力の指標になるため画面に出す。
+    // 14-1はイニング（交代の回数）が実力の指標なので、既定では数える。
     // 数え方はJPAと同じで、後攻→先攻に手番が移った時点で1イニング
-    // （engine.js が全種目で数えている。ここは表示するかどうかの指定）
-    showInnings: true,
+    // （engine.js が全種目で数えている。ここは出すかどうかの指定）。
+    // 一般種目なので、要らないときは設定で切れる（本人の指示 2026-08-21）
+    inningsOption: true,
     // 先取点は大会・場によって決める（規程は数値を固定していない）。
     // 実際によく使われる値をプリセットとして置く。
     goalPresets: [

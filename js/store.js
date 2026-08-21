@@ -68,10 +68,14 @@ const STORE = (function () {
       winner: res ? res.winner : null,
       scores: res ? res.scores : null,
       racks: res ? res.racks : null,
+      // イニングを数えると決めた試合か（本人の指示 2026-08-21）。
+      // 古い記録には印が無いので、無ければ数えた扱いにする
+      countInnings: !(match.options && match.options.countInnings === false),
       // 履歴と成績で使う。試合を1件ずつ開かずに読めるよう索引に持たせる
       // 画面に出すのは「何イニング戦ったか」。古い記録には無いので、
-      // 無ければ完了イニング数 +1 で補う
-      innings: res
+      // 無ければ完了イニング数 +1 で補う。
+      // 「数えない」を選んだ試合は null にして履歴にも出さない
+      innings: res && !(match.options && match.options.countInnings === false)
         ? (res.inningsPlayed != null ? res.inningsPlayed : (res.innings || 0) + 1)
         : null,
       safety: res
@@ -557,7 +561,10 @@ const STORE = (function () {
       out.racks += (r.racks ? r.racks.A + r.racks.B : 0);
       out.rackWins += (r.racks ? r.racks[side] : 0);
       out.score += (r.scores ? r.scores[side] : 0);
-      out.innings += r.inningsPlayed != null ? r.inningsPlayed : (r.innings || 0) + 1;
+      // 「数えない」を選んだ試合はイニングの合計に入れない（本人の指示 2026-08-21）
+      if (!(m.options && m.options.countInnings === false)) {
+        out.innings += r.inningsPlayed != null ? r.inningsPlayed : (r.innings || 0) + 1;
+      }
 
       ["masuwari", "breakAce", "safety", "fouls", "breaks", "breakWins",
        "shotClockViolations", "shotClockExtensions"].forEach(function (k) {
@@ -636,6 +643,8 @@ const STORE = (function () {
           gameId: id, label: label,
           matches: 0, wins: 0, losses: 0,
           racks: 0, innings: 0,
+          // 平均イニング数の分母。「数えない」を選んだ試合のラックは入れない
+          inningRacks: 0,
           safety: 0, masuwari: 0, breakAce: 0, breaks: 0, fouls: 0,
           highRun: 0,
           scMatches: 0, scShots: 0, scSec: 0, scExt: 0,
@@ -675,9 +684,14 @@ const STORE = (function () {
       if (r.winner === side) g.wins++;
       else if (r.winner) g.losses++;
 
-      g.racks += r.racks ? (r.racks.A + r.racks.B) : 0;
+      const racksHere = r.racks ? (r.racks.A + r.racks.B) : 0;
+      g.racks += racksHere;
       const inn = r.inningsPlayed != null ? r.inningsPlayed : (r.innings || 0) + 1;
-      g.innings += inn;
+      // 「数えない」を選んだ試合は、イニングもその分母のラック数も入れない
+      if (!(m.options && m.options.countInnings === false)) {
+        g.innings += inn;
+        g.inningRacks += racksHere;
+      }
 
       ["safety", "masuwari", "breakAce", "breaks", "fouls"].forEach(function (k) {
         g[k] += st[k] || 0;
@@ -703,8 +717,9 @@ const STORE = (function () {
         g.jpaFull += m.gameId === "jpa_8ball" ? 3 : 20;
       }
 
-      // あがりまでのイニング数（勝った試合だけ）
-      if (r.winner === side) {
+      // あがりまでのイニング数（勝った試合だけ）。
+      // 「数えない」を選んだ試合は入れない（本人の指示 2026-08-21）
+      if (r.winner === side && !(m.options && m.options.countInnings === false)) {
         if (g.winInnMin === null || inn < g.winInnMin) g.winInnMin = inn;
         if (g.winInnMax === null || inn > g.winInnMax) g.winInnMax = inn;
       }
