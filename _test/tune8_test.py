@@ -102,6 +102,8 @@ def start(pg, gid):
         pg.locator("#goalArea .field").nth(0).locator(".chip", has_text="SL7").click()
         pg.wait_for_timeout(150)
         pg.locator("#goalArea .field").nth(1).locator(".chip", has_text="SL4").click()
+    # イニングの既定は「数えない」になったので、帯の確認用に数える設定で始める
+    helpers.set_innings(pg, True)
     pg.wait_for_timeout(250)
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(900)

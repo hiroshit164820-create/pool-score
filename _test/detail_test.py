@@ -59,6 +59,9 @@ def setup_game(pg, gid):
     pg.wait_for_timeout(400)
     helpers.pick_game(pg, gid)
     pg.wait_for_timeout(450)
+    # 成績の「1ラックあたりの平均イニング数」を見るので、数える設定で作る
+    # （既定は「数えない」になった。本人の指示 2026-08-21）
+    helpers.set_innings(pg, True)
 
 
 def open_detail(pg, name):

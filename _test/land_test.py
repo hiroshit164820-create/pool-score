@@ -74,6 +74,8 @@ def start_match(pg):
     pg.wait_for_timeout(400)
     pg.fill("#inNameA", "たいら")
     pg.fill("#inNameB", "たかのぶ")
+    # イニングの既定は「数えない」になったので、帯の確認用に数える設定で始める
+    helpers.set_innings(pg, True)
     pg.click("#startMatchBtn")
     pg.wait_for_timeout(800)
 

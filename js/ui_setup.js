@@ -286,8 +286,9 @@ const SETUP = (function () {
   let setsToWin = 1;
   // イニングを数えるか（本人の指示 2026-08-21）。
   // 一般種目（games_data.js の inningsOption）でだけ選べる。
-  // 既定は数える＝それまでの動きと同じ。JPA・JCLは公式スコアシートの土台なので常に数える
-  let countInnings = true;
+  // **選べる種目の既定は「数えない」**（本人の指示 2026-08-21・16:3x）。
+  // JPA・JCLは公式スコアシートの土台なので選ばせず常に数える
+  let countInnings = false;
   // JPA用。スキルレベルから持ち点を自動算出する。
   // シングルスは skillLevels、ダブルスは memberSkills（2人ぶん）を使う。
   // skillLevels にはダブルスでも合計を入れておく（記録とチームポイントの算出に使う）
@@ -569,8 +570,11 @@ const SETUP = (function () {
     // 種目が変わったらダブルスの段階表示を初期化する
     secondOpen.A = false;
     secondOpen.B = false;
-    // イニングの数え方も種目ごとに選び直す（既定は数える）
-    countInnings = true;
+    // イニングの数え方は種目ごとに選び直す。
+    // 選べる種目の既定は「数えない」。ただし 14-1 はイニングが実力の指標なので
+    // games_data.js の inningsDefault で既定を「数える」にしてある。
+    // 選べない種目（JPA等）は常に数える
+    countInnings = g.inningsOption ? !!g.inningsDefault : true;
 
     // 先取点を出さない種目ではハンデも使わないので、状態を戻しておく
     if (g.goalHidden) {

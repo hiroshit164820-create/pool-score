@@ -7,7 +7,7 @@
 対象:
   1. 一般種目（9/10/8ボール・ダブルス・ローテーション・14-1）の設定に選択欄が出る
   2. JPA・ボウラードには出ない（JPAは公式スコアシートの土台なので切れない）
-  3. 既定は「数える」＝それまでの動きと同じ
+  3. 既定は「数えない」。ただし 14-1 だけ既定で数える（本人の指示 2026-08-21）
   4. 「数えない」で始めると、試合中の帯にイニングが出ない
   5. 「数えない」ではスコア修正のイニング調整も出ない
   6. 「数えない」で終えると、試合結果にイニングの行が出ない
@@ -86,6 +86,7 @@ with sync_playwright() as p:
     section("1. 一般種目には選択欄が出る")
     pg.click("#tabSetup")
     pg.wait_for_timeout(400)
+    # 14-1（straight）だけ既定で数える。他は数えない
     for gid in ["9ball", "10ball", "8ball", "rotation", "straight"]:
         helpers.pick_game(pg, gid)
         pg.wait_for_timeout(600)
@@ -94,8 +95,12 @@ with sync_playwright() as p:
         if f:
             check([b["t"] for b in f["btns"]] == ["数える", "数えない"],
                   gid + " の選択肢が2つ", f["btns"])
-            check(f["btns"][0]["on"] and not f["btns"][1]["on"],
-                  gid + " の既定は「数える」", f["btns"])
+            if gid == "straight":
+                check(f["btns"][0]["on"] and not f["btns"][1]["on"],
+                      "14-1 の既定は「数える」", f["btns"])
+            else:
+                check(f["btns"][1]["on"] and not f["btns"][0]["on"],
+                      gid + " の既定は「数えない」", f["btns"])
 
     section("2. ダブルスにも出る")
     helpers.pick_game(pg, "9ball_doubles")
@@ -111,7 +116,7 @@ with sync_playwright() as p:
     check(pg.evaluate(FIELD) is None, "ボウラードには出ない（1人でやる種目）")
 
     # ================= 4. 「数えない」で始める =================
-    section("4. 「数えない」で始めた試合")
+    section("4. 「数えない」で始めた試合（＝既定のまま）")
     start(pg, "9ball", False)
     check(pg.is_visible("#screenMatch"), "試合が始まる")
     check(pg.evaluate("() => STORE.findOngoing().options.countInnings") is False,
@@ -177,16 +182,41 @@ with sync_playwright() as p:
     helpers.pick_game(pg, "9ball")
     pg.wait_for_timeout(600)
     sm = pg.inner_text("#startSummary")
-    check("イニング" in sm and "数える" in sm, "「イニング 数える」が出る", sm[:250])
-    pick_innings(pg, False)
+    check("イニング" in sm and "数えない" in sm, "「イニング 数えない」が出る", sm[:250])
+    pick_innings(pg, True)
     sm2 = pg.inner_text("#startSummary")
-    check("数えない" in sm2, "切り替えると「数えない」に変わる", sm2[:250])
+    check("イニング： 数える" in sm2.replace(":", "：")
+          or ("イニング" in sm2 and "数えない" not in sm2),
+          "切り替えると「数える」に変わる", sm2[:250])
 
     section("10. 種目を変えると既定に戻る")
     helpers.pick_game(pg, "8ball")
     pg.wait_for_timeout(600)
     f = pg.evaluate(FIELD)
-    check(f and f["btns"][0]["on"], "別の種目に移ると「数える」に戻る", f)
+    check(f and f["btns"][1]["on"], "別の種目に移ると「数えない」に戻る", f)
+    # 14-1 に移ると「数える」に戻る（種目ごとに既定が違う）
+    helpers.pick_game(pg, "straight")
+    pg.wait_for_timeout(600)
+    f2 = pg.evaluate(FIELD)
+    check(f2 and f2["btns"][0]["on"], "14-1 に移ると「数える」に戻る", f2)
+    helpers.pick_game(pg, "8ball")
+    pg.wait_for_timeout(600)
+    f3 = pg.evaluate(FIELD)
+    check(f3 and f3["btns"][1]["on"], "8ボールに戻すと「数えない」", f3)
+
+    section("10b. 14-1 は既定のまま始めると数える")
+    pg.fill("#inNameA", "たいら")
+    pg.fill("#inNameB", "あいて")
+    helpers.pick_game(pg, "straight")
+    pg.wait_for_timeout(600)
+    pg.fill("#inNameA", "たいら")
+    pg.fill("#inNameB", "あいて")
+    pg.wait_for_timeout(300)
+    pg.click("#startMatchBtn")
+    pg.wait_for_timeout(1000)
+    check(pg.evaluate("() => STORE.findOngoing().options.countInnings") is True,
+          "14-1 は触らなくても数える設定になる")
+    check(pg.is_visible("#inningInfo"), "14-1 の試合中にイニングが出る")
 
     # ================= 11. 横向きでも壊れない =================
     section("11. 横向きで「数えない」")

@@ -242,3 +242,19 @@ def undo_last(pg):
         pg.wait_for_timeout(500)
     pg.click("#closeReviseBtn")
     pg.wait_for_timeout(300)
+
+
+def set_innings(page, on):
+    """
+    イニングを数えるかを選ぶ（一般種目だけに出る欄）。
+
+    既定は「数えない」（本人の指示 2026-08-21）。
+    イニングの表示を確かめるテストは、始める前にここで「数える」を選ぶ。
+    """
+    label = "数える" if on else "数えない"
+    field = page.locator("#goalArea .field").filter(has_text="イニング").first
+    if not field.count():
+        return False  # 選べない種目（JPA等）は常に数えるので何もしない
+    field.locator("button", has_text=label).first.click()
+    page.wait_for_timeout(200)
+    return True
