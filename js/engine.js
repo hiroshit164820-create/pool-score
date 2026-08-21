@@ -278,6 +278,10 @@ function initState(match, base) {
     turn: firstSide,
     innings: 0,
     onTable: base.balls.slice(), // 盤面に残っている球
+    // 無効球の合計（個数）と、その球が本来持っていた点の合計。
+    // ラックの区切りは「両者のスコア＋無効球ぶんの点」で見る（本人の指示 2026-08-21）
+    deadBalls: 0,
+    deadPoints: 0,
     rackPocketed: { A: [], B: [] },
     // スリーファール管理（同一ラック内・連続）
     foulStreak: { A: 0, B: 0 },
@@ -380,6 +384,9 @@ function applyEvent(st, ev, ctx) {
     case "TURN_END":
       applyTurnEnd(st, ev, ctx);
       break;
+    case "INNING_ADJ":
+      applyInningAdj(st, ev);
+      break;
     case "SAFETY":
       applySafety(st, ev, ctx);
       break;
@@ -390,7 +397,7 @@ function applyEvent(st, ev, ctx) {
       applyStep(st, ev, ctx);
       break;
     case "DEAD_BALLS":
-      applyDeadBalls(st, ev);
+      applyDeadBalls(st, ev, ctx);
       break;
     case "TIMEOUT":
       if (ev.side) st.stats[ev.side].timeouts++;
@@ -423,6 +430,8 @@ function startRack(st, ev, ctx) {
 function applyPocket(st, ev, ctx) {
   const side = ev.side;
   if (!side) return;
+  // 交代ボタンを押さずに相手が入力したときも、手番が移ったものとして数える
+  ensureTurnBy(st, side, ctx);
   const balls = (ev.d && ev.d.balls) || [];
   const onBreak = !!(ev.d && ev.d.onBreak);
   const scorer = ctx.scorer[side];
@@ -544,6 +553,32 @@ function applyTurnEnd(st, ev, ctx) {
   ctx.runScore[from] = 0;
 }
 
+/**
+ * イニングを手で増減する（本人の指示 2026-08-21：スコア修正から直せるように）。
+ * 0より下にはしない。
+ */
+function applyInningAdj(st, ev) {
+  const d = (ev.d && ev.d.delta) || 0;
+  st.innings = Math.max(0, st.innings + d);
+}
+
+/**
+ * 得点した側が手番でなければ、手番が移ったものとして扱う。
+ *
+ * 交代ボタンを押さなくてもイニングを数えられるようにするため
+ * （本人の指示 2026-08-21：A→B→A と入力されたらイニングを1増やす）。
+ * 交代ボタンを押した場合は st.turn が既に移っているので、ここは何もしない。
+ */
+function ensureTurnBy(st, side, ctx) {
+  if (!side || !st.turn || st.turn === side) return;
+  const from = st.turn;
+  // イニング（JPA規則）: 後攻→先攻に手番が移ったら1イニング
+  if (from === other(st.firstSide) && side === st.firstSide) st.innings++;
+  if (side !== ctx.rackBrokenBy) ctx.rackHadOpponentTurn = true;
+  st.turn = side;
+  ctx.runScore[from] = 0;
+}
+
 function applyFoul(st, ev, ctx) {
   const side = ev.side;
   if (!side) return;
@@ -631,13 +666,45 @@ function applyStep(st, ev, ctx) {
   }
 }
 
-function applyDeadBalls(st, ev) {
-  const balls = (ev.d && ev.d.balls) || [];
-  balls.forEach(function (b) {
-    const idx = st.onTable.indexOf(b);
-    if (idx >= 0) st.onTable.splice(idx, 1);
-  });
-  if (ev.side) st.stats[ev.side].deadBalls += balls.length;
+/**
+ * 無効球（デッドボール）。
+ *
+ * balls を指定すればその球を、指定が無ければ d.count 個ぶんを盤面から外す。
+ * 手で押す「無効球」ボタンは、どの球が落ちたか分からないので count で数える
+ * （本人の指示 2026-08-21）。点は入れず、無効球の数だけを数える。
+ */
+function applyDeadBalls(st, ev, ctx) {
+  const asked = (ev.d && ev.d.balls) || [];
+  const scoreOf = (ctx && ctx.scoring && ctx.scoring.scoreOf)
+    || function () { return 1; };
+  const removed = [];
+  if (asked.length) {
+    asked.forEach(function (b) {
+      const idx = st.onTable.indexOf(b);
+      if (idx >= 0) {
+        st.onTable.splice(idx, 1);
+        removed.push(b);
+      }
+    });
+  } else {
+    const n = (ev.d && ev.d.count) || 1;
+    const key = ctx && ctx.base ? ctx.base.keyBall : null;
+    for (let i = 0; i < n; i++) {
+      if (!st.onTable.length) break;
+      // キーボール（9番）は最後まで残す。無効になるのは手前の球
+      let idx = 0;
+      if (key !== null && st.onTable[0] === key && st.onTable.length > 1) idx = 1;
+      removed.push(st.onTable[idx]);
+      st.onTable.splice(idx, 1);
+    }
+  }
+  const n = removed.length;
+  if (!n) return;
+  // その球が本来持っていた点。9番のように2点の球が無効になることもある
+  const pts = removed.reduce(function (sum, b) { return sum + scoreOf(b); }, 0);
+  if (ev.side && st.stats[ev.side]) st.stats[ev.side].deadBalls += n;
+  st.deadBalls = (st.deadBalls || 0) + n;
+  st.deadPoints = (st.deadPoints || 0) + pts;
 }
 
 function applyShotClock(st, ev) {

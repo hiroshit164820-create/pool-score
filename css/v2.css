@@ -2210,3 +2210,154 @@ button::after {
   min-height: 44px;
   margin-bottom: 10px;
 }
+
+/* ============ 試合画面の下の帯（本人の指示 2026-08-21） ============
+   「スコア修正」「スコアシート」「無効球」「次のラック」を1行に並べる。
+   種目によって出るボタンの数が変わるので、幅は等分にする */
+#screenMatch .bottom-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  justify-content: center;
+}
+#screenMatch .bottom-bar button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1.15;
+}
+#screenMatch .bottom-bar .bb-ico {
+  font-size: 15px;
+  line-height: 1.1;
+}
+#screenMatch .bottom-bar .bb-tx {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* スコア修正はいちばん使うので、少しだけ広く・目立つ色にする */
+#screenMatch .bottom-bar #reviseBtn {
+  flex: 1.3 1 0;
+  background: var(--coin);
+  font-weight: 900;
+}
+#screenMatch .bottom-bar #sheetBtn[aria-pressed="true"] {
+  background: var(--coin);
+}
+
+/* スコアシートを開いたときの見出しの行（閉じるボタン付き） */
+.sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sheet-bar .sheet-title {
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+.sheet-bar .st-sum {
+  flex: 1 1 auto;
+  text-align: right;
+  font-weight: 800;
+  font-size: 13px;
+}
+.sheet-bar .st-close {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+/* 開いているときは、画面の高さに収まる範囲で中を送れるようにする。
+   横向きで 50px に潰していたため、開いても中身が見えなかった */
+#screenMatch .sheet-area:not([hidden]) {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  #screenMatch .sheet-area:not([hidden]) {
+    max-height: 58vh;
+    padding: 4px 8px;
+  }
+}
+
+/* スコアシートのラックの区切り。色だけだと切り替わりが分からないため、
+   ラックの先頭のマスに線とラック番号を出す（本人の指示 2026-08-21） */
+.sheet-cell.rack-open {
+  border-left: 3px solid var(--ink);
+  position: relative;
+}
+.sheet-cell.rack-open::after {
+  content: attr(data-rack);
+  position: absolute;
+  left: -2px;
+  top: -11px;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--ink);
+  background: var(--coin);
+  border: 1px solid var(--ink);
+  padding: 0 2px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.sheet-grid {
+  padding-top: 12px;
+}
+
+/* スコア修正のイニング調整 */
+.rv-inning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+}
+.rv-inning .ri-label {
+  font-weight: 800;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.rv-inning .ri-now {
+  flex: 1 1 auto;
+  font-weight: 900;
+}
+.rv-inning button {
+  min-height: 44px;
+  min-width: 56px;
+  flex: 0 0 auto;
+}
+
+/* JPAのスコアシートを開いている間は、シートに残りの高さを渡す。
+   元の配分のままだと、開いた瞬間に下の帯が画面の外へ出る（実測で101px） */
+#screenMatch.jpa-sheet-open .scoreboard {
+  flex: 0 0 auto;
+}
+#screenMatch.jpa-sheet-open .sheet-area:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+/* 開いている間はスコア欄を小さくして、シートに場所を回す */
+#screenMatch.jpa-sheet-open .score-panel {
+  min-height: 0;
+}
+#screenMatch.jpa-sheet-open .score-panel .val {
+  font-size: 28px;
+}
+
+/* シートを開いている間は記録のボタン列を隠して、シートに高さを回す。
+   横向きでは開いてもシートが83pxしか取れず読めなかった。
+   記録するときはシートを閉じるので、隠しても手は止まらない */
+#screenMatch.jpa-sheet-open .panel-flags {
+  display: none;
+}

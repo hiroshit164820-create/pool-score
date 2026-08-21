@@ -63,14 +63,15 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
 
     # --- 17 スコアシートの開閉 ---
-    check(pg.is_visible(".sheet-toggle"), "スコアシートの開閉ボタンがある")
-    check(pg.eval_on_selector(".sheet-toggle", "e => e.getAttribute('aria-expanded')") == "false",
+    # 2026-08-21 に開閉ボタンを下の帯（#sheetBtn）へ移した（本人の指示）
+    check(pg.is_visible("#sheetBtn"), "スコアシートの開閉ボタンがある")
+    check(pg.eval_on_selector("#sheetBtn", "e => e.getAttribute('aria-pressed')") == "false",
           "既定は閉じている")
     check(pg.eval_on_selector_all(".sheet-grid", "e => e.length") == 0, "閉じているとマス目が出ない")
-    pg.click(".sheet-toggle")
-    pg.wait_for_timeout(250)
+    pg.click("#sheetBtn")
+    pg.wait_for_timeout(400)
     check(pg.eval_on_selector_all(".sheet-grid", "e => e.length") == 2, "押すと開く")
-    pg.click(".sheet-toggle")
+    pg.click("#sheetBtn")
     pg.wait_for_timeout(200)
     check(pg.eval_on_selector_all(".sheet-grid", "e => e.length") == 0, "もう一度押すと閉じる")
 
@@ -94,7 +95,7 @@ with sync_playwright() as p:
     rack_after = pg.inner_text("#rackInfo")
     check(rack_before != rack_after, "手動でラックが進む", (rack_before, rack_after))
 
-    pg.click(".sheet-toggle")
+    pg.click("#sheetBtn")
     pg.wait_for_timeout(250)
     check(pg.eval_on_selector_all(".sheet-cell.rack-end", "e => e.length") >= 1,
           "スコアシートに区切りの印が残る")
@@ -105,7 +106,7 @@ with sync_playwright() as p:
                                 " img: getComputedStyle(e).backgroundImage})")
     check("255, 140, 26" in style["shadow"], "明るいオレンジの枠", style["shadow"])
     check("repeating-linear-gradient" in style["img"], "斜線が入っている", style["img"][:60])
-    pg.click(".sheet-toggle")
+    pg.click("#sheetBtn")
     pg.wait_for_timeout(150)
 
     # --- 20 マスワリの自動記録 ---

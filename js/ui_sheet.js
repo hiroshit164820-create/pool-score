@@ -46,9 +46,17 @@ const SHEET = (function () {
       if (screen) screen.classList.remove("has-sheet");
       return;
     }
-    area.hidden = false;
-    // シートが縦を取るぶん、スコアパネルを詰める配置に切り替える
-    if (screen) screen.classList.add("has-sheet");
+    // シートが縦を取るぶん、スコアパネルを詰める配置に切り替える。
+    // JPAは閉じているあいだ場所を取らないので、詰める必要も無い
+    // （閉じたまま詰めていると、そのぶんスコアが小さいままになる）
+    const takesRoom = (kind === "bowlard") || jpaOpen;
+    area.hidden = !takesRoom;
+    if (screen) {
+      screen.classList.toggle("has-sheet", takesRoom);
+      // JPAのシートを開いている間だけ、シートに残りの高さを全部渡す
+      // （開いたまま元の高さ配分だと、下の帯が画面の外へ出る）
+      screen.classList.toggle("jpa-sheet-open", kind === "jpa" && jpaOpen);
+    }
     UI.clear(area);
 
     if (kind === "bowlard") renderBowlard(area, match, st);
@@ -101,28 +109,32 @@ const SHEET = (function () {
     const sl = (match.goal.meta && match.goal.meta.skillLevel) || {};
     const isDoubles = g.playersPerSide === 2;
 
-    // 開閉の見出し。閉じているときも「何点取っているか」だけは読めるようにする
+    // 開閉は下の帯の「スコアシート」ボタンから行う（本人の指示 2026-08-21）。
+    // 画面の中に見出しを置くと、横向きでは高さが足りず開いても中身が見えなかった
+    if (!jpaOpen) {
+      area.hidden = true;
+      return;
+    }
     const got = { A: series.A.length, B: series.B.length };
     area.appendChild(
-      UI.el("button", {
-        type: "button",
-        class: "sheet-toggle",
-        "aria-expanded": String(jpaOpen),
-        onclick: function () {
-          jpaOpen = !jpaOpen;
-          render(match, st);
-        },
-      }, [
+      UI.el("div", { class: "sheet-bar" }, [
         UI.el("span", { class: "sheet-title", text: "JPAスコアシート" }),
         UI.el("span", {
           class: "st-sum",
           text: got.A + " / " + match.goal.targets.A + "　・　"
             + got.B + " / " + match.goal.targets.B,
         }),
-        UI.el("span", { class: "st-mark", text: jpaOpen ? "−" : "＋" }),
+        UI.el("button", {
+          type: "button",
+          class: "small ghost st-close",
+          text: "閉じる",
+          onclick: function () {
+            jpaOpen = false;
+            render(match, st);
+          },
+        }),
       ])
     );
-    if (!jpaOpen) return;
 
     ["A", "B"].forEach(function (side) {
       const target = match.goal.targets[side];
@@ -146,16 +158,23 @@ const SHEET = (function () {
 
       // 得点マス。公式シートと同じく1点=1マスで消していく
       const grid = UI.el("div", { class: "sheet-grid" });
+      let prevRack = null;
       for (let n = 1; n <= target; n++) {
         const hit = series[side][n - 1];
+        // ラックが変わるマスに区切り線とラック番号を出す
+        // （色だけでは切り替わりが分からない、という本人の指摘 2026-08-21）
+        const newRack = !!hit && hit.rackNo !== prevRack;
         const cell = UI.el("span", {
           class: "sheet-cell"
             + (hit ? " filled" : "")
             + (hit && hit.rackEnd ? " rack-end" : "")
+            + (newRack ? " rack-open" : "")
             + (n === target ? " goal" : ""),
           title: hit ? "ラック" + hit.rackNo + "／" + hit.ball + "番" : "",
           text: String(n),
         });
+        if (newRack) cell.setAttribute("data-rack", "R" + hit.rackNo);
+        if (hit) prevRack = hit.rackNo;
         grid.appendChild(cell);
       }
       box.appendChild(grid);
@@ -241,5 +260,16 @@ const SHEET = (function () {
     return side === "A" ? match.sides[0].name : match.sides[1].name;
   }
 
-  return { render: render, kindFor: kindFor, bowlardThrows: bowlardThrows };
+  /** 下の帯のボタンから開閉する（本人の指示 2026-08-21） */
+  function toggle(match, st) {
+    jpaOpen = !jpaOpen;
+    render(match, st);
+    return jpaOpen;
+  }
+
+  /** いま開いているか */
+  function isOpen() { return jpaOpen; }
+
+  return { render: render, kindFor: kindFor, bowlardThrows: bowlardThrows,
+    toggle: toggle, isOpen: isOpen };
 })();

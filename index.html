@@ -307,9 +307,8 @@
           <!-- マスワリが出るまでは出さない（出ていないのに0と書くと紛らわしいため） -->
           <span id="masuwariInfo" class="masuwari-info" hidden></span>
         </span>
-        <!-- JPA9ボールは無効球があり、10点に届かないままラックが終わることがある。
-             その場合に手で次のラックへ進める -->
-        <button id="nextRackBtn" class="small ghost" hidden>次のラック</button>
+        <!-- 「次のラック」は下の帯へ移した（本人の指示 2026-08-21）。
+             ここには残さない -->
         <button id="breakToggleBtn" class="break-toggle">
           <span class="bt-label">ブレイク</span>
           <span class="bt-name" id="breakToggleName">—</span>
@@ -332,9 +331,22 @@
 
 
     <!-- 取り消しは削除した（本人の指示 2026-08-21）。
-         記録の取り消しは「訂正」から、どの記録でも選んでできる -->
+         記録の取り消しは「スコア修正」から、どの記録でも選んでできる。
+         スコアシート・無効球・次のラックも同じ行にまとめた（本人の指示 2026-08-21）。
+         スコアシートを画面の中に開くと、横向きでは高さが足りず中身が見えなかった -->
     <div class="bottom-bar">
-      <button id="reviseBtn" class="ghost">⋯ 訂正</button>
+      <button id="reviseBtn" class="ghost">
+        <span class="bb-ico" aria-hidden="true">🛠</span><span class="bb-tx">スコア修正</span>
+      </button>
+      <button id="sheetBtn" class="ghost" hidden>
+        <span class="bb-ico" aria-hidden="true">📋</span><span class="bb-tx">スコアシート</span>
+      </button>
+      <button id="deadBallBtn" class="ghost" hidden>
+        <span class="bb-ico" aria-hidden="true">🚫</span><span class="bb-tx">無効球</span>
+      </button>
+      <button id="nextRackBtn" class="ghost" hidden>
+        <span class="bb-ico" aria-hidden="true">⏭</span><span class="bb-tx">次のラック</span>
+      </button>
     </div>
   </section>
 
@@ -578,7 +590,15 @@
 <!-- 訂正モーダル -->
 <div class="modal-backdrop" id="reviseModal" hidden>
   <div class="modal">
-    <h2>記録の訂正</h2>
+    <h2><span aria-hidden="true">🛠</span> スコア修正</h2>
+    <!-- イニングは得点の入力から自動で数えるが、数え違いを直せるようにする
+         （本人の指示 2026-08-21） -->
+    <div class="rv-inning" id="reviseInning" hidden>
+      <span class="ri-label">イニング</span>
+      <span class="ri-now" id="reviseInningNow">1</span>
+      <button id="inningMinusBtn" class="small ghost">−1</button>
+      <button id="inningPlusBtn" class="small ghost">＋1</button>
+    </div>
     <p class="hint">取り消したい記録を選んでください。取り消した記録も履歴には残ります。</p>
     <div class="ev-list" id="evList"></div>
     <div class="modal-actions">

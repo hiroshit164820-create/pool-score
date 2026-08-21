@@ -159,13 +159,21 @@ with sync_playwright() as p:
     check(fb and fb["x"] + fb["width"] > 390 * 0.6, "画面の右側にある", fb)
     check(fb and fb["height"] >= 36, "押せる大きさがある", fb)
 
-    # ラック情報が画面の下半分にある
-    mi = pg.eval_on_selector("#screenMatch .match-info",
-                             "e => Math.round(e.getBoundingClientRect().top)")
-    check(mi > 844 * 0.5, "ラック情報の帯が画面の下半分にある", mi)
+    # ラック情報の帯は、中身をよそへ移したので畳まれる（2026-08-21）。
+    #   ラック数・イニング数 → 上の帯 / 次のラック → 下の帯
+    # 出ている場合は画面の下半分にあること（元の指示どおり）を見る
+    mi = pg.evaluate("""() => {
+      const e = document.querySelector('#screenMatch .match-info');
+      const r = e.getBoundingClientRect();
+      return {top: Math.round(r.top), h: Math.round(r.height),
+              disp: getComputedStyle(e).display};
+    }""")
+    check(mi["disp"] == "none" or mi["top"] > 844 * 0.5,
+          "ラック情報の帯は畳まれるか、画面の下半分にある", mi)
     bb = pg.eval_on_selector("#screenMatch .bottom-bar",
                              "e => Math.round(e.getBoundingClientRect().top)")
-    check(mi < bb, "ラック情報は下の帯より上", (mi, bb))
+    check(mi["disp"] == "none" or mi["top"] < bb,
+          "ラック情報は（出ていれば）下の帯より上", (mi, bb))
 
     # 訂正から記録を取り消せる
     section("4. 訂正から取り消せる")

@@ -278,10 +278,11 @@ with sync_playwright() as p:
 
     # スコアシートは既定で閉じるようにした（本人の指示 2026-08-20）。
     # マスの大きさを測るので、まず開く
-    check(pg.locator(".sheet-toggle").count() == 1, "スコアシートの開閉ボタンがある")
+    # 2026-08-21 に開閉ボタンを下の帯（#sheetBtn）へ移した（本人の指示）
+    check(pg.locator("#sheetBtn").count() == 1, "スコアシートの開閉ボタンがある")
     check(pg.locator(".sheet-cell").count() == 0, "既定は閉じている")
-    pg.click(".sheet-toggle")
-    pg.wait_for_timeout(250)
+    pg.click("#sheetBtn")
+    pg.wait_for_timeout(400)
     has_sheet = pg.locator(".sheet-cell").count()
     check(has_sheet > 0, "開くとJPAスコアシートのマスが出る", has_sheet)
     box = pg.evaluate(CELL_BOX_JS)
