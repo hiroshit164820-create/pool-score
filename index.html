@@ -504,6 +504,22 @@
     <div class="list" id="historyList"></div>
   </section>
 
+  <!-- ================= 届いた試合の取り込み =================
+       相手から送られてきたリンクを開いたときに出る画面（本人の指示 2026-08-21）。
+       名前が違っていても、ここで「この人は誰か」を対応付けてから取り込む -->
+  <section id="screenImport" class="screen">
+    <div class="topbar">
+      <div>
+        <h1>届いた試合</h1>
+        <div class="sub" id="importSub">記録が送られてきました</div>
+      </div>
+      <button id="importCloseBtn" class="small ghost">閉じる</button>
+    </div>
+    <div class="list">
+      <div id="importBody"></div>
+    </div>
+  </section>
+
   <!-- ================= 選手一覧 ================= -->
   <section id="screenPlayers" class="screen">
     <div class="topbar">
@@ -653,6 +669,7 @@
 <script src="js/shotclock.js"></script>
 <script src="js/chessclock.js"></script>
 <script src="js/store.js"></script>
+<script src="js/share.js"></script>
 <script src="js/ui_setup.js"></script>
 <script src="js/csv.js"></script>
 <script src="js/ui_sheet.js"></script>
@@ -660,6 +677,7 @@
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
 <script src="js/ui_home.js"></script>
+<script src="js/ui_import.js"></script>
 <script src="js/money_game.js"></script>
 <script src="js/ui_money.js"></script>
 <script src="js/ui_kailun.js"></script>

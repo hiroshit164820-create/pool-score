@@ -2684,3 +2684,35 @@ select.goal-more.is-picked {
 .picker-chip.is-chosen .pc-at {
   background: rgba(0, 0, 0, .35);
 }
+
+/* ============ 届いた試合の取り込み（本人の指示 2026-08-21） ============
+   名前が違っていても正しい人に結び付けられるよう、
+   取り込む前に対応付けを確かめる画面 */
+.import-card {
+  margin-bottom: 14px;
+}
+.card-note {
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.card-note.warn-note {
+  background: #ffeceb;
+  border-left: 6px solid var(--danger);
+}
+.card-note p {
+  margin: 0;
+}
+.import-map {
+  margin-bottom: 16px;
+}
+.import-map > label.side-a { color: var(--side-a); }
+.import-map > label.side-b { color: var(--side-b); }
+/* 選んである選択肢は、ほかのボタンと同じ金色にする */
+.import-map .chip.is-on {
+  background: var(--block);
+  color: var(--ink);
+  font-weight: 900;
+}

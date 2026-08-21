@@ -507,6 +507,17 @@ const HISTORY = (function () {
           })
         );
       }
+      // 相手に送る（本人の指示 2026-08-21）。
+      // 終わった試合だけ。記録をリンクにして、LINEなどで渡す
+      if (m.finished && typeof SHARE !== "undefined") {
+        foot.appendChild(
+          UI.el("button", {
+            class: "small ghost",
+            text: "相手に送る",
+            onclick: UI.guard(function () { sendMatch(m.id); }),
+          })
+        );
+      }
       // メモ。書いてあれば内容を、無ければ「メモを追加」を出す
       foot.appendChild(
         UI.el("button", {
@@ -536,6 +547,51 @@ const HISTORY = (function () {
         })
       );
       card.appendChild(foot);
+  }
+
+  /**
+   * 試合の記録をリンクにして相手に渡す（本人の指示 2026-08-21）。
+   *
+   * サーバーを持たない作りなので、記録そのものをリンクに載せる。
+   * 「共有」が使える端末はLINE等に渡し、使えない端末は写して渡す。
+   */
+  function sendMatch(id) {
+    const full = STORE.loadMatch(id);
+    if (!full) { UI.toast("記録が見つかりません。", "warn"); return; }
+    const who = full.sides[0].name + " 対 " + full.sides[1].name;
+    const g = (typeof GAMES !== "undefined" && GAMES[full.gameId]) || {};
+    const title = (g.label || full.gameId) + "　" + who;
+
+    SHARE.makeLink(full).then(function (out) {
+      const text = title + " の記録です。開くと取り込めます。";
+      if (navigator.share) {
+        navigator.share({ title: "試合の記録", text: text, url: out.url })
+          .then(function () {
+            UI.toast(out.slim ? "送りました（長いので結果だけにしました）。" : "送りました。");
+          })
+          .catch(function () { /* 送るのをやめただけなので何も出さない */ });
+        return;
+      }
+      // 共有が使えない端末は、リンクを写して渡してもらう
+      copyText(out.url).then(function (okCopy) {
+        UI.toast(okCopy
+          ? "リンクを写しました。LINEなどに貼って送ってください。"
+          : "リンクを作れませんでした。", okCopy ? "" : "warn");
+        if (!okCopy) window.prompt("このリンクを送ってください", out.url);
+      });
+    }).catch(function (e) {
+      UI.toast("送る形にできませんでした（" + (e && e.message) + "）", "warn");
+    });
+  }
+
+  /** クリップボードに写す。使えない端末では false を返す */
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text)
+        .then(function () { return true; })
+        .catch(function () { return false; });
+    }
+    return Promise.resolve(false);
   }
 
   /**

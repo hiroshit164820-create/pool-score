@@ -33,6 +33,10 @@
     });
 
     renderResume();
+
+    // 相手から送られたリンクで開いたときは、取り込みの画面を出す
+    // （本人の指示 2026-08-21）。ふだんの起動では何も起きない
+    if (typeof IMPORTUI !== "undefined") IMPORTUI.checkHash();
   }
 
   /**
