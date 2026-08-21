@@ -196,8 +196,8 @@ with sync_playwright() as p:
         note:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()});
       localStorage.setItem('pool_layouts', JSON.stringify(all));
     }""")
-    # 呼び出した直後は一覧が閉じているので、1回だけ押して開く
-    if pg.eval_on_selector("#layoutList", "e => e.hidden"):
+    # 呼び出した直後は一覧のカードが閉じているので、1回だけ押して開く
+    if pg.eval_on_selector("#layoutListModal", "e => e.hidden"):
         pg.click("#layoutListBtn")
         pg.wait_for_timeout(400)
     pg.locator(".layout-item", has_text="むかしの配置").locator("button", has_text="呼び出す").click()

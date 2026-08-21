@@ -486,10 +486,22 @@
         <button id="layoutClearBtn" class="ghost">全部どける</button>
       </div>
 
-      <!-- 保存した配置の一覧 -->
-      <div id="layoutList" class="layout-list" hidden></div>
     </div>
   </section>
+
+  <!-- 保存した配置の一覧（本人の指示 2026-08-22）。
+       以前は台・球トレイ・操作ボタンの下に出していたため、
+       上の帯のボタンを押しても画面の外に開いて気づけなかった。
+       その場で重ねて開くカードにする -->
+  <div class="modal-backdrop" id="layoutListModal" hidden>
+    <div class="modal layout-list-modal">
+      <h2>保存した配置</h2>
+      <div id="layoutList" class="layout-list"></div>
+      <div class="modal-actions">
+        <button id="layoutListCloseBtn" class="ghost">閉じる</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= 履歴 ================= -->
   <section id="screenHistory" class="screen">

@@ -1,0 +1,54 @@
+# tests.tsv — 検証の一覧（この1か所で管理する）
+# 実行するもの<TAB>ファイル<TAB>説明
+# 追加したらここに1行足すだけでよい。run.py が読んで並列で流す
+node	engine.test.js	スコア計算エンジン
+node	money_game.test.js	5-9/5-10 の点数計算
+node	shotclock.test.js	ショットクロック
+node	chessclock.test.js	チェスクロック
+python	browser_test.py	実ブラウザでの通し確認
+python	features_test.py	新機能（JPA・プレーヤー・成績・時計）
+python	redesign_test.py	デザイン刷新（8bit・SL登録・延長1ラック1回・ブレイク表示・種目選択）
+python	roster_handicap_test.py	選手一覧・ボールハンデ・アプリ化
+python	rotation_goal_test.py	勝利条件UI・ローテーション
+python	session_test.py	中断と再開・戻る・盤面の配色・ボウラード
+python	slice1_test.py	表示の修正（選択の色・スコア表・数字の位置・点線・ルール説明）
+python	layout_fit_test.py	1画面に収まっているか（種目8×画面4の全数）
+python	slice2_test.py	先取点・マスワリ即記録
+python	note_test.py	試合メモ
+python	kailun_test.py	カイルン（複数人・専用画面）
+python	tabbar_test.py	下部タブとホーム
+python	layout_test.py	練習配置
+python	layout_touch_test.py	配置図の見た目と操作性
+python	self_player_test.py	自分の登録
+python	money_ui_test.py	5-9/5-10 の画面
+python	layout2_test.py	配置図（ポケット・左右のボタン・メモ）
+python	setup2_test.py	設定画面（種目カード・ゲスト・ハンデ・まとめ）
+python	stats2_test.py	JPA・成績・履歴（イニング／マスワリ／絞り込み／CSV）
+python	money2_test.py	5-9/5-10のデザイン変更・JPA8ボールのポイント・通知の位置
+python	tune3_test.py	配置図の線・使うボール削除・通知の長さ・終了画面（第3便）
+python	tune4_test.py	台の潰れ・ローテのスコア・番号・セット数・横向き（08-21）
+python	tune5_test.py	カイルンの人選び・JPAダブルス表・履歴の作り直し（08-21 2便目）
+python	tune6_test.py	履歴の絞り込みにハウスゲーム（08-21 3便目）
+python	line_test.py	配置図に直線を引く（08-21 3便目）
+python	land_test.py	横向きのスコアボード・記録ボタンの置き場（08-21 3便目）
+python	stats3_test.py	一般種目とJPAの内訳・パートナー別（08-21 3便目）
+python	draw_test.py	配置図の描画（なぞった通りの線・08-20 追加）
+python	detail_test.py	種目別でさらに詳しくカード（08-21 段階7）
+python	fix2_test.py	長い名前とW-Lの重なり・中断中カードの×の幅（08-21）
+python	tune7_test.py	番号1px・JPAポイント率・5-9マスワリ・試合画面の作り直し（08-21 4便目）
+python	tune8_test.py	縦向きの試合画面の作り直し（08-21 B: 交代とブレイクを1行・帯を上へ）
+python	class_test.py	選手のクラス・プロフィール編集（08-21 C）
+python	stats4_test.py	成績管理の作り直し・ホーム5件（08-21 D/E）
+python	hist2_test.py	履歴の件数切り替え・ダブルス2段・SLの位置（08-21 F）
+python	flag_jpa_test.py	球単位の種目のマスワリ・ブレイクエース（08-21 不具合）
+python	match2_test.py	試合画面の作り直し（08-21 下の帯・無効球・イニング自動）
+python	stage3_test.py	選手・成績（08-21 段階3 種目別成績の削除・自分の扱い）
+python	stage4_test.py	見た目（08-21 段階4 左右の色・ホームのカード・アイコン）
+python	innings_opt_test.py	イニングを数えるかの選択（08-21 一般種目）
+python	manual_test.py	説明書の体裁（08-21 manual.html）
+python	tune9_test.py	成績の既定とプルダウンの色（08-21 段階A）
+python	overlap_test.py	ボタン干渉の全数（08-21 段階B・種目11×時計3×向き2）
+python	pairpick_test.py	プレーヤーの選び方・ペアの組み替え（08-21 段階C）
+python	share_test.py	試合の記録を相手に渡す（08-22 段階D）
+python	paste_test.py	リンクを貼り付けて取り込む（08-22・ホーム画面のアプリ対応）
+python	layoutcard_test.py	保存した配置をその場で開くカード（08-22）

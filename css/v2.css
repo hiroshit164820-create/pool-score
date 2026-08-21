@@ -2539,6 +2539,18 @@ button::after {
   }
 }
 
+/* 「保存した配置」は、その場で重ねて開くカードにした（本人の指示 2026-08-22）。
+   以前は台と操作ボタンの下に伸びる作りで、押しても画面の外に開いていた */
+.layout-list-modal .layout-list {
+  max-height: 56vh;
+  overflow-y: auto;
+  /* 影と枠が切れないぶんの余白 */
+  padding: 2px;
+}
+.layout-list-modal .layout-item:last-child {
+  margin-bottom: 0;
+}
+
 /* ボール種の選び方（ローテーションのみ・本人の指示 2026-08-22）。
    色の見本を先に出して、名前を読まなくても違いが分かるようにする */
 .ballset-chip {

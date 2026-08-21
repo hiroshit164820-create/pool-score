@@ -38,7 +38,22 @@ const LAYOUT = (function () {
     $("layoutClearBtn").addEventListener("click", UI.guard(clearAll));
     $("layoutUndoBtn").addEventListener("click", UI.guard(undo));
     $("layoutRedoBtn").addEventListener("click", UI.guard(redo));
-    $("layoutListBtn").addEventListener("click", UI.guard(toggleList));
+    $("layoutListBtn").addEventListener("click", UI.guard(openList));
+
+    // 一覧はその場で重ねて開くカードにした（本人の指示 2026-08-22）。
+    // 下に長く伸ばす作りだと、押しても画面の外に開いて気づけなかった
+    const closeBtn = $("layoutListCloseBtn");
+    if (closeBtn) closeBtn.addEventListener("click", UI.guard(closeList));
+    const backdrop = $("layoutListModal");
+    if (backdrop) {
+      // 背景（カードの外）を押しても閉じる
+      backdrop.addEventListener("click", function (e) {
+        if (e.target === backdrop) closeList();
+      });
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeList();
+    });
 
     // 画面の向きや大きさが変わったら台を測り直す。
     // 入れておかないと、横向きにしたときに台が画面からはみ出す
@@ -831,16 +846,22 @@ const LAYOUT = (function () {
     UI.toast("「" + saved.name + "」を保存しました。");
   }
 
-  function toggleList() {
-    const list = $("layoutList");
-    if (!list) return;
-    list.hidden = !list.hidden;
-    if (!list.hidden) renderList();
+  /** 一覧のカードを開く。中身は開くたびに作り直す */
+  function openList() {
+    const modal = $("layoutListModal");
+    if (!modal) return;
+    renderList();
+    modal.hidden = false;
+  }
+
+  function closeList() {
+    const modal = $("layoutListModal");
+    if (modal) modal.hidden = true;
   }
 
   function renderList() {
     const list = $("layoutList");
-    if (!list || list.hidden) return;
+    if (!list) return;
     UI.clear(list);
 
     const items = STORE.listLayouts();
@@ -904,8 +925,7 @@ const LAYOUT = (function () {
     editingName = l.name;
     const memo = $("layoutMemo");
     if (memo) memo.value = l.note || "";
-    const list = $("layoutList");
-    if (list) list.hidden = true;
+    closeList();
     render();
     UI.toast("「" + l.name + "」を呼び出しました。");
   }

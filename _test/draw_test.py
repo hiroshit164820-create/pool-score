@@ -220,7 +220,7 @@ with sync_playwright() as p:
           saved and len(saved["strokes"][0]["pts"]))
     pg.click("#layoutClearBtn")
     pg.wait_for_timeout(400)
-    if pg.eval_on_selector("#layoutList", "e => e.hidden"):
+    if pg.eval_on_selector("#layoutListModal", "e => e.hidden"):
         pg.click("#layoutListBtn")
         pg.wait_for_timeout(400)
     listtext = pg.inner_text("#layoutList")
@@ -241,7 +241,7 @@ with sync_playwright() as p:
         note:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()});
       localStorage.setItem('pool_layouts', JSON.stringify(all));
     }""")
-    if pg.eval_on_selector("#layoutList", "e => e.hidden"):
+    if pg.eval_on_selector("#layoutListModal", "e => e.hidden"):
         pg.click("#layoutListBtn")
         pg.wait_for_timeout(400)
     pg.locator(".layout-item", has_text="むかしの配置").locator(

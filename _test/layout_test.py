@@ -54,10 +54,21 @@ def put(pg, label):
 
 
 def open_list(pg):
-    """保存した配置の一覧を開く（ボタンは開閉なので状態を見てから押す）"""
-    if pg.locator("#layoutList").get_attribute("hidden") is not None:
+    """保存した配置の一覧を開く（すでに開いていれば何もしない）"""
+    if pg.locator("#layoutListModal").get_attribute("hidden") is not None:
         pg.click("#layoutListBtn")
         pg.wait_for_timeout(400)
+
+
+def close_list(pg):
+    """一覧のカードを閉じる。
+
+    2026-08-22 から一覧は重ねて出すカードになった（本人の指示）。
+    開いたままだと下の台やボタンを押せないので、用が済んだら閉じる。
+    """
+    if pg.locator("#layoutListModal").get_attribute("hidden") is None:
+        pg.click("#layoutListCloseBtn")
+        pg.wait_for_timeout(300)
 
 
 with sync_playwright() as p:
@@ -196,6 +207,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
     live = [x for x in pg.evaluate(STORED) if not x.get("deletedAt")]
     check(len(live) == 0, "削除される", live)
+    close_list(pg)
 
     # 削除の確認を取り消したら消えない
     put(pg, "2")
@@ -208,6 +220,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     live = [x for x in pg.evaluate(STORED) if not x.get("deletedAt")]
     check(len(live) == 1, "取り消したら消えない", live)
+    close_list(pg)
 
     # ================================================================
     section("7. 試合の記録に影響しない")
