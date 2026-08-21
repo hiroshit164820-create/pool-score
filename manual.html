@@ -258,6 +258,7 @@ a { color: var(--side-a); }
     <li><a href="#screens">画面の案内</a></li>
     <li><a href="#games">選べる種目</a></li>
     <li><a href="#data">記録はどこにあるか</a></li>
+    <li><a href="#share">相手に記録を送る</a></li>
     <li><a href="#system">システム編：中の仕組み</a></li>
     <li><a href="#addgame">システム編：種目を増やす</a></li>
     <li><a href="#dev">システム編：検証と公開</a></li>
@@ -444,7 +445,56 @@ a { color: var(--side-a); }
 </div>
 
 <!-- ============================================================ -->
-<h2 id="system">7. システム編：中の仕組み</h2>
+<h2 id="share">7. 相手に記録を送る</h2>
+
+<div class="card">
+  <p><strong>片方だけが記録して、終わったら相手に送れます。</strong>
+    両方の端末で記録を付ける必要はありません。</p>
+
+  <h3>送る</h3>
+  <ol class="steps">
+    <li>「履歴」で送りたい試合を出す</li>
+    <li><kbd>相手に送る</kbd> を押す</li>
+    <li>LINE などの送り先を選ぶ（共有が使えない端末では、リンクが写されるので貼って送ります）</li>
+  </ol>
+
+  <h3>受け取る</h3>
+  <ol class="steps">
+    <li>届いたリンクを押す</li>
+    <li>「届いた試合」の画面が出るので、中身（種目・スコア・日時）を見る</li>
+    <li><kbd>この試合を取り込む</kbd> を押すと、履歴と成績に入ります</li>
+  </ol>
+
+  <div class="card note">
+    <strong>名前が違っていても大丈夫です</strong>
+    <p>取り込む前に「この人は誰ですか」で、送られてきた名前を
+      あなたの端末の選手に結び付けます。</p>
+    <ul>
+      <li>名前がそのまま一致する人がいれば、<strong>はじめから選ばれています</strong></li>
+      <li>一致しなければ何も選ばれず、<strong>「成績に入れない」</strong>になります。
+        そのまま取り込むと記録だけが残り、誰の勝率も動きません</li>
+      <li>「登録済みから選ぶ」「新しく登録する」「成績に入れない」の3つから選べます</li>
+      <li><strong>一度結び付けたら覚えるので、次からは自動</strong>で選ばれます</li>
+    </ul>
+  </div>
+
+  <h3>知っておくこと</h3>
+  <ul>
+    <li>記録は<strong>リンクそのものに入っています</strong>。サーバーには送られません
+      （URLの「#」より後ろはサーバーに届かない決まりです）</li>
+    <li>同じ試合をもう一度取り込もうとすると<strong>警告が出ます</strong>
+      （ボタンが「それでも取り込む」に変わります）</li>
+    <li>試合1つぶんのリンクは<strong>1,000〜2,000字ほど</strong>です。
+      LINEなら問題ありませんが、文字数の少ない送り方（SMSなど）では切れることがあります</li>
+    <li>とても長い試合は、1球ごとの記録を省いて<strong>結果だけ</strong>を送ります
+      （そのときは取り込み画面にその旨が出ます）</li>
+    <li>取り込んだ記録は<strong>そのあと同期しません</strong>。
+      送ったあとに送り主が直しても、こちらには反映されません</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="system">8. システム編：中の仕組み</h2>
 
 <div class="card">
   <h3>作りの考え方</h3>
@@ -467,6 +517,7 @@ a { color: var(--side-a); }
         <tr><td><span class="path">js/engine.js</span></td><td>スコア計算の中心。<strong>種目名による分岐を一切書かない</strong></td></tr>
         <tr><td><span class="path">js/store.js</span></td><td>保存と読み出し、成績の集計</td></tr>
         <tr><td><span class="path">js/ui_*.js</span></td><td>画面ごとの処理（設定・試合・履歴・選手・成績・配置・ハウスゲーム）</td></tr>
+        <tr><td><span class="path">js/share.js</span> / <span class="path">js/ui_import.js</span></td><td>記録をリンクにして渡す／届いた記録を取り込む</td></tr>
         <tr><td><span class="path">js/shotclock.js</span> / <span class="path">chessclock.js</span></td><td>2種類の時計</td></tr>
         <tr><td><span class="path">style.css</span> / <span class="path">css/v2.css</span></td><td>見た目。v2.css が後から上書きする</td></tr>
         <tr><td><span class="path">sw.js</span></td><td>オフライン用。<strong>ファイルを変えたら CACHE_VERSION を上げる</strong></td></tr>
@@ -492,7 +543,7 @@ a { color: var(--side-a); }
 </div>
 
 <!-- ============================================================ -->
-<h2 id="addgame">8. システム編：種目を増やす</h2>
+<h2 id="addgame">9. システム編：種目を増やす</h2>
 
 <div class="card">
   <p><strong>種目を増やしても、スコア計算（<span class="path">js/engine.js</span>）は触りません。</strong>
@@ -554,7 +605,7 @@ a { color: var(--side-a); }
 </div>
 
 <!-- ============================================================ -->
-<h2 id="dev">9. システム編：検証と公開</h2>
+<h2 id="dev">10. システム編：検証と公開</h2>
 
 <div class="card">
   <h3>検証</h3>
@@ -582,7 +633,7 @@ python _test\live_test.py  … 公開されている実物を実ブラウザで�
 </div>
 
 <!-- ============================================================ -->
-<h2 id="trouble">10. 困ったとき</h2>
+<h2 id="trouble">11. 困ったとき</h2>
 
 <div class="card">
   <div class="table-scroll">
@@ -601,7 +652,7 @@ python _test\live_test.py  … 公開されている実物を実ブラウザで�
 </div>
 
 <footer>
-  <p>ビリヤードスコア記録 — 説明書。内容は 2026-08-21 時点（アプリの版 v40）のものです。</p>
+  <p>ビリヤードスコア記録 — 説明書。内容は 2026-08-22 時点（アプリの版 v43）のものです。</p>
   <p class="hint">意匠について：既存ゲームの画像・ロゴ・スプライト・効果音は使っていません。
     1980年代の横スクロールアクションの「様式」（空色・レンガ・金のブロック・ドット書体）だけを、
     CSSの図形と自作の16×16ドット絵で表しています。</p>

@@ -98,7 +98,7 @@ with sync_playwright() as p:
             check(not r["small"], "本文が15px以上", r["small"])
 
             section("3. 中身がそろっている")
-            check(len(r["heads"]) == 10, "見出しが10個", r["heads"])
+            check(len(r["heads"]) == 11, "見出しが11個", r["heads"])
             missing = [l[1:] for l in r["links"] if l[1:] not in r["ids"]]
             check(not missing, "目次のリンク先がすべてある", missing)
             check(len(r["links"]) == len(r["heads"]),
