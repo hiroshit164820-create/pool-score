@@ -811,7 +811,134 @@ function buildResult(match, now) {
       };
     }
   }
+
+  // スコア表の元データ。イベント列を間引いても表を描けるように、
+  // 結果の中に最小限の形で残す（本人の指示 2026-08-22）。
+  // 追加は最後に行う。share.js が「結果は計算し直せるか」を
+  // JSON文字列の一致で見ているため、キーの並びを変えないこと
+  const sheet = buildSheetData(match);
+  if (sheet) result.sheet = sheet;
+
   return result;
+}
+
+/* ============================================================
+ * スコア表の元データ（result.sheet）
+ *
+ * 終わった試合のスコア表を、1球ごとのイベント列なしで描けるようにする。
+ * 画面（ui_sheet.js）は試合中このイベント列から表を組んでいるが、
+ *   ・終わった試合を開く道が要る
+ *   ・古い試合はイベント列を間引いて容量を減らす予定
+ * の2つの理由で、確定時に必要最小限だけを結果に残す。
+ *
+ * 形（キーは短く、値は配列）:
+ *   ボウラード { k:"b", t:[各投で入れた球数] }
+ *   JPA        { k:"j", lr:最終ラック番号,
+ *                A:{ b:[得点順の球番号], c:[ラックごとの得点数] }, B:{...} }
+ *   JPA の b は「1点=1要素」。9番のように2点の球は同じ番号が2つ並ぶ。
+ *   c は添字がラック番号-1。得点が無いラックは 0 が入る。
+ * ============================================================ */
+
+/**
+ * その試合にスコア表があるか。無ければ null。
+ * 返すのは保存データの k と同じ短い記号（"b" = ボウリング式 / "j" = JPA）。
+ * 種目名（gameId）をエンジンに書かない決まりがあるため、
+ * 画面に出す名前への読み替えは store.js 側で行う。
+ */
+function sheetKindOf(match) {
+  if (!match || !match.gameId || !GAMES[match.gameId]) return null;
+  const r = resolveGame(match.gameId);
+  if (r.scoring.kind === "bowling") return "b";
+  if (r.game.goal === "jpaSL" || r.game.goal === "jpaSL8") return "j";
+  return null;
+}
+
+/**
+ * JPAの「入った順の得点列」をイベント列から作る。
+ * 画面（ui_sheet.js の jpaSeries）と同じものを返す。
+ * こちらは最終ラック番号（lastRack）も返す。
+ */
+function jpaSeriesOf(match) {
+  const r = resolveGame(match.gameId);
+  const scoreOf = r.scoring.scoreOf || function () { return 1; };
+  const out = { A: [], B: [], lastRack: 1 };
+  let rackNo = 1;
+
+  ((match && match.events) || []).forEach(function (e) {
+    if (e.voided) return;
+    if (e.t === "RACK_START") {
+      ["A", "B"].forEach(function (side) {
+        const arr = out[side];
+        if (arr.length) arr[arr.length - 1].rackEnd = true;
+      });
+      rackNo = (e.d && e.d.rackNo) || rackNo + 1;
+      if (rackNo > out.lastRack) out.lastRack = rackNo;
+      return;
+    }
+    if (e.t !== "POCKET" || !e.side) return;
+    const balls = (e.d && e.d.balls) || [];
+    balls.forEach(function (b) {
+      const pts = scoreOf(b);
+      for (let i = 0; i < pts; i++) {
+        out[e.side].push({ ball: b, rackNo: rackNo, rackEnd: false });
+      }
+    });
+  });
+  return out;
+}
+
+/** 試合からスコア表の元データを作る。対象外の種目は null */
+function buildSheetData(match) {
+  const kind = sheetKindOf(match);
+  if (!kind) return null;
+  if (!match.events || !match.events.length) return null;
+
+  if (kind === "b") {
+    return { k: "b", t: bowlardThrowsOf(match) };
+  }
+
+  const ser = jpaSeriesOf(match);
+  const data = { k: "j", lr: ser.lastRack };
+  ["A", "B"].forEach(function (side) {
+    const b = [];
+    const c = [];
+    ser[side].forEach(function (p) {
+      b.push(p.ball);
+      const i = Math.max(1, p.rackNo) - 1;
+      while (c.length <= i) c.push(0);
+      c[i] += 1;
+    });
+    if (c.length > data.lr) data.lr = c.length;
+    data[side] = { b: b, c: c };
+  });
+  return data;
+}
+
+/**
+ * 保存したデータから、画面が使う得点列に戻す。
+ * ラックの最後の点に付く印（rackEnd）は
+ * 「そのラックの最後の点で、かつ後にもラックが始まっている」で決まる。
+ */
+function jpaSeriesFromSheet(sheet) {
+  const out = { A: [], B: [] };
+  if (!sheet) return out;
+  const lr = sheet.lr || 1;
+  ["A", "B"].forEach(function (side) {
+    const d = sheet[side] || { b: [], c: [] };
+    const balls = d.b || [];
+    let i = 0;
+    (d.c || []).forEach(function (cnt, ri) {
+      const rackNo = ri + 1;
+      for (let n = 0; n < cnt; n++) {
+        out[side].push({
+          ball: balls[i++],
+          rackNo: rackNo,
+          rackEnd: n === cnt - 1 && rackNo < lr,
+        });
+      }
+    });
+  });
+  return out;
 }
 
 /* ============================================================

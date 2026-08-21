@@ -18,9 +18,31 @@ const HISTORY = (function () {
   let pageSize = 10;
   let page = 0;
 
+  /* ---------- 複数選択（本人の指示 2026-08-22） ----------
+     「履歴にチェックボックス付けて、複数選択してからまとめて送信みたいな。
+       複数まとめて削除、複数まとめてメモ、も可能にしたい」 */
+
+  // 選ぶ状態か。ふだんは切っておく（誤って選んだまま削除するのを防ぐ）
+  let selectMode = false;
+  // 選んだ試合のid
+  const picked = {};
+
+  function pickedIds() {
+    return Object.keys(picked).filter(function (k) { return picked[k]; });
+  }
+
   function bindOnce() {
     if (bound) return;
     bound = true;
+
+    const selBtn = $("histSelectBtn");
+    if (selBtn) selBtn.addEventListener("click", UI.guard(toggleSelectMode));
+    const sendBtn = $("bulkSendBtn");
+    if (sendBtn) sendBtn.addEventListener("click", UI.guard(bulkSend));
+    const noteBtn = $("bulkNoteBtn");
+    if (noteBtn) noteBtn.addEventListener("click", UI.guard(bulkNote));
+    const delBtn = $("bulkDeleteBtn");
+    if (delBtn) delBtn.addEventListener("click", UI.guard(bulkDelete));
     // 上下のボタン（新しい試合・プレーヤー・読み込み・書き出し・戻る）は
     // 本人の指示（2026-08-21）で削除した。移動は下のタブでする。
     // 書き出し／読み込みの処理そのものは残してあるので、必要になれば
@@ -225,6 +247,7 @@ const HISTORY = (function () {
   function render() {
     const list = $("historyList");
     UI.clear(list);
+    syncBulkBar();
     const all = STORE.listMatches();
     const allMoney = STORE.listMoneyResults ? STORE.listMoneyResults() : [];
     renderFilters(all, allMoney);
@@ -279,6 +302,7 @@ const HISTORY = (function () {
     const from = page * pageSize;
     items.slice(from, from + pageSize).forEach(function (m) {
       const card = UI.el("div", { class: "match-card" });
+      if (selectMode) decorateForSelect(card, m);
 
       const top = UI.el("div", { class: "mc-top" }, [
         UI.el("span", { class: "mc-game", text: m.gameLabel }),
@@ -515,6 +539,18 @@ const HISTORY = (function () {
           })
         );
       }
+      // スコア表（本人の指示 2026-08-22）。
+      // ボウラードとJPAは、終わったあとも表を見返したい。
+      // 表の元になる値は結果の中に保存してある（STORE.sheetOf）
+      if (m.finished && typeof SHEETVIEW !== "undefined" && SHEETVIEW.has(m.id)) {
+        foot.appendChild(
+          UI.el("button", {
+            class: "small ghost",
+            text: "スコア表",
+            onclick: UI.guard(function () { SHEETVIEW.open(m.id); }),
+          })
+        );
+      }
       // 相手に送る（本人の指示 2026-08-21）。
       // 終わった試合だけ。記録をリンクにして、LINEなどで渡す
       if (m.finished && typeof SHARE !== "undefined") {
@@ -603,6 +639,159 @@ const HISTORY = (function () {
     }).catch(function (e) {
       UI.toast("送る形にできませんでした（" + (e && e.message) + "）", "warn");
     });
+  }
+
+  /* ---------- 複数選択のしくみ ---------- */
+
+  function toggleSelectMode() {
+    selectMode = !selectMode;
+    if (!selectMode) {
+      // やめたら選択も捨てる（残したまま次に持ち越すと事故のもと）
+      Object.keys(picked).forEach(function (k) { delete picked[k]; });
+    }
+    const b = $("histSelectBtn");
+    if (b) b.textContent = selectMode ? "選ぶのをやめる" : "選ぶ";
+    render();
+  }
+
+  /**
+   * カードを「選べる」見た目にする。
+   *
+   * カードのどこを押しても選べるようにする（チェックの四角だけだと小さくて押しにくい）。
+   * ただし中のボタン（送る・メモ・削除）は選ぶ状態では押せなくする。
+   * 選んでいるつもりで1件だけ消してしまう事故を防ぐため。
+   */
+  function decorateForSelect(card, m) {
+    card.classList.add("is-selectable");
+    if (picked[m.id]) card.classList.add("is-picked");
+    card.appendChild(
+      UI.el("span", {
+        class: "mc-check",
+        "aria-hidden": "true",
+        text: picked[m.id] ? "✓" : "",
+      })
+    );
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-pressed", String(!!picked[m.id]));
+    card.addEventListener("click", function (e) {
+      // 中のボタンは押させない
+      if (e.target.closest("button")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      picked[m.id] = !picked[m.id];
+      render();
+    });
+  }
+
+  function syncBulkBar() {
+    const bar = $("bulkBar");
+    if (!bar) return;
+    const n = pickedIds().length;
+    bar.hidden = !selectMode;
+    const c = $("bulkCount");
+    if (c) c.textContent = n ? n + "件を選択中" : "選びたい試合を押してください";
+    ["bulkSendBtn", "bulkNoteBtn", "bulkDeleteBtn"].forEach(function (id) {
+      const b = $(id);
+      if (b) b.disabled = !n;
+    });
+  }
+
+  /* ---------- まとめて送る ---------- */
+
+  function bulkSend() {
+    const ids = pickedIds();
+    if (!ids.length) return;
+    const list = ids.map(function (id) { return STORE.loadMatch(id); })
+      .filter(Boolean);
+    if (!list.length) { UI.toast("記録が見つかりません。", "warn"); return; }
+    if (list.length === 1) { sendMatch(list[0].id); return; }
+
+    if (typeof QRVIEW !== "undefined" && QRVIEW.openSendMany) {
+      QRVIEW.openSendMany(list);
+      return;
+    }
+    UI.toast("この版ではまとめて送れません。", "warn");
+  }
+
+  /* ---------- まとめてメモ ---------- */
+
+  /**
+   * すでにメモがあるときは「メモ1」「メモ2」と番号を振って足す
+   * （本人の指示 2026-08-22）。
+   * 上書きにすると前に書いたことが取り返しなく消えるため、必ず残す。
+   */
+  function appendNote(existing, added) {
+    const cur = String(existing || "").trim();
+    const add = String(added || "").trim();
+    if (!add) return cur;
+    if (!cur) return add;
+    const NL = String.fromCharCode(10);
+    // すでに「メモN」で始まっていれば、その続きの番号にする
+    const nums = cur.match(new RegExp("(^|\\n)メモ([0-9]+)\\n", "g")) || [];
+    if (nums.length) {
+      let max = 0;
+      nums.forEach(function (t) {
+        const n = parseInt(t.replace(/[^0-9]/g, ""), 10);
+        if (n > max) max = n;
+      });
+      return cur + NL + NL + "メモ" + (max + 1) + NL + add;
+    }
+    // はじめて足すときは、いまの中身を「メモ1」にしてから「メモ2」を足す
+    return "メモ1" + NL + cur + NL + NL + "メモ2" + NL + add;
+  }
+
+  function bulkNote() {
+    const ids = pickedIds();
+    if (!ids.length) return;
+    const text = window.prompt(
+      [ids.length + "件の試合に同じメモを足します。",
+       "",
+       "すでにメモがある試合は、今のぶんを「メモ1」にして、",
+       "この内容を「メモ2」として足します（消しません）。"].join(String.fromCharCode(10)),
+      ""
+    );
+    if (text === null) return;
+    if (!String(text).trim()) { UI.toast("何も書かれていません。", "warn"); return; }
+
+    let ok = 0;
+    let ng = 0;
+    ids.forEach(function (id) {
+      const entry = STORE.listMatches().find(function (e) { return e.id === id; });
+      const next = appendNote(entry ? entry.note : "", text);
+      if (STORE.setMatchNote(id, next)) ok++;
+      else ng++;
+    });
+    render();
+    UI.toast(ng
+      ? (ok + "件に足しました（" + ng + "件は保存できませんでした）。")
+      : (ok + "件にメモを足しました。"),
+      ng ? "warn" : "");
+  }
+
+  /* ---------- まとめて削除 ---------- */
+
+  function bulkDelete() {
+    const ids = pickedIds();
+    if (!ids.length) return;
+    const all = STORE.listMatches();
+    const names = ids.slice(0, 5).map(function (id) {
+      const e = all.find(function (x) { return x.id === id; });
+      return e ? (e.gameLabel + "／" + e.names.A + " 対 " + e.names.B) : id;
+    });
+    const NL = String.fromCharCode(10);
+    if (!window.confirm([
+      ids.length + "件の記録を削除します。",
+      "",
+      names.join(NL) + (ids.length > 5 ? NL + "ほか" + (ids.length - 5) + "件" : ""),
+      "",
+      "削除すると元に戻せません。よろしいですか？",
+    ].join(NL))) return;
+
+    ids.forEach(function (id) { STORE.deleteMatch(id); });
+    Object.keys(picked).forEach(function (k) { delete picked[k]; });
+    render();
+    UI.toast(ids.length + "件を削除しました。");
   }
 
   /** クリップボードに写す。使えない端末では false を返す */
@@ -729,5 +918,5 @@ const HISTORY = (function () {
     reader.readAsText(file);
   }
 
-  return { open: open, render: render };
+  return { open: open, render: render, appendNote: appendNote };
 })();

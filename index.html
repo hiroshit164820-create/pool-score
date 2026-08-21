@@ -489,6 +489,19 @@
     </div>
   </section>
 
+  <!-- 終わった試合のスコア表（本人の指示 2026-08-22）。
+       ボウラードは10フレームの表、JPAは1点=1マスの升目。読むだけ -->
+  <div class="modal-backdrop" id="sheetViewModal" hidden>
+    <div class="modal sheetview-modal">
+      <h2 id="sheetViewTitle">スコア表</h2>
+      <div class="sub" id="sheetViewSub"></div>
+      <div id="sheetViewBody"></div>
+      <div class="modal-actions">
+        <button id="sheetViewCloseBtn" class="ghost">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- QRを写して取り込む（本人の指示 2026-08-22）。
        「受信側はQRを読み込むボタンを押せばカメラが起動する形」 -->
   <div class="modal-backdrop" id="qrScanModal" hidden>
@@ -545,6 +558,8 @@
       <div>
         <!-- 受け取る: 送られたリンクを貼り付けて取り込む（本人の指示 2026-08-22）。
              LINEの中のブラウザで開くと、ホーム画面のアプリには入らないため -->
+        <!-- 複数選択（本人の指示 2026-08-22）。まとめて送る・メモ・削除に使う -->
+        <button id="histSelectBtn" class="small ghost">選ぶ</button>
         <button id="importOpenBtn" class="small ghost">試合結果を受け取る</button>
         <button id="csvHistoryBtn" class="small ghost">表計算へ</button>
       </div>
@@ -562,6 +577,17 @@
       <button id="histFilterClear" class="small ghost">絞り込みを外す</button>
     </div>
     <div class="list" id="historyList"></div>
+
+    <!-- まとめて選んだときの操作（本人の指示 2026-08-22）。
+         画面の下に貼り付けて、選びながらいつでも押せるようにする -->
+    <div class="bulk-bar" id="bulkBar" hidden>
+      <div class="bulk-count" id="bulkCount">0件を選択中</div>
+      <div class="bulk-btns">
+        <button id="bulkSendBtn" class="small primary">まとめて送る</button>
+        <button id="bulkNoteBtn" class="small">まとめてメモ</button>
+        <button id="bulkDeleteBtn" class="small ghost">まとめて削除</button>
+      </div>
+    </div>
   </section>
 
   <!-- ================= 届いた試合の取り込み =================
@@ -738,6 +764,7 @@
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
 <script src="js/qrview.js"></script>
+<script src="js/ui_sheetview.js"></script>
 <script src="js/ui_players.js"></script>
 <script src="js/ui_home.js"></script>
 <script src="js/ui_import.js"></script>

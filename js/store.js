@@ -166,6 +166,171 @@ const STORE = (function () {
     return null;
   }
 
+  /* ============================================================
+   * スコア表（終わった試合を、あとから表として見る）
+   *
+   * 試合中の表（ui_sheet.js）は1球ごとのイベント列から組み立てているが、
+   *   ・終わった試合を開く道が要る（本人の指示 2026-08-22）
+   *   ・古い試合はイベント列を間引いて容量を減らす予定
+   * の2つの理由で、確定時に result.sheet として最小限を保存する。
+   * ここはその読み出しと、既存の記録を1回だけ埋める移行を持つ。
+   * ============================================================ */
+
+  /** 設定に置く移行済みの印。二度と全試合を読み直さないため */
+  const SHEET_MIGRATION_FLAG = "sheetDataMigratedAt";
+
+  /**
+   * 終わった試合のスコア表データを1件ぶん返す。
+   * 画面側はこれだけを見れば表を描ける。
+   *
+   * @param {string|object} idOrMatch 試合ID（保存済みの試合オブジェクトでも可）
+   * @returns {object} kind は "bowlard" | "jpa" | null
+   */
+  function sheetOf(idOrMatch) {
+    const m = typeof idOrMatch === "string" ? loadMatch(idOrMatch) : idOrMatch;
+    if (!m) return { kind: null, matchId: idOrMatch || null, reason: "notFound" };
+
+    let kind = null;
+    try {
+      kind = sheetKindOf(m);
+    } catch (e) {
+      kind = null;
+    }
+    const g = GAMES[m.gameId];
+    const base = {
+      matchId: m.id,
+      gameId: m.gameId,
+      gameLabel: g ? g.label : m.gameId,
+      finished: !!m.result,
+      endedAt: (m.result && m.result.endedAt) || null,
+    };
+    if (!kind) return Object.assign({ kind: null, reason: "noSheet" }, base);
+
+    // 保存済みのデータを優先し、無ければイベント列から作る（古い記録の保険）
+    let data = (m.result && m.result.sheet) || null;
+    if (!data) {
+      try {
+        data = buildSheetData(m);
+      } catch (e) {
+        data = null;
+      }
+    }
+    if (!data) return Object.assign({ kind: null, reason: "noData" }, base);
+
+    try {
+      // エンジンが返すのは短い記号（b / j）。画面に渡す名前はここで付ける
+      return kind === "b"
+        ? bowlardSheet(m, data, base)
+        : jpaSheet(m, data, base);
+    } catch (e) {
+      console.warn("スコア表を組み立てられませんでした: " + m.id, e);
+      return Object.assign({ kind: null, reason: "broken" }, base);
+    }
+  }
+
+  function bowlardSheet(m, data, base) {
+    const r = resolveGame(m.gameId);
+    const cfg = { frames: r.scoring.frames, pinsPerFrame: r.scoring.pinsPerFrame };
+    const throws = data.t || [];
+    const sc = buildBowlardScore(throws, cfg);
+    return Object.assign({
+      kind: "bowlard",
+      name: m.sides && m.sides[0] ? m.sides[0].name : "",
+      cfg: cfg,
+      throws: throws,
+      frames: sc.frames,
+      total: sc.total,
+      complete: sc.complete,
+      tally: (m.result && m.result.bowlard) || null,
+    }, base);
+  }
+
+  function jpaSheet(m, data, base) {
+    const g = GAMES[m.gameId];
+    const series = jpaSeriesFromSheet(data);
+    const goal = m.goal || {};
+    const meta = goal.meta || {};
+    const res = m.result || null;
+    const per = (res && res.perSide) || null;
+
+    // イニングと死球。終わっていれば結果から、途中ならイベント列から読む
+    let innings = null;
+    let dead = 0;
+    if (res) {
+      innings = res.inningsPlayed != null ? res.inningsPlayed : (res.innings || 0) + 1;
+      dead = ((per && per.A && per.A.deadBalls) || 0)
+        + ((per && per.B && per.B.deadBalls) || 0);
+    } else if (m.events && m.events.length) {
+      const st = reduceMatch(m);
+      innings = st.innings + 1;
+      dead = (st.stats.A.deadBalls || 0) + (st.stats.B.deadBalls || 0);
+    }
+
+    return Object.assign({
+      kind: "jpa",
+      doubles: !!(g && g.playersPerSide === 2),
+      names: {
+        A: m.sides && m.sides[0] ? m.sides[0].name : "",
+        B: m.sides && m.sides[1] ? m.sides[1].name : "",
+      },
+      targets: {
+        A: (goal.targets && goal.targets.A) != null ? goal.targets.A : null,
+        B: (goal.targets && goal.targets.B) != null ? goal.targets.B : null,
+      },
+      skillLevel: meta.skillLevel || null,
+      series: series,
+      got: { A: series.A.length, B: series.B.length },
+      lastRack: data.lr || 1,
+      innings: innings,
+      deadBalls: dead,
+      winner: res ? res.winner : null,
+      teamPoints: (res && res.jpa && res.jpa.teamPoints) || null,
+    }, base);
+  }
+
+  /**
+   * 終わっている試合のうち、スコア表データを持っていないものを埋める。
+   *
+   * イベント列がまだ残っているうちに走らせること（間引きより先）。
+   * 一度走ったら設定に印を残し、二度と全件を読み直さない。
+   *
+   * @param {boolean} force 印があってももう一度走らせる
+   * @returns {{ran:boolean, scanned:number, filled:number, skipped:number}}
+   */
+  function migrateSheetData(force) {
+    const s = getSettings() || {};
+    if (!force && s[SHEET_MIGRATION_FLAG]) {
+      return { ran: false, scanned: 0, filled: 0, skipped: 0 };
+    }
+    let scanned = 0;
+    let filled = 0;
+    let skipped = 0;
+    // 消した試合も対象にする（イベント列は間引きで消えるため、
+    // 復元できる形をいま作っておく）
+    const idx = readJSON(KEY_INDEX, []);
+    idx.forEach(function (e) {
+      if (!e || !e.id || !e.finished) return;
+      scanned++;
+      try {
+        const m = loadMatch(e.id);
+        if (!m || !m.result) return;
+        if (m.result.sheet) return; // すでに入っている
+        if (!sheetKindOf(m)) return; // スコア表の無い種目
+        const data = buildSheetData(m);
+        if (!data) { skipped++; return; }
+        m.result.sheet = data;
+        // 索引には持たない値なので本体だけ書き戻す
+        if (writeJSON(KEY_MATCH + m.id, m)) filled++;
+        else skipped++;
+      } catch (err) {
+        skipped++; // 壊れている記録で止まらない
+      }
+    });
+    s[SHEET_MIGRATION_FLAG] = new Date().toISOString();
+    saveSettings(s);
+    return { ran: true, scanned: scanned, filled: filled, skipped: skipped };
+  }
+
   /* ---- 練習配置 ----
    * 台の上の球の並びを保存して、あとで同じ配置を作り直せるようにする。
    * ドリル練習で「前回と同じ配置からやる」ために使う。
@@ -1017,6 +1182,8 @@ const STORE = (function () {
     loadMatch: loadMatch,
     deleteMatch: deleteMatch,
     setMatchNote: setMatchNote,
+    sheetOf: sheetOf,
+    migrateSheetData: migrateSheetData,
     listMoneyResults: listMoneyResults,
     saveMoneyResult: saveMoneyResult,
     deleteMoneyResult: deleteMoneyResult,
@@ -1051,3 +1218,15 @@ const STORE = (function () {
     usageKB: usageKB,
   };
 })();
+
+/*
+ * スコア表データの移行は「読み込んだ直後・1回だけ」走らせる。
+ * イベント列を間引く処理より先に必ず通す必要があるため、
+ * 画面側の呼び出しに頼らず、ここで済ませておく（本人の指示 2026-08-22）。
+ * 2回目以降は設定の印を見るだけで抜ける。
+ */
+try {
+  STORE.migrateSheetData();
+} catch (e) {
+  console.warn("スコア表データの移行に失敗しました", e);
+}

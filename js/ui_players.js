@@ -1086,6 +1086,9 @@ const PLAYERS = (function () {
       ]));
       if (has) {
         card.appendChild(detailTable(g ? detailRows(g) : houseRows(h)));
+        // ボウラードは1回ごとのスコア表を見返したい（本人の指示 2026-08-22）。
+        // 数字の一覧だけでは「どのフレームで落としたか」が分からないため
+        if (id === "bowlard") card.appendChild(bowlardHistory(player));
       } else {
         card.appendChild(
           UI.el("p", { class: "hint", text: "まだこの種目の記録がありません。" })
@@ -1095,6 +1098,62 @@ const PLAYERS = (function () {
     });
 
     body.appendChild(box);
+  }
+
+  /**
+   * 過去のボウラードの一覧（本人の指示 2026-08-22）。
+   *
+   * 「成績を詳しく見るから過去のボウラードの履歴を表示できるようにしたい」
+   * 日付とスコアを並べ、押すとその回のスコア表を開く。
+   */
+  function bowlardHistory(player) {
+    const wrap = UI.el("div", { class: "bowl-history" });
+    wrap.appendChild(UI.el("div", { class: "section-title", text: "1回ごとの記録" }));
+
+    const mine = STORE.listMatches().filter(function (m) {
+      if (m.gameId !== "bowlard" || !m.finished) return false;
+      const ids = (m.playerIds && m.playerIds.A) || [];
+      return ids.indexOf(player.id) >= 0;
+    });
+
+    if (!mine.length) {
+      wrap.appendChild(UI.el("p", { class: "hint", text: "まだ記録がありません。" }));
+      return wrap;
+    }
+
+    mine.forEach(function (m) {
+      const total = (m.bowlard && m.bowlard.total != null)
+        ? m.bowlard.total
+        : ((m.scores && m.scores.A) != null ? m.scores.A : "—");
+      const row = UI.el("button", {
+        type: "button",
+        class: "bowl-hist-row",
+        onclick: UI.guard(function () {
+          if (typeof SHEETVIEW !== "undefined") SHEETVIEW.open(m.id);
+        }),
+      }, [
+        UI.el("span", { class: "bh-date", text: fmtDay(m.endedAt || m.createdAt) }),
+        UI.el("span", { class: "bh-score", text: total + "点" }),
+        UI.el("span", {
+          class: "bh-marks",
+          text: m.bowlard
+            ? ("X" + m.bowlard.strike + "　／" + m.bowlard.spare + "　-" + m.bowlard.miss)
+            : "",
+        }),
+        UI.el("span", { class: "bh-open", text: "スコア表" }),
+      ]);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  function fmtDay(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return (d.getMonth() + 1) + "/" + d.getDate() + " "
+      + String(d.getHours()).padStart(2, "0") + ":"
+      + String(d.getMinutes()).padStart(2, "0");
   }
 
   function detailTable(rows) {

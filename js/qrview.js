@@ -31,6 +31,8 @@ const QRVIEW = (function () {
   let link = null;
   // 「結果だけ」に落としてQRを小さくしたか
   let slimmed = false;
+  // まとめて送るとき、選んだ試合の一覧（1件のときは null）
+  let many = null;
 
   /** これより細かいQRは、読み取りに失敗しやすいので注意書きを出す */
   const DENSE_VERSION = 25;
@@ -55,6 +57,7 @@ const QRVIEW = (function () {
     const m = $("shareModal");
     if (m) m.hidden = true;
     match = null;
+    many = null;
     link = null;
     slimmed = false;
   }
@@ -84,6 +87,31 @@ const QRVIEW = (function () {
   }
 
   /**
+   * 選んだ試合をまとめて渡す（本人の指示 2026-08-22）。
+   *
+   * リンクの長さには上限があるので、入りきらないぶんは share.js 側で
+   * 落とされる（落ちた件数は dropped で返る）。黙って減らさず必ず知らせる。
+   */
+  function openSendMany(list) {
+    bindOnce();
+    if (!list || !list.length) return;
+    many = list;
+    match = list[0];
+    slimmed = false;
+    SHARE.makeLink(list).then(function (out) {
+      link = out;
+      renderChoice();
+      const m = $("shareModal");
+      if (m) m.hidden = false;
+      if (out.dropped) {
+        UI.toast(out.dropped + "件は長さの都合で入りませんでした。分けて送ってください。", "warn");
+      }
+    }).catch(function (e) {
+      UI.toast("送る形にできませんでした（" + (e && e.message) + "）", "warn");
+    });
+  }
+
+  /**
    * 「結果だけ」のリンクを作る。
    *
    * share.js には結果だけに落とす道が中にあるが、外から呼べない。
@@ -98,6 +126,10 @@ const QRVIEW = (function () {
   }
 
   function titleOf(m) {
+    if (many && many.length > 1) {
+      const n = (link && link.count) || many.length;
+      return n + "件の試合";
+    }
     const g = (typeof GAMES !== "undefined" && GAMES[m.gameId]) || {};
     return (g.label || m.gameId) + "　"
       + m.sides[0].name + " 対 " + m.sides[1].name;
@@ -193,8 +225,37 @@ const QRVIEW = (function () {
     try {
       qr = QRCODE.make(link.url, { ecLevel: "L" });
     } catch (e) {
+      // QRに入るのは約2,950字まで。それを超えると作れない。
+      // 何をすれば渡せるのかを、必ず一緒に出す
+      const manyNow = many && many.length > 1;
       body.appendChild(
-        UI.el("p", { class: "hint import-msg", text: "QRにできませんでした（" + e.message + "）。" })
+        UI.el("div", { class: "card-note warn-note" }, [
+          UI.el("p", {
+            text: manyNow
+              ? "この件数はQRに入りません（" + link.chars + "文字）。"
+                + "選ぶ試合を減らすか、「リンクで送る」を使ってください。"
+              : "この記録はQRに入りません（" + link.chars + "文字）。"
+                + "下の「結果だけにして小さくする」を押すか、「リンクで送る」を使ってください。",
+          }),
+        ])
+      );
+      if (!slimmed) {
+        body.appendChild(
+          UI.el("button", {
+            class: "primary",
+            style: "width:100%;margin-top:10px",
+            text: "結果だけにして小さくする",
+            onclick: UI.guard(makeSlimQr),
+          })
+        );
+      }
+      body.appendChild(
+        UI.el("button", {
+          class: "share-way",
+          style: "width:100%;margin-top:8px",
+          text: "リンクで送る",
+          onclick: UI.guard(sendLink),
+        })
       );
       body.appendChild(backButton());
       return;
@@ -255,7 +316,15 @@ const QRVIEW = (function () {
 
   function makeSlimQr() {
     if (!match) return;
-    buildSlimLink(match).then(function (out) {
+    const target = (many && many.length > 1)
+      ? many.map(function (m) {
+          const c = {};
+          Object.keys(m).forEach(function (k) { c[k] = m[k]; });
+          c.events = [];
+          return c;
+        })
+      : match;
+    (many && many.length > 1 ? SHARE.makeLink(target) : buildSlimLink(match)).then(function (out) {
       link = out;
       slimmed = true;
       renderQr();
@@ -312,6 +381,7 @@ const QRVIEW = (function () {
 
   return {
     openSend: openSend,
+    openSendMany: openSendMany,
     close: closeModal,
     // 検証から使う
     drawMatrix: drawMatrix,

@@ -23,17 +23,32 @@
  *
  * 形式: #m=<版>.<圧縮の種類>.<本体>
  *   版         … 1（初代）/ 2（短くした形。2026-08-22〜）
+ *                 3（複数の試合を1本にまとめた形。2026-08-22〜）
  *   圧縮の種類 … d=deflate-raw / g=gzip / r=そのまま（圧縮に未対応の端末）
  *
  *   **版1のリンクも今までどおり読める**。すでに送ったリンクを死なせないため
  *   （受け取り側は取り込むまで放置していることがある）。
+ *
+ * 版3: 複数の試合をまとめて渡す（本人の指示 2026-08-22）
+ *
+ *   本人の困りごと:
+ *     「試合結果を複数件まとめて送ることもできる？
+ *       履歴にチェックボックス付けて、複数選択してからまとめて送信みたいな」
+ *
+ *   中身は {"v":3,"m":[試合, 試合, …]}。中の1件ずつは版2と同じ詰め方なので、
+ *   同じ選手名・同じ設定が繰り返されるぶんは圧縮がまとめて効く。
+ *
+ *   1件だけ渡されたときは版3にせず**版2のまま**送る。
+ *   そのほうが短く、古いアプリでも読めるため。
  */
 const SHARE = (function () {
   "use strict";
 
   // 作るときの版。読むほうは版1も受け付ける（下の READABLE）
   const VERSION = "2";
-  const READABLE = { "1": true, "2": true };
+  // 複数まとめのときの版（1件だけのときは VERSION のまま）
+  const VERSION_MULTI = "3";
+  const READABLE = { "1": true, "2": true, "3": true };
   const HASH_KEY = "m";
   // これを超えたら「結果だけ」に落とす。
   // 長いリンクは送り先（SMS等）で切られることがあるため
@@ -474,46 +489,174 @@ const SHARE = (function () {
     return p;
   }
 
+  /** 中身（JSONにできる物）を <版>.<圧縮>.<本体> の形にする */
+  function encodeBody(ver, body) {
+    const json = JSON.stringify(body);
+    if (!canGzip()) {
+      return Promise.resolve(
+        ver + ".r." + bytesToB64url(new TextEncoder().encode(json))
+      );
+    }
+    const algo = canDeflateRaw() ? "deflate-raw" : "gzip";
+    const code = algo === "deflate-raw" ? "d" : "g";
+    return gzip(json, algo).then(function (bytes) {
+      return ver + "." + code + "." + bytesToB64url(bytes);
+    });
+  }
+
+  /**
+   * 版2の形に詰める。戻したときに元と1バイトも変わらないことを毎回確かめ、
+   * 合わなければその試合だけ版1の形（詰めない形）にする。だから壊れようがない。
+   * @returns {ver, body}
+   */
+  function compactOrFull(p) {
+    if (VERSION === "2") {
+      const c = compactPayload(p);
+      if (sameJson(expandPayload(c), p)) return { ver: "2", body: c };
+    }
+    return { ver: "1", body: p };
+  }
+
+  /** 1試合ぶんを本体の文字列にする（版1 or 版2） */
+  function packOne(p) {
+    const r = compactOrFull(p);
+    return encodeBody(r.ver, r.body);
+  }
+
+  /** 複数の試合を1本の本体にする（版3） */
+  function packMany(matches, slim) {
+    const items = matches.map(function (m) {
+      return compactOrFull(slim ? payloadSlim(m) : payloadFull(m)).body;
+    });
+    return encodeBody(VERSION_MULTI, { v: 3, m: items });
+  }
+
+  /** 新しい順に並べ替える（同じ時刻なら渡された順） */
+  function newestFirst(list) {
+    return list.map(function (m, i) {
+      const t = Date.parse((m && (m.updatedAt || m.createdAt)) || "");
+      return { m: m, i: i, t: isNaN(t) ? 0 : t };
+    }).sort(function (a, b) {
+      return b.t - a.t || a.i - b.i;
+    });
+  }
+
+  /**
+   * 新しいほうから k 件を選び、**渡された順に並べ直す**。
+   * 長さを測るときと実際に送るときで、並びが違うと縮み方も違ってしまうので、
+   * どちらもこの関数で作った同じ物を使う
+   */
+  function pickNewest(sorted, k) {
+    return sorted.slice(0, k).slice().sort(function (a, b) {
+      return a.i - b.i;
+    }).map(function (x) { return x.m; });
+  }
+
+  /**
+   * この顔ぶれで送れる、いちばん詳しい形を作る。
+   *   1球ごとの記録つきで入るならそれ。入らなければ「結果だけ」に落とす。
+   *
+   * **「結果だけ」のほうが長くなることがある**（実測 2026-08-22）。
+   * 1球ごとの記録があれば結果は計算し直せるので送らずに済むが、
+   * 記録を落とすと結果そのものを載せるしかなくなるため。
+   * 短い試合＋長いメモだと、結果だけのほうが太る。
+   * だから「落としたら入った」ではなく、**入るほうを選ぶ**。
+   *
+   * @returns Promise<{body, slim, fits}>
+   */
+  function packFit(matches) {
+    return packMany(matches, false).then(function (bf) {
+      if (bf.length <= MAX_CHARS) return { body: bf, slim: false, fits: true };
+      return packMany(matches, true).then(function (bs) {
+        // どちらも入らないときは、短いほうを持って帰る
+        if (bs.length > MAX_CHARS && bf.length < bs.length) {
+          return { body: bf, slim: false, fits: false };
+        }
+        return { body: bs, slim: true, fits: bs.length <= MAX_CHARS };
+      });
+    });
+  }
+
+  /**
+   * 新しい順に何件まで入るかを探す（上限 MAX_CHARS）。
+   * 件数が増えれば本体も伸びるので、半分ずつに割って探す（作り直す回数を減らすため）
+   * @returns Promise<件数>  0 なら1件も入らない
+   */
+  function fitCount(sorted, lo, hi) {
+    if (lo > hi) return Promise.resolve(lo - 1);
+    const mid = Math.floor((lo + hi) / 2);
+    return packFit(pickNewest(sorted, mid)).then(function (r) {
+      if (r.fits) return fitCount(sorted, mid + 1, hi);
+      return fitCount(sorted, lo, mid - 1);
+    });
+  }
+
+  /**
+   * 複数の試合を1本のリンクにする。
+   *
+   * 長さが上限を超えたときの落とし方（この順）:
+   *   1. まず全件を「結果だけ」に落として入るか試す
+   *   2. それでも入らなければ、**新しい試合から順に**入るだけ入れて、
+   *      残りを dropped に数える（古いほうから落とす。
+   *      新しい試合のほうが渡したい相手に近いため）
+   */
+  function makeLinkMany(list, base) {
+    function wrap(body, slim, count, dropped) {
+      return {
+        url: base + "#" + HASH_KEY + "=" + body,
+        chars: body.length, slim: slim, count: count, dropped: dropped,
+      };
+    }
+    const n = list.length;
+    // 1. 全件で試す（入らなければ「結果だけ」に落として試す）
+    return packFit(list).then(function (r) {
+      if (r.fits) return wrap(r.body, r.slim, n, 0);
+      // 2. それでも入らないので、新しいほうから入るだけ入れる
+      const sorted = newestFirst(list);
+      return fitCount(sorted, 1, n - 1).then(function (k) {
+        // 1件も入らないときでも、いちばん新しい1件は渡す
+        const keep = Math.max(1, k);
+        return packFit(pickNewest(sorted, keep)).then(function (r2) {
+          return wrap(r2.body, r2.slim, keep, n - keep);
+        });
+      });
+    });
+  }
+
   /**
    * 試合をリンクにする。
-   * @returns Promise<{url, chars, slim}>
+   *
+   * @param matchOrArray 1試合、または試合の配列（複数まとめて渡すとき）
+   * @returns Promise<{url, chars, slim, count, dropped}>
+   *          count   … 実際にリンクに入った試合の数
+   *          dropped … 長さの上限で入りきらず外した試合の数（0 なら全部入った）
+   *          slim    … 1件でも「結果だけ」に落としたか
    */
-  function makeLink(match, baseUrl) {
+  function makeLink(matchOrArray, baseUrl) {
     const base = (baseUrl || location.href).split("#")[0];
-
-    function pack(obj) {
-      // 版2の形に詰める。戻したときに元と1バイトも変わらないことを毎回確かめ、
-      // 合わなければその試合だけ版1の形で送る（壊れたものを送らないため）
-      let ver = VERSION;
-      let body = obj;
-      if (VERSION === "2") {
-        const c = compactPayload(obj);
-        if (sameJson(expandPayload(c), obj)) {
-          body = c;
-        } else {
-          ver = "1";
-        }
+    if (Array.isArray(matchOrArray)) {
+      if (!matchOrArray.length) {
+        return Promise.reject(new Error("渡す試合が選ばれていません"));
       }
-      const json = JSON.stringify(body);
-      if (!canGzip()) {
-        return Promise.resolve(
-          ver + ".r." + bytesToB64url(new TextEncoder().encode(json))
-        );
-      }
-      const algo = canDeflateRaw() ? "deflate-raw" : "gzip";
-      const code = algo === "deflate-raw" ? "d" : "g";
-      return gzip(json, algo).then(function (bytes) {
-        return ver + "." + code + "." + bytesToB64url(bytes);
-      });
+      // 1件だけなら今までどおり版2で送る（そのほうが短く、古いアプリでも読める）
+      if (matchOrArray.length > 1) return makeLinkMany(matchOrArray, base);
+      return makeLink(matchOrArray[0], baseUrl);
     }
+    const match = matchOrArray;
 
-    return pack(payloadFull(match)).then(function (body) {
+    return packOne(payloadFull(match)).then(function (body) {
       if (body.length <= MAX_CHARS) {
-        return { url: base + "#" + HASH_KEY + "=" + body, chars: body.length, slim: false };
+        return {
+          url: base + "#" + HASH_KEY + "=" + body, chars: body.length,
+          slim: false, count: 1, dropped: 0,
+        };
       }
       // 長すぎるときは、1球ごとの記録を落として結果だけにする
-      return pack(payloadSlim(match)).then(function (body2) {
-        return { url: base + "#" + HASH_KEY + "=" + body2, chars: body2.length, slim: true };
+      return packOne(payloadSlim(match)).then(function (body2) {
+        return {
+          url: base + "#" + HASH_KEY + "=" + body2, chars: body2.length,
+          slim: true, count: 1, dropped: 0,
+        };
       });
     });
   }
@@ -555,8 +698,14 @@ const SHARE = (function () {
     return null;
   }
 
-  /** 取り出した文字列を記録に戻す。@returns Promise<object> */
-  function decode(body) {
+  /**
+   * 取り出した文字列を記録に戻す。**常に配列**で返す。
+   *
+   * 版1・版2（1試合ぶんの今までのリンク）も、1件だけの配列にして返す。
+   * これより先（取り込み・保存・集計）は、どの版でも同じものを見る。
+   * @returns Promise<object[]>
+   */
+  function decodeAll(body) {
     const parts = (body || "").split(".");
     if (parts.length < 3) return Promise.reject(new Error("形式が違います"));
     const ver = parts[0];
@@ -576,13 +725,32 @@ const SHARE = (function () {
       text = Promise.resolve(new TextDecoder().decode(bytes));
     }
     return Promise.resolve(text).then(function (json) {
-      let obj = JSON.parse(json);
-      // 版2は詰めた形なので、ここで元の形に戻す。
-      // これより先（取り込み・保存・集計）は版1のときと同じものを見る
-      if (ver === "2") obj = expandPayload(obj);
-      if (!obj || !obj.id || !obj.gameId) throw new Error("中身が読めません");
-      return obj;
+      const obj = JSON.parse(json);
+      // 版3は複数まとめ。中の1件ずつは版2（詰めた形）か版1（そのままの形）
+      const raw = (ver === "3")
+        ? ((obj && obj.m) || [])
+        : [obj];
+      const list = raw.map(function (one) {
+        // 版2は詰めた形なので、ここで元の形に戻す
+        if (ver === "2") return expandPayload(one);
+        if (ver === "3" && one && one.v === 2) return expandPayload(one);
+        return one;
+      });
+      if (!list.length) throw new Error("中身が読めません");
+      list.forEach(function (o) {
+        if (!o || !o.id || !o.gameId) throw new Error("中身が読めません");
+      });
+      return list;
     });
+  }
+
+  /**
+   * 取り出した文字列を記録に戻す（1件目だけ）。
+   * 今までの呼び出しをそのまま通すために残している。
+   * @returns Promise<object>
+   */
+  function decode(body) {
+    return decodeAll(body).then(function (list) { return list[0]; });
   }
 
   /** URLから「#」の記録を消す（取り込んだあと、再読み込みで二重に出さないため） */
@@ -681,6 +849,7 @@ const SHARE = (function () {
     readHash: readHash,
     readAny: readAny,
     decode: decode,
+    decodeAll: decodeAll,
     clearHash: clearHash,
     importMatch: importMatch,
     alreadyHave: alreadyHave,
@@ -688,6 +857,7 @@ const SHARE = (function () {
     canGzip: canGzip,
     canDeflateRaw: canDeflateRaw,
     VERSION: VERSION,
+    VERSION_MULTI: VERSION_MULTI,
     // 検証用（版2の詰め方を単体で確かめるため）
     _compact: compactPayload,
     _expand: expandPayload,
