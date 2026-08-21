@@ -2568,6 +2568,27 @@ button::after {
   max-width: 100%;
 }
 
+/* 保存容量の行と「保存を軽くする」（本人の指示 2026-08-22） */
+.usage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+/* 説明は1行に収める決まりがあるので、幅を丸ごと使わせる。
+   ボタンを横に置くと「記録した試合: 2件（保存容量 約11KB）」が
+   折り返して2行になっていた（tune4_test が検出 2026-08-22） */
+.usage-row .hint {
+  flex: 1 0 100%;
+  margin: 0;
+}
+.usage-row .usage-btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+  min-height: 44px;
+}
+
 /* ============ 終わった試合のスコア表（本人の指示 2026-08-22） ============
    試合中のスコア表と同じ見た目にそろえる。読むだけなので押せる部品は置かない */
 .sheetview-modal .sub {

@@ -112,7 +112,14 @@ const STORE = (function () {
     return readJSON(KEY_MATCH + id, null);
   }
 
-  /** 論理削除（Phase2の同期のため物理削除しない） */
+  /**
+   * 削除の印を立てる（論理削除）。
+   *
+   * 本体を即座に消さないのは「うっかり消した」を取り戻せる余地のため。
+   * 実際に消えるのは STORE.compact()（＝purgeDeleted）を通したとき。
+   * 元はサーバー同期のために残していたが、そのサーバーは無い
+   * （本人の確認 2026-08-22）。
+   */
   function deleteMatch(id) {
     const m = loadMatch(id);
     if (m) {
@@ -1164,8 +1171,8 @@ const STORE = (function () {
     return { games: games, partners: partnerList };
   }
 
-  /** 概算の使用容量（KB） */
-  function usageKB() {
+  /** 保存に使っている文字数（＝概算のバイト数） */
+  function bytesUsed() {
     let total = 0;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
@@ -1173,7 +1180,193 @@ const STORE = (function () {
         total += (localStorage.getItem(k) || "").length;
       }
     }
-    return Math.round(total / 1024);
+    return total;
+  }
+
+  /** 概算の使用容量（KB） */
+  function usageKB() {
+    return Math.round(bytesUsed() / 1024);
+  }
+
+  /* ============================================================
+   * 保存容量の掃除（本人の指示 2026-08-22「保存容量をもっと軽くしたい」）
+   *
+   * 2つのことをする。
+   *   1. 消した試合の本体を、本当に消す（purgeDeleted）
+   *   2. 古い試合の1球ごとの記録を間引く（trimOldEvents）
+   *
+   * どちらも入口は compact()。**必ずスコア表データの移行を先に通す**。
+   * 順番を間違えるとボウラード・JPAのスコア表が永久に失われる。
+   * ============================================================ */
+
+  /** 何試合ぶんの1球ごとの記録を残すか（本人の確認済み） */
+  const KEEP_RECENT_DEFAULT = 30;
+
+  /** 新しい順に並べるための日付。無い記録でも比較できるよう文字列で返す */
+  function sortKeyOf(e) {
+    return String((e && (e.createdAt || e.updatedAt || e.endedAt)) || "");
+  }
+
+  /**
+   * 論理削除済みの試合を、本当に消す。
+   *
+   * 元はサーバー同期のために本体を残していたが、そのサーバーは無い
+   * （本人の確認 2026-08-22）。索引からも行ごと消す。
+   * 索引に載っていない本体（どこからも辿れない残骸）も一緒に片付ける。
+   *
+   * @returns {{purged:number, orphans:number, freed:number}}
+   */
+  function purgeDeleted() {
+    const before = bytesUsed();
+    const idx = readJSON(KEY_INDEX, []);
+    const alive = [];
+    const keep = {};
+    let purged = 0;
+
+    idx.forEach(function (e) {
+      if (!e || !e.id) return;
+      if (e.deletedAt) {
+        localStorage.removeItem(KEY_MATCH + e.id);
+        purged++;
+        return;
+      }
+      keep[e.id] = true;
+      alive.push(e);
+    });
+    if (purged) writeJSON(KEY_INDEX, alive);
+
+    // 索引から辿れない本体（過去の不整合や、途中で止まった保存の残り）。
+    // 一覧にも成績にも書き出しにも出てこないので、残しておく意味がない
+    const orphanKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf(KEY_MATCH) !== 0) continue;
+      if (!keep[k.slice(KEY_MATCH.length)]) orphanKeys.push(k);
+    }
+    orphanKeys.forEach(function (k) { localStorage.removeItem(k); });
+
+    return {
+      purged: purged,
+      orphans: orphanKeys.length,
+      freed: Math.max(0, before - bytesUsed()),
+    };
+  }
+
+  /**
+   * 古い試合の1球ごとの記録を間引く。
+   *
+   * 決め（本人の確認 2026-08-22）:
+   *   ・新しい順に keepRecent 件（既定30）は、そのまま残す
+   *   ・それより古い**終わった試合**だけ、イベント列を最初の1件にする
+   *   ・最初の1件（MATCH_START）は必ず残す。
+   *     成績の集計（gameDetail のローテーションA/Bハイラン判定）が
+   *     m.events[0].d.firstSide を読んでいるため（js/store.js 内で確認済み）
+   *
+   * 安全のため、次のものには触らない:
+   *   ・進行中の試合（result が無い）… 再開できなくなる
+   *   ・スコア表のある種目なのに result.sheet がまだ無い試合
+   *     … 表が永久に失われる。移行が済むまで待つ
+   *
+   * @param {number} keepRecent 残す件数
+   * @returns {{ran:boolean, scanned:number, trimmed:number, skipped:number,
+   *            keepRecent:number, freed:number, reason?:string}}
+   */
+  function trimOldEvents(keepRecent) {
+    const keep = Math.max(0, keepRecent == null ? KEEP_RECENT_DEFAULT : keepRecent);
+    const out = {
+      ran: false, scanned: 0, trimmed: 0, skipped: 0,
+      keepRecent: keep, freed: 0,
+    };
+
+    // ---- 間引きの前に、必ずスコア表データの移行を通す ----
+    // まだなら今ここで走らせる。それでも印が立たないときは何もしない
+    if (!(getSettings() || {})[SHEET_MIGRATION_FLAG]) {
+      try {
+        migrateSheetData();
+      } catch (e) {
+        /* 下の印の確認で弾く */
+      }
+    }
+    if (!(getSettings() || {})[SHEET_MIGRATION_FLAG]) {
+      out.reason = "migrationPending";
+      return out;
+    }
+
+    const before = bytesUsed();
+    const list = readJSON(KEY_INDEX, [])
+      .filter(function (e) { return e && e.id && !e.deletedAt; })
+      .sort(function (a, b) {
+        const d = sortKeyOf(b).localeCompare(sortKeyOf(a));
+        return d !== 0 ? d : String(b.id).localeCompare(String(a.id));
+      });
+
+    // 直近 keep 件は手を付けない
+    const old = list.slice(keep);
+    old.forEach(function (e) {
+      out.scanned++;
+      try {
+        const m = loadMatch(e.id);
+        if (!m) { out.skipped++; return; }
+        // 進行中は絶対に触らない（再開できなくなる）
+        if (!m.result) { out.skipped++; return; }
+        if (!m.events || m.events.length <= 1) return; // すでに軽い
+        // スコア表のある種目で、まだ表が保存されていないものは残す
+        let kind = null;
+        try { kind = sheetKindOf(m); } catch (err) { kind = null; }
+        if (kind && !m.result.sheet) { out.skipped++; return; }
+
+        m.events = [m.events[0]];
+        m.eventsTrimmedAt = new Date().toISOString();
+        if (writeJSON(KEY_MATCH + m.id, m)) out.trimmed++;
+        else out.skipped++;
+      } catch (err) {
+        out.skipped++; // 壊れている記録で止まらない
+      }
+    });
+
+    out.ran = true;
+    out.freed = Math.max(0, before - bytesUsed());
+    return out;
+  }
+
+  /**
+   * 保存容量の掃除をまとめて行う入口。
+   *
+   * 呼ぶ順番に意味がある:
+   *   1. migrateSheetData … スコア表を結果に写す（間引きより必ず先）
+   *   2. purgeDeleted     … 消した試合の本体を実際に消す
+   *   3. trimOldEvents    … 古い試合の1球ごとの記録を間引く
+   *
+   * before は移行が済んだあとの大きさを測る。
+   * こうすると saved が「掃除で減ったぶん」だけになる。
+   *
+   * @param {{keepRecent?:number}} opts
+   * @returns {{before:number, after:number, saved:number,
+   *            purged:number, trimmed:number,
+   *            orphans:number, scanned:number, skipped:number, keepRecent:number}}
+   */
+  function compact(opts) {
+    const keep = (opts && opts.keepRecent != null) ? opts.keepRecent : KEEP_RECENT_DEFAULT;
+    try {
+      migrateSheetData();
+    } catch (e) {
+      console.warn("スコア表データの移行に失敗しました", e);
+    }
+    const before = bytesUsed();
+    const p = purgeDeleted();
+    const t = trimOldEvents(keep);
+    const after = bytesUsed();
+    return {
+      before: before,
+      after: after,
+      saved: before - after,
+      purged: p.purged,
+      trimmed: t.trimmed,
+      orphans: p.orphans,
+      scanned: t.scanned,
+      skipped: t.skipped,
+      keepRecent: t.keepRecent,
+    };
   }
 
   return {
@@ -1216,6 +1409,11 @@ const STORE = (function () {
     exportAll: exportAll,
     importAll: importAll,
     usageKB: usageKB,
+    bytesUsed: bytesUsed,
+    purgeDeleted: purgeDeleted,
+    trimOldEvents: trimOldEvents,
+    compact: compact,
+    KEEP_RECENT_DEFAULT: KEEP_RECENT_DEFAULT,
   };
 })();
 

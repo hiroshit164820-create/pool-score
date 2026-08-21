@@ -290,13 +290,27 @@ const HISTORY = (function () {
     // 簡易サマリ（確定した試合のみ対象）
     const done = items.filter(function (m) { return m.finished; });
     if (done.length) {
-      list.appendChild(
+      const row = UI.el("div", { class: "usage-row" });
+      row.appendChild(
         UI.el("p", {
           class: "hint",
           text: (filterOn ? "絞り込み中: " : "記録した試合: ") + done.length + "件"
             + (filterOn ? "（全" + all.length + "件中）" : "（保存容量 約" + STORE.usageKB() + "KB）"),
         })
       );
+      // 保存を軽くする（本人の指示 2026-08-22）。
+      // 押したときだけ動かす。自動で走らせると、気づかないうちに
+      // 古い記録が薄くなり、取り返しがつかないため
+      if (!filterOn && typeof STORE.compact === "function") {
+        row.appendChild(
+          UI.el("button", {
+            class: "small ghost usage-btn",
+            text: "保存を軽くする",
+            onclick: UI.guard(compactStorage),
+          })
+        );
+      }
+      list.appendChild(row);
     }
 
     const from = page * pageSize;
@@ -639,6 +653,52 @@ const HISTORY = (function () {
     }).catch(function (e) {
       UI.toast("送る形にできませんでした（" + (e && e.message) + "）", "warn");
     });
+  }
+
+  /**
+   * 保存を軽くする（本人の指示 2026-08-22）。
+   *
+   * ・削除した試合の本体を実際に消す（いままで残り続けていた）
+   * ・**直近30試合より古い**終わった試合の「1球ごとの記録」を落とす
+   *
+   * 落としても、勝敗・スコア・マスワリ等の成績と、
+   * ボウラード／JPAのスコア表は残る（結果の中に別に保存してあるため）。
+   * 元に戻せないので、何が起きるかを書いてから確かめる。
+   */
+  function compactStorage() {
+    const keep = STORE.KEEP_RECENT_DEFAULT || 30;
+    const before = STORE.usageKB();
+    const NL = String.fromCharCode(10);
+    if (!window.confirm([
+      "保存を軽くします（いま約" + before + "KB）。",
+      "",
+      "・削除した試合を実際に消します",
+      "・直近" + keep + "試合より古い試合から、1球ごとの記録を落とします",
+      "",
+      "成績の数字と、ボウラード・JPAのスコア表は残ります。",
+      "落とした1球ごとの記録は元に戻せません。よろしいですか？",
+    ].join(NL))) return;
+
+    let out = null;
+    try {
+      out = STORE.compact();
+    } catch (e) {
+      UI.toast("軽くできませんでした（" + (e && e.message) + "）", "danger");
+      return;
+    }
+    render();
+    if (!out || (!out.saved && !out.purged && !out.trimmed)) {
+      UI.toast("減らせるものはありませんでした。");
+      return;
+    }
+    const savedKB = Math.round((out.saved || 0) / 1024);
+    const bits = [];
+    if (out.trimmed) bits.push(out.trimmed + "件の記録を簡略化");
+    if (out.purged) bits.push(out.purged + "件を完全に削除");
+    UI.toast(
+      (savedKB > 0 ? "約" + savedKB + "KB 減りました" : "少しだけ減りました")
+      + (bits.length ? "（" + bits.join("・") + "）" : "") + "。"
+    );
   }
 
   /* ---------- 複数選択のしくみ ---------- */

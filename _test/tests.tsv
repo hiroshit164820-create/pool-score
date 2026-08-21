@@ -62,3 +62,5 @@ python	bulk_test.py	履歴の複数選択（まとめて送る・メモ・削除
 python	multishare_test.py	試合を複数まとめて1本のリンクで渡す（08-22）
 python	sheetdata_test.py	終わった試合のスコア表データ（08-22）
 python	sheetview_test.py	スコア表を履歴・成績から見る（08-22）
+python	storage_test.py	保存容量の掃除（実削除・古い試合のイベント間引き）（08-22）
+python	compactui_test.py	「保存を軽くする」の入口（08-22）
