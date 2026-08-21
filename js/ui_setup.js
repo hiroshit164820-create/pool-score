@@ -683,7 +683,8 @@ const SETUP = (function () {
 
       const label = nameForSide(side);
       wrap.appendChild(
-        UI.el("div", { class: "field" }, [UI.el("label", { text: label + " のハンデ" }), chips])
+        UI.el("div", { class: "field side-" + side.toLowerCase() },
+              [UI.el("label", { text: label + " のハンデ" }), chips])
       );
 
       // ダブルスは「誰がどのハンデ球を持っているか」を人ごとに決められるようにする。
@@ -724,7 +725,7 @@ const SETUP = (function () {
             );
           });
           wrap.appendChild(
-            UI.el("div", { class: "field member-bh" }, [
+            UI.el("div", { class: "field member-bh side-" + side.toLowerCase() }, [
               UI.el("label", { text: "　" + nm + " が持つ球" }),
               mchips,
             ])
@@ -996,7 +997,9 @@ const SETUP = (function () {
       const side = pair[0];
 
       if (per === 1) {
-        const field = UI.el("div", { class: "field" }, [
+        // A側は青、B側は赤の枠線にする（本人の指示 2026-08-21・段階4）。
+        // どちらの欄を触っているのかを、試合画面と同じ色で分かるようにする
+        const field = UI.el("div", { class: "field side-" + side.toLowerCase() }, [
           UI.el("label", { text: pair[1] + " の名前" }),
           UI.el("input", { type: "text", id: "inName" + side, placeholder: pair[1] }),
         ]);
@@ -1008,7 +1011,7 @@ const SETUP = (function () {
 
       // ---- ダブルス ----
       const teamLabel = side === "A" ? "チームA" : "チームB";
-      const field = UI.el("div", { class: "field team-field" });
+      const field = UI.el("div", { class: "field team-field side-" + side.toLowerCase() });
       field.appendChild(UI.el("label", { text: teamLabel }));
 
       // 1人目
@@ -1383,7 +1386,7 @@ const SETUP = (function () {
           );
         });
         wrap.appendChild(
-          UI.el("div", { class: "field" }, [
+          UI.el("div", { class: "field" + (side ? " side-" + side.toLowerCase() : "") }, [
             UI.el("label", {
               text: side ? nameForSide(side) + " の目標（点）" : label,
             }),
@@ -1425,7 +1428,7 @@ const SETUP = (function () {
       // ハンデあり: 左右別に選ぶ
       ["A", "B"].forEach(function (side) {
         wrap.appendChild(
-          UI.el("div", { class: "field" }, [
+          UI.el("div", { class: "field side-" + side.toLowerCase() }, [
             UI.el("label", { text: nameForSide(side) + " の目標（" + unit + "）" }),
             goalPicker(unit, goalValues[side], function (v) {
               goalValues[side] = v;
@@ -1457,8 +1460,8 @@ const SETUP = (function () {
     // 選べるスキルレベルの範囲（8ボールは2〜7、9ボールは1〜9）
     const range = is8 ? [2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-    /** SLを選ぶボタンの列を1つ作る */
-    function slRow(labelText, current, onPick) {
+    /** SLを選ぶボタンの列を1つ作る。side は枠線の色（A=青／B=赤）に使う */
+    function slRow(labelText, current, onPick, side) {
       const chips = UI.el("div", { class: "chips sl-chips" });
       range.forEach(function (sl) {
         chips.appendChild(
@@ -1472,7 +1475,8 @@ const SETUP = (function () {
         );
       });
       wrap.appendChild(
-        UI.el("div", { class: "field" }, [UI.el("label", { text: labelText }), chips])
+        UI.el("div", { class: "field" + (side ? " side-" + side.toLowerCase() : "") },
+              [UI.el("label", { text: labelText }), chips])
       );
     }
 
@@ -1487,12 +1491,14 @@ const SETUP = (function () {
                 function (sl) {
                   memberSkills[side][i] = sl;
                   skillLevels[side] = memberSkills[side][0] + memberSkills[side][1];
-                });
+                },
+                side);
         });
       } else {
         slRow((side === "A" ? "プレーヤーA" : "プレーヤーB") + " のスキルレベル",
               skillLevels[side],
-              function (sl) { skillLevels[side] = sl; });
+              function (sl) { skillLevels[side] = sl; },
+              side);
       }
     });
 

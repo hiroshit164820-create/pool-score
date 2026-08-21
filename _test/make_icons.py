@@ -19,33 +19,41 @@ SKY = "#5c94fc"
 INK = "#1a1408"
 COIN = "#fbd000"
 WHITE = "#ffffff"
-SHADE = "#c79000"   # 球の陰
+SHADE = "#c79000"   # 帯の陰
 GROUND = "#3aa63a"  # 地面の緑
+# アラミス ブラックの9番（本人の指示 2026-08-21・段階4）。
+# data/balls_data.js の aramith_black から取った値。
+#   地が黒（stripeBase #141414）、帯が1番の黄（#f0c11b）、番号は白丸の中
+BALL_BLACK = "#141414"
+BALL_BLACK_SHADE = "#000000"
+STRIPE = "#f0c11b"
 
 # 16x16のドット絵。1文字=1マス
-#   .=空  #=黒(輪郭と数字)  W=白  Y=黄(ストライプ)  S=陰
-# 9番ボール（上下に黄色い帯／中央の白帯に「9」）を正面から見た図。
+#   .=空  #=黒(輪郭と数字)  W=白丸  Y=黄(ストライプ)  S=帯の陰
+#   K=球の黒地  D=黒地の陰
+# アラミス ブラックの9番（上下が黒／中央の帯が黄／白丸の中に「9」）を正面から見た図。
 # 数字は4x5マスで描く。これ以上小さくすると192pxで潰れる。
 PIXELS = [
     ".....######.....",
-    "...##YYYYYY##...",
-    "..#YYYYYYYYYY#..",
-    ".#YYYYYYYYYYYY#.",
-    "#YYYYYYYYYYYYYS#",
-    "#WWWWWWWWWWWWWS#",
-    "#WWWW######WWWS#",
-    "#WWWW#WWWW#WWWS#",
-    "#WWWW######WWWS#",
-    "#WWWWWWWW##WWWS#",
-    "#WWWWW#####WWWS#",
-    "#YYYYYYYYYYYYSS#",
-    ".#YYYYYYYYYYYS#.",
-    "..#YYYYYYYYYS#..",
-    "...##YYYYYYS##..",
+    "...##KKKKKK##...",
+    "..#KKKKKKKKKK#..",
+    ".#KKKKKKKKKKKK#.",
+    "#KKKKKKKKKKKKKD#",
+    "#YYYYWWWWWWYYYS#",
+    "#YYYYW####WYYYS#",
+    "#YYYYW#WW#WYYYS#",
+    "#YYYYW####WYYYS#",
+    "#YYYYWWWW#WYYYS#",
+    "#YYYYW####WYYYS#",
+    "#KKKKKKKKKKKKDD#",
+    ".#KKKKKKKKKKKD#.",
+    "..#KKKKKKKKKD#..",
+    "...##KKKKKKD##..",
     ".....######.....",
 ]
 
-COLOR = {"#": INK, "W": WHITE, "Y": COIN, "S": SHADE, "G": GROUND}
+COLOR = {"#": INK, "W": WHITE, "Y": STRIPE, "S": SHADE,
+         "K": BALL_BLACK, "D": BALL_BLACK_SHADE, "G": GROUND}
 
 
 def svg(size, maskable):
