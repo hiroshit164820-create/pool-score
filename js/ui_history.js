@@ -26,6 +26,14 @@ const HISTORY = (function () {
     // 書き出し／読み込みの処理そのものは残してあるので、必要になれば
     // ボタンを戻すだけで使える
 
+    // 送られてきたリンクを貼り付けて取り込む（本人の指示 2026-08-22）。
+    // リンクを踏んだブラウザとホーム画面のアプリは保存場所が別々なので、
+    // アプリの中から貼り付けて取り込む道を用意する
+    const impBtn = $("importOpenBtn");
+    if (impBtn && typeof IMPORTUI !== "undefined") {
+      impBtn.addEventListener("click", UI.guard(function () { IMPORTUI.openPaste(); }));
+    }
+
     // 表計算（CSV）への書き出し。いま絞り込んでいるぶんだけを出す
     $("csvHistoryBtn").addEventListener("click", UI.guard(function () {
       CSVOUT.download(CSVOUT.historyRows(visibleItems()), "試合履歴");

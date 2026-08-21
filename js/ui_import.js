@@ -10,6 +10,17 @@
  *   ・何も選ばなければ「成績に入れない（記録だけ残す）」に倒す
  *     → 間違った人の勝率が動くことはない
  *   ・一度対応付けたら覚えるので、次からは自動で埋まる
+ *
+ * 2026-08-22 追記（本人の実機での指摘）:
+ *   「LINEで開いたブラウザ上でしか反映されず、ホーム画面に追加した
+ *     アイコンから開いたアプリの方に取り込まれない」
+ *
+ *   ホーム画面のアプリとLINEの中のブラウザは、見た目が同じでも
+ *   記録の保存場所が別々。リンクを踏んだ側にしか入らない。
+ *   そこで2つ足した:
+ *     ・アプリの中に**リンクを貼り付けて取り込む**窓（openPaste）
+ *     ・リンクを踏んだ側に**このリンクを写す**ボタン
+ *       （写してアプリに貼れば、ホーム画面のアプリにも入る）
  */
 const IMPORTUI = (function () {
   "use strict";
@@ -20,6 +31,10 @@ const IMPORTUI = (function () {
   // どちらの側を、この端末の誰として数えるか。null なら成績に入れない
   let mapping = { A: null, B: null };
   let bound = false;
+  // "recv" … リンクを踏んで開いた／"paste" … アプリの中で貼り付けて取り込む
+  let mode = "recv";
+  // 貼り付け窓に出す注意書き
+  let pasteMsg = "";
   // 「#」の変化を見張っているか（同じ画面のままリンクを踏んだ場合の対応）
   let watching = false;
 
@@ -28,8 +43,12 @@ const IMPORTUI = (function () {
     bound = true;
     $("importCloseBtn").addEventListener("click", function () {
       SHARE.clearHash();
+      const fromPaste = mode === "paste";
       payload = null;
-      UI.showScreen("screenSetup");
+      pasteMsg = "";
+      // 履歴から「受け取る」で来たときは履歴に戻す
+      if (fromPaste && typeof HISTORY !== "undefined") HISTORY.open();
+      else UI.showScreen("screenSetup");
     });
   }
 
@@ -60,8 +79,9 @@ const IMPORTUI = (function () {
     return true;
   }
 
-  function open(obj) {
+  function open(obj, viaPaste) {
     bindOnce();
+    mode = viaPaste ? "paste" : "recv";
     payload = obj;
     mapping = {
       A: SHARE.guessPlayer(sideName("A")),
@@ -105,14 +125,21 @@ const IMPORTUI = (function () {
 
   /* ---------- 画面 ---------- */
 
+  /** 見出しと副題を書き換える */
+  function setHead(title, sub) {
+    const t = $("importTitle");
+    if (t) t.textContent = title;
+    const s2 = $("importSub");
+    if (s2) s2.textContent = sub;
+  }
+
   function render() {
     const body = $("importBody");
     UI.clear(body);
-    if (!payload) return;
+    if (!payload) { renderPaste(body); return; }
 
     const dup = SHARE.alreadyHave(payload.id);
-    const sub = $("importSub");
-    if (sub) sub.textContent = dup ? "この試合はもう持っています" : "記録が送られてきました";
+    setHead("届いた試合", dup ? "この試合はもう持っています" : "記録が送られてきました");
 
     // ---- 届いた中身 ----
     const card = UI.el("div", { class: "match-card import-card" }, [
@@ -176,6 +203,164 @@ const IMPORTUI = (function () {
         onclick: function () { $("importCloseBtn").click(); },
       })
     );
+
+    // ---- ホーム画面のアプリに入れたいとき（本人の指摘 2026-08-22） ----
+    // LINEの中のブラウザで取り込んでも、ホーム画面のアプリには入らない。
+    // 別物として保存されるため。リンクを写してアプリで貼り直してもらう
+    if (mode === "recv" && !isStandalone()) {
+      body.appendChild(
+        UI.el("div", { class: "card-note" }, [
+          UI.el("p", {
+            text: "ホーム画面のアイコンから開くアプリには、ここで取り込んでも入りません"
+              + "（別々に保存されるため）。アプリの方に入れたいときは、"
+              + "下のボタンでリンクを写して、アプリの履歴 →「受け取る」で貼り付けてください。",
+          }),
+          UI.el("button", {
+            class: "small",
+            style: "margin-top:8px",
+            text: "このリンクを写す",
+            onclick: UI.guard(copyCurrentLink),
+          }),
+        ])
+      );
+    }
+  }
+
+  /** ホーム画面から開いたアプリとして動いているか */
+  function isStandalone() {
+    try {
+      return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || navigator.standalone === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** いま開いているリンクをクリップボードに写す */
+  function copyCurrentLink() {
+    const url = location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () {
+        UI.toast("リンクを写しました。アプリの履歴 →「受け取る」で貼り付けてください。");
+      }).catch(function () {
+        window.prompt("このリンクを写してください", url);
+      });
+      return;
+    }
+    window.prompt("このリンクを写してください", url);
+  }
+
+  /* ---------- リンクを貼り付けて取り込む（本人の指示 2026-08-22） ---------- */
+
+  /** アプリの中から開く。貼り付け窓を出す */
+  function openPaste() {
+    bindOnce();
+    mode = "paste";
+    payload = null;
+    pasteMsg = "";
+    render();
+    UI.showScreen("screenImport");
+  }
+
+  function renderPaste(body) {
+    setHead("記録を受け取る", "送られてきたリンクを貼り付けてください");
+
+    body.appendChild(
+      UI.el("p", {
+        class: "hint",
+        text: "LINEなどに届いたリンクを長押しして写し、下の枠に貼り付けて"
+          + "「取り込む」を押してください。リンクの前後に文章が付いていても構いません。",
+      })
+    );
+
+    const box = UI.el("textarea", {
+      id: "importPasteBox",
+      class: "paste-box",
+      rows: "4",
+      placeholder: "ここにリンクを貼り付けます",
+      spellcheck: "false",
+    });
+    body.appendChild(box);
+
+    // 端末によっては押すだけで写したものを入れられる
+    const row = UI.el("div", { class: "chips" });
+    row.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "chip",
+        text: "写したものを入れる",
+        onclick: UI.guard(function () { pasteFromClipboard(box); }),
+      })
+    );
+    row.appendChild(
+      UI.el("button", {
+        type: "button",
+        class: "chip",
+        text: "消す",
+        onclick: function () { box.value = ""; setPasteMsg(""); },
+      })
+    );
+    body.appendChild(row);
+
+    body.appendChild(
+      UI.el("p", { id: "importPasteMsg", class: "hint import-msg", text: pasteMsg })
+    );
+
+    body.appendChild(
+      UI.el("button", {
+        class: "primary",
+        style: "width:100%;margin-top:14px",
+        text: "取り込む",
+        onclick: UI.guard(function () { readPasted(box.value); }),
+      })
+    );
+    body.appendChild(
+      UI.el("button", {
+        class: "ghost",
+        style: "width:100%;margin-top:8px",
+        text: "やめる",
+        onclick: function () { $("importCloseBtn").click(); },
+      })
+    );
+  }
+
+  function setPasteMsg(text) {
+    pasteMsg = text || "";
+    const n = $("importPasteMsg");
+    if (n) n.textContent = pasteMsg;
+  }
+
+  function pasteFromClipboard(box) {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      setPasteMsg("この端末では自動で入れられません。枠を長押しして貼り付けてください。");
+      return;
+    }
+    navigator.clipboard.readText().then(function (t) {
+      if (!t) {
+        setPasteMsg("写したものが空でした。リンクを長押しして写してください。");
+        return;
+      }
+      box.value = t;
+      setPasteMsg("");
+    }).catch(function () {
+      setPasteMsg("この端末では自動で入れられません。枠を長押しして貼り付けてください。");
+    });
+  }
+
+  /** 貼り付けられた文字列を読んで、取り込みの確認へ進む */
+  function readPasted(text) {
+    const bodyStr = SHARE.readAny(text);
+    if (!bodyStr) {
+      setPasteMsg("リンクが見つかりません。"
+        + "「https://」から始まる部分をまるごと写して貼り付けてください。");
+      return;
+    }
+    SHARE.decode(bodyStr).then(function (obj) {
+      open(obj, true);
+    }).catch(function (e) {
+      setPasteMsg("この記録は読めませんでした（" + (e && e.message) + "）。"
+        + "もう一度、リンクをまるごと写して貼り付けてください。");
+    });
   }
 
   /** 片方ぶんの対応付けの行 */
@@ -273,5 +458,5 @@ const IMPORTUI = (function () {
     else UI.showScreen("screenSetup");
   }
 
-  return { checkHash: checkHash, open: open };
+  return { checkHash: checkHash, open: open, openPaste: openPaste };
 })();

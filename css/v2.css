@@ -2716,3 +2716,28 @@ select.goal-more.is-picked {
   color: var(--ink);
   font-weight: 900;
 }
+
+/* リンクを貼り付けて取り込む枠（本人の指示 2026-08-22）。
+   LINEの中のブラウザで開くと、ホーム画面のアプリには入らないため、
+   リンクを写してアプリに貼り直せるようにした */
+.paste-box {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  /* 16px 未満だと iOS が勝手に画面を寄せる */
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 8px;
+  border: 2px solid var(--ink, #241a12);
+  background: var(--surface, #fffdf6);
+  color: var(--ink, #241a12);
+  box-sizing: border-box;
+  /* 長いリンクを折り返す */
+  word-break: break-all;
+  resize: vertical;
+}
+.import-msg {
+  min-height: 1em;
+  color: var(--danger, #c0392b);
+  font-weight: 700;
+}

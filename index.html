@@ -486,6 +486,9 @@
     <div class="topbar">
       <h1>履歴</h1>
       <div>
+        <!-- 受け取る: 送られたリンクを貼り付けて取り込む（本人の指示 2026-08-22）。
+             LINEの中のブラウザで開くと、ホーム画面のアプリには入らないため -->
+        <button id="importOpenBtn" class="small ghost">受け取る</button>
         <button id="csvHistoryBtn" class="small ghost">表計算へ</button>
       </div>
     </div>
@@ -510,7 +513,7 @@
   <section id="screenImport" class="screen">
     <div class="topbar">
       <div>
-        <h1>届いた試合</h1>
+        <h1 id="importTitle">届いた試合</h1>
         <div class="sub" id="importSub">記録が送られてきました</div>
       </div>
       <button id="importCloseBtn" class="small ghost">閉じる</button>

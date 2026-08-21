@@ -57,8 +57,8 @@ const SHARE = (function () {
   function gzip(text) {
     const cs = new CompressionStream("gzip");
     const w = cs.writable.getWriter();
-    w.write(new TextEncoder().encode(text));
-    w.close();
+    w.write(new TextEncoder().encode(text)).catch(function () {});
+    w.close().catch(function () {});
     return new Response(cs.readable).arrayBuffer()
       .then(function (buf) { return new Uint8Array(buf); });
   }
@@ -66,10 +66,16 @@ const SHARE = (function () {
   function gunzip(bytes) {
     const ds = new DecompressionStream("gzip");
     const w = ds.writable.getWriter();
-    w.write(bytes);
-    w.close();
+    // リンクが途中で切れていると、書き込む側でも別に失敗が起きる。
+    // 理由は下の arrayBuffer 側で出すので、ここは黙って捨てる。
+    // 捨てないと「拾われなかった失敗」として画面の外に出る（実測 2026-08-22）
+    w.write(bytes).catch(function () {});
+    w.close().catch(function () {});
     return new Response(ds.readable).arrayBuffer()
-      .then(function (buf) { return new TextDecoder().decode(buf); });
+      .then(function (buf) { return new TextDecoder().decode(buf); })
+      .catch(function () {
+        throw new Error("リンクが途中で切れているようです");
+      });
   }
 
   /* ---------- 送るときの中身 ---------- */
@@ -149,6 +155,34 @@ const SHARE = (function () {
     const h = (href || location.href).split("#")[1] || "";
     const m = h.match(new RegExp("(?:^|&)" + HASH_KEY + "=([^&]+)"));
     return m ? m[1] : null;
+  }
+
+  /**
+   * 貼り付けられた文字列から記録を取り出す（本人の指示 2026-08-22）。
+   *
+   * 本人の困りごと:
+   *   「LINEで開いたブラウザにしか取り込まれず、
+   *     ホーム画面のアイコンから開いたアプリの方に入らない」
+   *
+   *   ホーム画面のアプリとLINEの中のブラウザは、同じアプリに見えても
+   *   保存場所が別々で、片方に取り込んでももう片方には現れない。
+   *   そこで、リンクの文字列そのものをアプリに貼り付けて取り込めるようにする。
+   *
+   * 受け付ける形（どれでも通る）:
+   *   1. リンクまるごと（前後に文章が付いていてもよい）
+   *   2. 「#m=…」や「m=…」だけ
+   *   3. 本体だけ（1.g.… ）
+   * @returns 本体の文字列。見つからなければ null
+   */
+  function readAny(text) {
+    const t = String(text || "").trim();
+    if (!t) return null;
+    // 本体に使う文字は英数字と「.」「-」「_」だけなので、
+    // 日本語の文章がくっついていてもそこで切れる
+    const m = t.match(new RegExp("(?:^|[#&?])" + HASH_KEY + "=([0-9A-Za-z._-]+)"));
+    if (m) return m[1];
+    if (/^[0-9]+\.[gr]\.[0-9A-Za-z._-]+$/.test(t)) return t;
+    return null;
   }
 
   /** 取り出した文字列を記録に戻す。@returns Promise<object> */
@@ -264,6 +298,7 @@ const SHARE = (function () {
   return {
     makeLink: makeLink,
     readHash: readHash,
+    readAny: readAny,
     decode: decode,
     clearHash: clearHash,
     importMatch: importMatch,
