@@ -2504,6 +2504,64 @@ button::after {
   border-top: 2px dotted var(--ink);
 }
 
+/* ============ ホームの入り口（本人の指示 2026-08-22） ============
+   ・「試合を始める」をいちばん上に
+   ・成績と直近の試合の間に「試合結果を取り込む」 */
+#screenHome .home-start,
+#screenHome .home-import {
+  width: 100%;
+  min-height: 52px;
+  margin-bottom: 14px;
+}
+#screenHome .home-start {
+  font-size: 18px;
+}
+
+/* 直近の試合の種目バッジ。名前より先に読めるよう左端に置く */
+.home-row .hr-game {
+  flex: 0 0 auto;
+  max-width: 42%;
+  padding: 1px 6px;
+  border: 2px solid var(--ink);
+  background: var(--surface-2);
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 種目バッジが入って4つになるので、日付は狭いときだけ落とす */
+@media (max-width: 380px) {
+  .home-row .hr-date {
+    display: none;
+  }
+}
+
+/* ボール種の選び方（ローテーションのみ・本人の指示 2026-08-22）。
+   色の見本を先に出して、名前を読まなくても違いが分かるようにする */
+.ballset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ballset-chip .bs-swatches {
+  display: inline-flex;
+  gap: 3px;
+}
+.ballset-chip .bs-dot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+.ballset-chip.is-on {
+  background: var(--block);
+  color: var(--ink);
+  font-weight: 900;
+}
+
 /* プルダウンで先取数を選んだときは、ボタンと同じ金色にする
    （本人の指示 2026-08-21）。選んだ場所が一目で分かるようにするため */
 select.goal-more.is-picked {

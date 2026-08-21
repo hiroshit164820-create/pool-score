@@ -22,8 +22,13 @@
   function boot() {
     SETUP.init();
     UI.bindBackButton();
+    // 起動して最初に出すのはホーム（本人の指示 2026-08-22）。
+    // index.html 側で screenHome に active を付けてあるので、
+    // ここでは中身を描くだけ。showScreen は通さない
+    // （通すと「戻る」の積み方が1つずれる）
+    if (typeof HOME !== "undefined") HOME.render();
     // 起動時はまだ showScreen を通っていないので、タブの状態をここで整える
-    UI.updateTabBar(UI.currentScreen() || "screenSetup");
+    UI.updateTabBar(UI.currentScreen() || "screenHome");
 
     UI.$("toHistoryBtn").addEventListener("click", function () {
       HISTORY.open();

@@ -36,6 +36,8 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(URL)
     pg.wait_for_timeout(500)
+    # 起動して最初に出るのはホーム（本人の指示 2026-08-22）
+    helpers.goto_setup(pg)
 
     print("\n-- 1. カテゴリが全部閉じている --")
     opened = pg.eval_on_selector_all(".group-head", "els => els.map(e => e.getAttribute('aria-expanded'))")

@@ -40,8 +40,21 @@ PARENT_OF = {
 ALL_GAME_IDS = list(GROUP_OF.keys())
 
 
+def goto_setup(page):
+    """種目の画面を出す。
+
+    2026-08-22 に起動時の画面がホームに変わった（本人の指示）ため、
+    種目を選ぶ前にはこの一手が要る。すでに種目の画面ならそのまま。
+    """
+    if page.is_visible("#screenSetup"):
+        return
+    page.click("#tabSetup")
+    page.wait_for_timeout(300)
+
+
 def open_group(page, group_key):
     """カテゴリを開く。すでに開いていれば何もしない"""
+    goto_setup(page)
     head = page.locator('.group-head').nth(GROUP_ORDER.index(group_key))
     if head.get_attribute("aria-expanded") != "true":
         head.click()
@@ -81,6 +94,7 @@ def pick_game(page, game_id):
 
 def each_group_open(page):
     """カテゴリを1つずつ開きながら、そのインデックスを返す"""
+    goto_setup(page)
     heads = page.locator(".group-head")
     for i in range(heads.count()):
         h = page.locator(".group-head").nth(i)

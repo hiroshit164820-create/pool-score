@@ -64,13 +64,19 @@ with sync_playwright() as p:
     # アプリを閉じて開き直す想定
     pg.reload()
     pg.wait_for_timeout(800)
-    check(pg.is_visible("#screenSetup"), "起動すると設定画面が出る")
-    check(pg.is_visible("#resumeCard"), "中断中の試合が最初の画面に出る")
-    info = pg.text_content("#resumeInfo") or ""
+    # 起動して最初に出るのはホーム（本人の指示 2026-08-22）。
+    # 中断中の試合はホームのいちばん上に出る
+    check(pg.is_visible("#screenHome"), "起動するとホームが出る")
+    check(pg.locator("#homeBody .home-card.resume").count() == 1,
+          "中断中の試合が最初の画面に出る")
+    info = pg.text_content("#homeBody .home-card.resume") or ""
     check("山田" in info and "佐藤" in info, "誰の試合か分かる", info[:60])
     check("9ボール" in info, "種目が分かる", info[:60])
     check("2" in info, "そこまでのスコアが分かる", info[:60])
 
+    # ホームからも続けられるが、ここでは種目の画面側の再開カードを確かめる
+    helpers.goto_setup(pg)
+    check(pg.is_visible("#resumeCard"), "種目の画面にも再開カードが出る")
     pg.click("#resumeBtn")
     pg.wait_for_timeout(600)
     check(pg.is_visible("#screenMatch"), "続きから再開できる")
@@ -116,15 +122,26 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
 
     # ================================================================
-    section("3 使うボールの配色（項目は削除済み）")
-    # 「使うボール」を選ぶ項目は本人の指示（2026-08-20 第2便）で画面から削除した。
-    # 配色そのものは残るので、既定（標準セット）で盤面が描かれることを確かめる。
+    section("3 ボール種の配色（ローテーションだけで選べる）")
+    # 2026-08-20 にいったん消したが、本人の指示（2026-08-22）で
+    # ローテーションのときだけ選べるように戻した。
+    # 既定（標準セット）のまま始めて、その配色で盤面が描かれることを確かめる。
     helpers.pick_game(pg, "rotation")
     pg.wait_for_timeout(300)
-    check(pg.locator("#ballSetSection").count() == 0, "「使うボール」の欄は画面に無い")
-    check(pg.locator(".ballset-chip").count() == 0, "ボールセットのボタンも無い")
-    check("ボールセット" not in pg.inner_text("#startSummary"),
-          "「この内容で始めます」にも出さない", pg.inner_text("#startSummary")[:120])
+    check(not pg.locator("#ballSetSection").get_attribute("hidden"),
+          "ローテーションでは「ボール種」の欄が出る")
+    check(pg.locator(".ballset-chip").count() == 3, "ボール種が3つ選べる",
+          pg.locator(".ballset-chip").count())
+    check("ボール種" in pg.inner_text("#startSummary"),
+          "「この内容で始めます」にも出る", pg.inner_text("#startSummary")[:160])
+
+    # 他の種目では出さない（盤面が出ないので意味が無いため）
+    helpers.pick_game(pg, "9ball")
+    pg.wait_for_timeout(300)
+    check(pg.locator("#ballSetSection").get_attribute("hidden") is not None,
+          "9ボールでは「ボール種」の欄を出さない")
+    helpers.pick_game(pg, "rotation")
+    pg.wait_for_timeout(300)
 
     pg.fill("#inNameA", "田中")
     pg.fill("#inNameB", "鈴木")

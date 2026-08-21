@@ -23,7 +23,9 @@
 
   <!-- ================= 試合作成 ================= -->
   <!-- ================= ホーム（個人ダッシュボード） ================= -->
-  <section id="screenHome" class="screen">
+  <!-- 起動して最初に出す画面（本人の指示 2026-08-22）。
+       以前は「種目」だったが、ホームを入り口にして「試合を始める」から入る -->
+  <section id="screenHome" class="screen active">
     <div class="topbar">
       <div>
         <h1>ホーム</h1>
@@ -33,7 +35,7 @@
     <div class="list" id="homeBody"></div>
   </section>
 
-  <section id="screenSetup" class="screen active">
+  <section id="screenSetup" class="screen">
     <div class="topbar">
       <h1>ビリヤードスコア記録</h1>
       <div style="display:flex;gap:6px">
@@ -74,6 +76,14 @@
       <div id="ballHandicapSection">
         <div class="section-title">ボールハンデ</div>
         <div id="ballHandicapArea"></div>
+      </div>
+
+      <!-- ボール種。盤面の球を色分けするために使う。
+           球の色が要るのはローテーションだけなので、そこでしか出さない
+           （本人の指示 2026-08-22） -->
+      <div id="ballSetSection" hidden>
+        <div class="section-title">ボール種</div>
+        <div id="ballSetArea"></div>
       </div>
 
       <div class="section-title" id="breakTitle">ブレイク</div>
@@ -488,7 +498,7 @@
       <div>
         <!-- 受け取る: 送られたリンクを貼り付けて取り込む（本人の指示 2026-08-22）。
              LINEの中のブラウザで開くと、ホーム画面のアプリには入らないため -->
-        <button id="importOpenBtn" class="small ghost">受け取る</button>
+        <button id="importOpenBtn" class="small ghost">試合結果を受け取る</button>
         <button id="csvHistoryBtn" class="small ghost">表計算へ</button>
       </div>
     </div>

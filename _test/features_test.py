@@ -36,6 +36,8 @@ with sync_playwright() as p:
 
     pg.goto(URL)
     pg.wait_for_timeout(400)
+    # 起動して最初に出るのはホーム（本人の指示 2026-08-22）
+    helpers.goto_setup(pg)
 
     # ================= 勝利条件 =================
     section("よく使う勝利条件は3〜7先のボタン")

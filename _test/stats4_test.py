@@ -122,10 +122,16 @@ with sync_playwright() as p:
     pg.click("#tabHome")
     pg.wait_for_timeout(500)
 
-    # ================= 12. ホームの直近の試合は5件（E）=================
-    section("12. ホームの直近の試合は5件")
+    # ============ 12. ホームの直近の試合は3件（本人の指示 2026-08-22）============
+    # 2026-08-21 に5件へ増やしたが、本人の指示で3件に戻した
+    section("12. ホームの直近の試合は3件")
     rows = pg.eval_on_selector_all("#homeBody .home-row", "e => e.length")
-    check(rows == 5, "直近の試合が5件出る", rows)
+    check(rows == 3, "直近の試合が3件出る", rows)
+    # 何の種目だったかが分かるバッジを出す（本人の指示 2026-08-22）
+    badges = pg.eval_on_selector_all("#homeBody .home-row .hr-game",
+                                     "e => e.map(x => x.textContent.trim())")
+    check(len(badges) == 3, "3件とも種目のバッジが付く", badges)
+    check(all(b for b in badges), "バッジが空でない", badges)
 
     # ================= 2〜3. 成績ページの冒頭 =================
     section("2. 成績ページの冒頭のボタン")

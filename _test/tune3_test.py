@@ -75,15 +75,23 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "tune3_layout.png"))
 
     # ================= 2. 使うボールの項目 =================
-    section("2 「使うボール」の項目を削除")
+    section("2 ボール種はローテーションでだけ出す")
+    # 2026-08-20 に消したが、本人の指示（2026-08-22）で
+    # ローテーションのときだけ選べるように戻した
     pg.click("#tabSetup")
     pg.wait_for_timeout(300)
     helpers.pick_game(pg, "rotation")
     pg.wait_for_timeout(300)
-    check(pg.locator("#ballSetSection").count() == 0, "欄そのものが無い")
-    check(pg.locator(".ballset-chip").count() == 0, "ボタンも無い")
-    check("使うボール" not in pg.inner_text("#screenSetup"), "見出しも無い")
-    check("ボールセット" not in pg.inner_text("#startSummary"), "まとめにも出さない")
+    check(not pg.locator("#ballSetSection").get_attribute("hidden"), "ローテーションでは欄が出る")
+    check(pg.locator(".ballset-chip").count() == 3, "ボタンが3つある",
+          pg.locator(".ballset-chip").count())
+    check("使うボール" not in pg.inner_text("#screenSetup"),
+          "見出しは「ボール種」で、古い「使うボール」は使わない")
+    check("ボール種" in pg.inner_text("#startSummary"), "まとめにも出す")
+    helpers.pick_game(pg, "9ball")
+    pg.wait_for_timeout(300)
+    check(pg.locator("#ballSetSection").get_attribute("hidden") is not None,
+          "9ボールでは出さない")
 
     # ================= 7. 14-1のボタン =================
     section("7 14-1で「3先」を出さない")

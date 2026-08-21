@@ -213,7 +213,8 @@ const IMPORTUI = (function () {
           UI.el("p", {
             text: "ホーム画面のアイコンから開くアプリには、ここで取り込んでも入りません"
               + "（別々に保存されるため）。アプリの方に入れたいときは、"
-              + "下のボタンでリンクを写して、アプリの履歴 →「受け取る」で貼り付けてください。",
+              + "下のボタンでリンクを写して、アプリのホーム →「試合結果を取り込む」で"
+              + "貼り付けてください（履歴の「試合結果を受け取る」でも同じです）。",
           }),
           UI.el("button", {
             class: "small",
@@ -241,7 +242,7 @@ const IMPORTUI = (function () {
     const url = location.href;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(function () {
-        UI.toast("リンクを写しました。アプリの履歴 →「受け取る」で貼り付けてください。");
+        UI.toast("リンクを写しました。アプリのホーム →「試合結果を取り込む」で貼り付けてください。");
       }).catch(function () {
         window.prompt("このリンクを写してください", url);
       });

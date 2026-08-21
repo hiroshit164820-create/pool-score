@@ -300,8 +300,10 @@ const SETUP = (function () {
   // （本人提供のスコア表 2026-08-21。data/handicap_data.js の JPA_DOUBLES_9BALL）
   let memberSkills = { A: [5, 5], B: [5, 5] };
   // 盤面の色分けに使うボールセット。
-  // 選ぶ項目は画面から削除した（本人の指示 2026-08-20）。
-  // 色そのものは残るので、既定（標準セット）を使い、試合記録にも書き残す
+  // 2026-08-20 にいったん画面から消したが、本人の指示（2026-08-22）で
+  // **ローテーションのときだけ**選べるように戻した。
+  // 球の色を見ながら押すのはローテーションだけで、他の種目では意味が無いため。
+  // 選んだ種類は設定に覚えさせ、次の試合でも同じものが出るようにする
   let ballSet = (STORE.getSettings() || {}).ballSet || "standard";
 
   /**
@@ -590,6 +592,7 @@ const SETUP = (function () {
 
     renderPlayerFields();
     renderHouseRules();
+    renderBallSet();
     renderGoalArea(); // 中で renderBallHandicap も呼ばれる
   }
 
@@ -1344,6 +1347,73 @@ const SETUP = (function () {
   }
 
   /**
+   * ボール種（盤面の色分け）を選ばせる（本人の指示 2026-08-22）。
+   *
+   * 出すのはローテーションだけ。球の色を見ながら番号を押すのはこの種目だけで、
+   * 他の種目では盤面そのものが出ないため、選ばせても意味が無い。
+   *
+   * 色の値は balls_data.js（商品画像から起こした近似値）。
+   * 選んだ種類は設定に覚えさせるので、次の試合では選び直さなくてよい。
+   */
+  function renderBallSet() {
+    const section = $("ballSetSection");
+    const wrap = $("ballSetArea");
+    if (!section || !wrap) return;
+    UI.clear(wrap);
+
+    const g = GAMES[selectedGame];
+    const usable = !!g && g.base === "rotation"
+      && typeof BALL_SET_ORDER !== "undefined";
+    section.hidden = !usable;
+    if (!usable) return;
+
+    // 覚えている種類が消えていたら標準に戻す
+    if (!BALL_SETS[ballSet]) ballSet = "standard";
+
+    // 説明は1行に収める（本人の指示 2026-08-21）。
+    // 色の違いはボタンの中の見本で分かるので、文章では足さない
+    wrap.appendChild(
+      UI.el("p", { class: "hint", text: "盤面の球の色が変わります。" })
+    );
+
+    const chips = UI.el("div", { class: "chips" });
+    BALL_SET_ORDER.forEach(function (id) {
+      const set = BALL_SETS[id];
+      if (!set) return;
+      chips.appendChild(
+        UI.el("button", {
+          type: "button",
+          class: "chip ballset-chip" + (ballSet === id ? " is-on" : ""),
+          "data-ballset": id,
+          "aria-pressed": String(ballSet === id),
+          onclick: function () { chooseBallSet(id); },
+        }, [
+          // 選ぶ前に色が分かるよう、1・6・7番の見本を並べる
+          // （セットごとの違いがいちばん出る3つ）
+          UI.el("span", { class: "bs-swatches" }, [7, 6, 1].map(function (n) {
+            const look = ballAppearance(id, n);
+            return UI.el("span", {
+              class: "bs-dot",
+              style: "background:" + look.base,
+            });
+          })),
+          UI.el("span", { class: "bs-name", text: set.label }),
+        ])
+      );
+    });
+    wrap.appendChild(chips);
+
+  }
+
+  function chooseBallSet(id) {
+    ballSet = id;
+    const st = STORE.getSettings();
+    st.ballSet = id;
+    STORE.saveSettings(st);
+    renderBallSet();
+  }
+
+  /**
    * 公式競技規程が無いゲームの、店ごとの決め方を選ばせる。
    *
    * カイルンは NBA 規程に章が無いハウスゲームで、
@@ -1953,6 +2023,11 @@ const SETUP = (function () {
 
     // イニングを数えるか（選べる種目でだけ出す）
     if (g.inningsOption) add("イニング", countInnings ? "数える" : "数えない");
+
+    // ボール種（ローテーションでだけ選べる）
+    if (g.base === "rotation" && typeof BALL_SETS !== "undefined" && BALL_SETS[ballSet]) {
+      add("ボール種", BALL_SETS[ballSet].label);
+    }
 
     // ブレイク。方式が決まっている種目では選ばせていないので出さない
     if (!g.solo && !(g.breakTypeFixed || base.breakTypeFixed)) {

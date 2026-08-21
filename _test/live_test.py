@@ -43,6 +43,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
 
     check(pg.title() == "ビリヤードスコア記録", "タイトルが出る", pg.title())
+    # 起動して最初に出るのはホーム（本人の指示 2026-08-22）
+    check(pg.is_visible("#screenHome"), "ホームが表示される")
+    helpers.goto_setup(pg)
     check(pg.is_visible("#startMatchBtn"), "試合作成画面が表示される")
     check(helpers.count_selectable_games(pg) == 14, "種目が14選べる",
           helpers.count_selectable_games(pg))

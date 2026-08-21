@@ -3,8 +3,10 @@
  *
  * 台の脇で開いたときに、まず知りたいことだけを出す:
  *   1. 中断している試合があるか（続きから記録できる）
- *   2. 自分の直近の成績（勝率・試合数）
- *   3. 直近の試合の結果
+ *   2. 試合を始める（本人の指示 2026-08-22。いちばん上に置く）
+ *   3. 自分の直近の成績（勝率・試合数）
+ *   4. 試合結果を取り込む（相手から届いたリンクを貼る）
+ *   5. 直近の試合の結果（3件・種目のバッジ付き）
  *
  * 集計そのものは store.js の playerStats に任せ、
  * ここは「何を出すか」だけを決める。
@@ -86,6 +88,18 @@ const HOME = (function () {
       body.appendChild(card);
     }
 
+    // ---- 試合を始める ----
+    // ホームがアプリの入り口になったので、いちばん使う用事を最上部に置く
+    // （本人の指示 2026-08-22）。中断中の試合があるときは、
+    // 続きの案内を先に読ませたいのでその下に出す
+    body.appendChild(
+      UI.el("button", {
+        class: "primary home-start",
+        text: "試合を始める",
+        onclick: UI.guard(function () { UI.showScreen("screenSetup"); }),
+      })
+    );
+
     // ---- 自分の成績 ----
     if (me) {
       const st = me.stats;
@@ -107,9 +121,23 @@ const HOME = (function () {
       body.appendChild(card);
     }
 
+    // ---- 試合結果を取り込む ----
+    // 相手から届いたリンクを貼って取り込む入り口（本人の指示 2026-08-22）。
+    // 履歴の中にしか無いと、LINEから戻ってきた人が見つけられないため、
+    // 成績と直近の試合の間に置く
+    if (typeof IMPORTUI !== "undefined") {
+      body.appendChild(
+        UI.el("button", {
+          class: "ghost home-import",
+          text: "試合結果を取り込む",
+          onclick: UI.guard(function () { IMPORTUI.openPaste(); }),
+        })
+      );
+    }
+
     // ---- 直近の試合 ----
-    // 直近の試合は5件まで（本人の指示 2026-08-21・E。以前は3件）
-    const done = matches.filter(function (m) { return m.finished; }).slice(0, 5);
+    // 直近の試合は3件まで（本人の指示 2026-08-22。08-21に5件へ増やしたが戻す）
+    const done = matches.filter(function (m) { return m.finished; }).slice(0, 3);
     if (done.length) {
       const card = UI.el("div", { class: "home-card" }, [
         UI.el("div", { class: "hc-title", text: "直近の試合" }),
@@ -122,6 +150,8 @@ const HOME = (function () {
           : "—";
         card.appendChild(
           UI.el("div", { class: "home-row" }, [
+            // 何の種目だったかが一目で分かるバッジ（本人の指示 2026-08-22）
+            UI.el("span", { class: "hr-game", text: gameBadge(m) }),
             UI.el("span", { class: "hr-names", text: m.names.A + " 対 " + m.names.B }),
             UI.el("span", { class: "hr-score", text: sc }),
             UI.el("span", { class: "hr-date", text: fmtDate(m.createdAt) }),
@@ -158,7 +188,7 @@ const HOME = (function () {
       body.appendChild(
         UI.el("div", { class: "empty" }, [
           UI.el("p", { text: "まだ記録がありません。" }),
-          UI.el("p", { text: "下の「種目」から試合を始めてください。" }),
+          UI.el("p", { text: "上の「試合を始める」から記録できます。" }),
         ])
       );
     }
@@ -185,6 +215,19 @@ const HOME = (function () {
     render();
     window.dispatchEvent(new Event("pool-score:refresh-resume"));
     UI.toast("中断中の試合を閉じました。記録は残していません。");
+  }
+
+  /**
+   * 直近の試合に出す種目のバッジ（本人の指示 2026-08-22）。
+   *
+   * 幅が限られるので短くする。GAMES に短縮名（shortLabel）があればそれを使い、
+   * 無ければ正式名から括弧の中を落として使う。
+   */
+  function gameBadge(m) {
+    const g = (typeof GAMES !== "undefined" && GAMES[m.gameId]) || null;
+    const label = (g && (g.shortLabel || g.label)) || m.gameLabel || m.gameId || "";
+    // 「14-1（ストレートプール）」→「14-1」
+    return String(label).split("（")[0];
   }
 
   function stat(label, value) {

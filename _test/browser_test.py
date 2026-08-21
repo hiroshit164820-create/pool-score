@@ -45,7 +45,13 @@ def run():
         page.wait_for_timeout(400)
 
         # ---------- 初期表示 ----------
-        check(page.is_visible("#screenSetup"), "起動時に試合作成画面が出る")
+        # 2026-08-22 から、起動して最初に出るのはホーム（本人の指示）
+        check(page.is_visible("#screenHome"), "起動時にホームが出る")
+        check(page.locator("#homeBody button", has_text="試合を始める").count() == 1,
+              "ホームに「試合を始める」がある")
+        page.locator("#homeBody button", has_text="試合を始める").click()
+        page.wait_for_timeout(400)
+        check(page.is_visible("#screenSetup"), "「試合を始める」で種目の画面に移る")
         # 種目はカテゴリに畳まれている。全部開いたときに選べる数
         # 通常8（ダブルス2つ含む）＋JPA3＋ハウス1（カイルン）＝12
         check(helpers.count_selectable_games(page) == 14, "種目が14選べる（通常8＋JPA3＋ハウス3）",
@@ -252,8 +258,9 @@ def run():
             check(len(void_events) > 0, "VOIDイベントが記録されている", len(void_events))
 
         # ---------- ダブルスの確認 ----------
-        # リロード後は試合作成画面に戻っている（履歴へは上部ボタンで行ける）
-        check(page.is_visible("#screenSetup"), "リロード後は試合作成画面に戻る")
+        # リロード後はホームに戻っている（2026-08-22 から起動時はホーム）
+        check(page.is_visible("#screenHome"), "リロード後はホームに戻る")
+        helpers.goto_setup(page)
         page.click("#toHistoryBtn")
         page.wait_for_timeout(300)
         check(page.is_visible("#screenHistory"), "履歴ボタンで履歴画面に行ける")
