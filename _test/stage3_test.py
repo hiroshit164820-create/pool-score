@@ -160,6 +160,32 @@ with sync_playwright() as p:
 
     section("JSエラー")
     check(not errs, "ページのJSエラーなし", errs[:3])
+
+    # ================= 9. 狭い画面でも上の帯が壊れない =================
+    section("9. 360px・320pxでも上の帯が収まる")
+    # 登録ボタンを帯に移したので、狭い端末で見出しに重なったり
+    # 画面からはみ出したりしないことを確かめる
+    for w, h in [(360, 640), (320, 568)]:
+        pn = br.new_page(viewport={"width": w, "height": h})
+        pn.goto(URL)
+        pn.wait_for_timeout(500)
+        pn.click("#tabPlayers")
+        pn.wait_for_timeout(500)
+        r = pn.evaluate("""() => {
+          const bar = document.querySelector('#screenPlayers .topbar');
+          const h1 = bar.querySelector('h1');
+          const reg = bar.querySelector('.tb-reg');
+          const a = bar.getBoundingClientRect(), t = h1.getBoundingClientRect(),
+                g = reg.getBoundingClientRect();
+          return {over: Math.round(g.right - a.right), gap: Math.round(g.left - t.right),
+                  hs: [...reg.querySelectorAll('button')]
+                        .map(b => Math.round(b.getBoundingClientRect().height))};
+        }""")
+        check(r["over"] <= 0, "%dpx 帯からはみ出さない" % w, r)
+        check(r["gap"] >= 0, "%dpx 見出しと重ならない" % w, r)
+        check(min(r["hs"]) >= 44, "%dpx ボタンが44px以上" % w, r)
+        pn.close()
+
     br.close()
 
 ng = [r for r in results if not r[0]]
