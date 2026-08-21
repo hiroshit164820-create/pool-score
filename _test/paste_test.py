@@ -33,7 +33,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import helpers
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-URL = "file:///" + ROOT.replace(chr(92), "/") + "/index.html"
+# 公開URLでも同じ検証を回せるようにする（POOL_URL に入れる）
+URL = os.environ.get("POOL_URL")
+if not URL:
+    URL = "file:///" + ROOT.replace(chr(92), "/") + "/index.html"
 SHOTS = os.path.join(ROOT, "_test", "shots")
 if not os.path.isdir(SHOTS):
     os.makedirs(SHOTS)
