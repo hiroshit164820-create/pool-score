@@ -9,8 +9,7 @@
   20. マスワリの自動記録と合計表示（出るまでは非表示）
   21. JPA独自の得点換算表でのポイント表示
   22. 履歴のJPA試合で名前のうしろにSL
-  23. ホームに「種目ごとの成績を見る」
-  24. 種目ごとの成績（平均イニング・マスワリ率・JPA9は1イニング平均得点）
+  23/24. 種目ごとの成績は削除済み（入口も画面も無いことを確かめる）
   26. 履歴を種目・対戦相手で絞れる
   27. 進行中マークが名前と同じ行の右
   28. 操作ボタンが1行に収まる
@@ -199,38 +198,21 @@ with sync_playwright() as p:
           "見出しに必要な列がある", head)
     check("タイラ" in text and "岸川" in text, "中身が入っている", text[:150])
 
-    # ===================== 種目ごとの成績 =====================
-    section("23/24 種目ごとの成績")
+    # ===================== 種目ごとの成績（削除済み） =====================
+    section("23/24 種目ごとの成績は削除した")
+    # 本人の指示（2026-08-21・段階3）で画面ごと削除した。
+    # 入口も画面も残っていないことだけ確かめる
     pg.click("#tabHome")
     pg.wait_for_timeout(400)
     btns = pg.eval_on_selector_all("#homeBody button", "e => e.map(x => x.textContent)")
-    # ホームの「種目ごとの成績を見る」は本人の指示（2026-08-21・D）で削除した。
-    # 画面そのものは残っているので、ここでは直接開いて中身を確かめる
     check(not any("種目ごとの成績" in b for b in btns),
           "ホームに「種目ごとの成績を見る」は置かない", btns)
     # 「新しい試合を始める」は本人の指示（2026-08-21）で削除した
     check(pg.eval_on_selector_all("#homeBody .home-new", "e => e.length") == 0,
           "「新しい試合を始める」は置かない")
-    pg.evaluate("() => GAMESTATS.open()")
-    pg.wait_for_timeout(400)
-    check(pg.is_visible("#screenGameStats"), "種目ごとの成績が開く")
-    body = pg.inner_text("#gameStatsBody")
-    print("   " + body.replace("\n", " / ")[:250])
-    check("JPA 9ボール" in body, "実施した種目が出る", body[:100])
-    check("上りまでの平均イニング数" in body, "平均イニング数が出る")
-    check("マスワリ率" in body, "マスワリ率が出る")
-    check("1イニング当たりの平均得点" in body, "JPA9ボールは1イニング平均得点も出る")
-    check("ボウラード" not in body and "ローテーション" not in body,
-          "実施していない種目は出さない", body[:200])
-
-    with pg.expect_download() as dl2:
-        pg.click("#csvGameStatsBtn")
-    p2 = os.path.join(SHOTS, "gamestats.csv")
-    dl2.value.save_as(p2)
-    t2 = io.open(p2, "rb").read().decode("utf-8-sig")
-    check("平均イニング数" in t2, "種目別CSVに平均イニング数の列がある", t2[:200])
-    check("マスワリ率(%)" in t2, "マスワリ率の列がある", t2[:200])
-    pg.screenshot(path=os.path.join(SHOTS, "gamestats.png"), full_page=True)
+    check(pg.locator("#screenGameStats").count() == 0, "種目ごとの成績の画面が無い")
+    check(pg.evaluate("() => typeof GAMESTATS") == "undefined",
+          "GAMESTATS が読み込まれていない")
 
     # ===================== 25 ダブルスのパートナーごとの成績 =====================
     section("25 パートナーごとの成績（ダブルス）")
@@ -268,18 +250,20 @@ with sync_playwright() as p:
         pg.click("#confirmFinishBtn")
         pg.wait_for_timeout(700)
 
-    pg.click("#tabHome")
-    pg.wait_for_timeout(400)
-    pg.evaluate("() => GAMESTATS.open()")
-    pg.wait_for_timeout(400)
-    body2 = pg.inner_text("#gameStatsBody")
-    check("パートナーごとの成績" in body2, "パートナーごとの成績の見出しが出る", body2[-200:])
-    check("岸川" in body2, "組んだ相手（岸川）が出る", body2[-200:])
-    check("佐藤" not in body2.split("パートナーごとの成績")[-1],
-          "相手チームの人はパートナーに混ざらない", body2[-200:])
-    check("タイラ" not in body2.split("パートナーごとの成績")[-1],
-          "自分自身はパートナーに出ない", body2[-200:])
-    pg.screenshot(path=os.path.join(SHOTS, "gamestats_partner.png"), full_page=True)
+    # 種目ごとの成績を消したので、パートナー別は個人の成績ページで確かめる
+    pg.click("#tabStats")
+    pg.wait_for_timeout(700)
+    pg.locator(".stats-switch button", has_text="自分の成績").click()
+    pg.wait_for_timeout(600)
+    pg.eval_on_selector_all("#statsBody details", "e => e.forEach(x => x.open = true)")
+    pg.wait_for_timeout(300)
+    body2 = pg.inner_text("#statsBody")
+    check("パートナー別" in body2, "パートナー別の見出しが出る", body2[-300:])
+    part = body2.split("パートナー別")[-1].split("種目別")[0]
+    check("岸川" in part, "組んだ相手（岸川）が出る", part[:200])
+    check("佐藤" not in part, "相手チームの人はパートナーに混ざらない", part[:200])
+    check("タイラ" not in part, "自分自身はパートナーに出ない", part[:200])
+    pg.screenshot(path=os.path.join(SHOTS, "stats_partner.png"), full_page=True)
 
     section("JSエラー")
     check(not errs, "ページのJSエラーなし", errs[:3])

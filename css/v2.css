@@ -2361,3 +2361,44 @@ button::after {
 #screenMatch.jpa-sheet-open .panel-flags {
   display: none;
 }
+
+/* ============ 選手一覧の上の帯（本人の指示 2026-08-21・段階3） ============
+   登録ボタンを本文から上の帯へ移した。帯の中では横に2つ並べ、
+   本文いっぱいに広がる .add-player-head の指定を打ち消す */
+.topbar .tb-reg {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.add-player-head.in-bar {
+  width: auto;
+  margin-bottom: 0;
+  gap: 4px;
+  padding: 8px 10px;
+  /* 帯の中は狭いので、押せる高さ（44px）は保ったまま字だけ小さくする */
+  min-height: 44px;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.add-player-head.in-bar .aph-plus {
+  font-size: 15px;
+}
+/* 360px幅では2つ並べると窮屈なので、印だけにして名前は読み上げに残す */
+@media (max-width: 380px) {
+  .add-player-head.in-bar .aph-label {
+    font-size: 11px;
+  }
+  .add-player-head.in-bar {
+    padding: 8px 7px;
+  }
+}
+
+/* 自分の印は名前の右に短く付ける（本人の指示 2026-08-21・段階3）。
+   行の直下ではなく名前の欄の中に入っているので、
+   勝敗の札は他の人と同じ位置に出る */
+.player-card .self-badge {
+  margin-right: 0;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 12px;
+}

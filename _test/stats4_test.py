@@ -2,7 +2,7 @@
 """stats4_test.py — 成績管理の作り直し（本人の指示 2026-08-21・D）＋ホーム5件（E）
 
 対象:
-  1. ホームの「種目ごとの成績を見る」ボタンが無い
+  1. 種目ごとの成績は削除済み（ホームにも成績ページにも入口が無い）
   2. 成績ページの冒頭に「自分の成績」「他選手の成績」の1行がある
   3. 「自分の成績」でくわしい成績が出る（ホームから押したときと同じもの）
   4. くわしい成績の並びが 総合 → 内訳 → 対戦相手別 → パートナー別 → 種目別
@@ -111,25 +111,14 @@ with sync_playwright() as p:
     check(not any("種目ごとの成績" in b for b in btns),
           "ホームに「種目ごとの成績を見る」が無い", btns)
 
-    # ---- 入口は成績ページに移した（本人の指示 2026-08-21）----
-    section("1b. 成績ページから種目ごとの成績を開ける")
+    # ---- 種目ごとの成績は本人の指示（2026-08-21・段階3）で削除した ----
+    section("1b. 種目ごとの成績は入口も画面も無い")
     pg.click("#tabStats")
     pg.wait_for_timeout(700)
-    bg = pg.locator(".stats-bygame")
-    check(bg.count() == 1, "成績ページにボタンがある", bg.count())
-    check((bg.text_content() or "").strip() == "種目ごとの成績を見る",
-          "文言が「種目ごとの成績を見る」", bg.text_content())
-    bh = bg.bounding_box()
-    check(bh and bh["height"] >= 44, "44px以上", bh)
-    bg.click()
-    pg.wait_for_timeout(600)
-    check(pg.is_visible("#screenGameStats"), "押すと種目ごとの成績が開く")
-    gtxt = pg.inner_text("#gameStatsBody")
-    check("9ボール" in gtxt, "中身が出ている", gtxt[:120])
-    pg.click("#backFromGameStatsBtn")
-    pg.wait_for_timeout(600)
-    check(pg.is_visible("#screenStats"), "「戻る」で成績ページに帰る")
-    check(pg.locator(".stats-switch").count() == 1, "成績ページの一覧に戻っている")
+    check(pg.locator(".stats-bygame").count() == 0, "成績ページにボタンが無い")
+    check(pg.locator("#screenGameStats").count() == 0, "画面そのものが無い")
+    check(pg.evaluate("() => typeof GAMESTATS") == "undefined",
+          "GAMESTATS が読み込まれていない")
     pg.click("#tabHome")
     pg.wait_for_timeout(500)
 

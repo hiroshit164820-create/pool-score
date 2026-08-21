@@ -6,7 +6,7 @@
   2. JPA 9ボールダブルス: 2人のSLを縦横で見る表から先取点が決まる
   3. ホーム: 「新しい試合を始める」が無い／中断中のカードに×がある
   4. 種目ページ: 中断中のカードに×がある
-  5. 選手ページ: 「選手を登録する」になっている
+  5. 選手ページ: 「選手を登録」になっている
   6. 種目名: 14-1に「（ストレートプール）」が付く
   7. 履歴: 開始と終了の時刻が出る
   8. 履歴: 種目名が太字で大きい
@@ -55,7 +55,8 @@ with sync_playwright() as p:
     pg.click("#tabPlayers")
     pg.wait_for_timeout(400)
     lbl = pg.text_content("#toggleAddPlayerBtn") or ""
-    check("選手を登録する" in lbl, "「選手を登録する」になっている", lbl)
+    # 上の帯に移したぶん字数を詰めた（本人の指示 2026-08-21・段階3）
+    check("選手を登録" in lbl, "「選手を登録」になっている", lbl)
     for n in ["たいら", "たかのぶ", "みなみ"]:
         helpers.add_player(pg, n)
     pg.wait_for_timeout(300)

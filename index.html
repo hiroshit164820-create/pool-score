@@ -511,23 +511,24 @@
         <h1>選手一覧</h1>
         <div class="sub" id="playersCount"></div>
       </div>
-      <button id="backFromPlayersBtn" class="small ghost">戻る</button>
+      <!-- 登録は上の帯に置く（本人の指示 2026-08-21・段階3）。
+           「戻る」は下部タブで移動できるため削除した -->
+      <div class="tb-reg">
+        <button id="toggleSelfBtn" class="small ghost add-player-head in-bar" aria-expanded="false">
+          <span class="aph-plus" aria-hidden="true">★</span>
+          <span class="aph-label">自分を登録</span>
+        </button>
+        <button id="toggleAddPlayerBtn" class="small ghost add-player-head in-bar" aria-expanded="false">
+          <span class="aph-plus" aria-hidden="true">＋</span>
+          <span class="aph-label">選手を登録</span>
+        </button>
+      </div>
     </div>
 
     <div class="list">
-      <!-- 登録フォーム。ふだんは畳んでおき、一覧を主役にする -->
-      <!-- 自分と対戦相手を分けて登録する（本人指示 2026-08-20）。
+      <!-- 登録フォームの中身。開閉ボタンは上の帯にある（本人の指示 2026-08-21・段階3）。
+           自分と対戦相手を分けて登録する（本人指示 2026-08-20）。
            自分はホームの成績に使うため、1人だけ別枠にしている -->
-      <button id="toggleSelfBtn" class="add-player-head" aria-expanded="false">
-        <span class="aph-plus" aria-hidden="true">★</span>
-        <span class="aph-label">自分を登録する</span>
-      </button>
-
-      <button id="toggleAddPlayerBtn" class="add-player-head" aria-expanded="false">
-        <span class="aph-plus" aria-hidden="true">＋</span>
-        <span class="aph-label">選手を登録する</span>
-      </button>
-
       <div id="addPlayerBody" class="add-player-body" hidden>
         <div class="field">
           <label for="newPlayerName" id="newPlayerLabel">名前</label>
@@ -556,21 +557,6 @@
 
     <!-- 「成績を見る」「新しい試合」は本人の指示（2026-08-20）で撤去した。
          同じ導線が下部タブとホーム画面にあり、二重に置くと一覧が短く見えるため -->
-  </section>
-
-  <!-- ================= 種目ごとの成績 ================= -->
-  <section id="screenGameStats" class="screen">
-    <div class="topbar">
-      <div>
-        <h1>種目ごとの成績</h1>
-        <div class="sub" id="gameStatsSub"></div>
-      </div>
-      <div>
-        <button id="csvGameStatsBtn" class="small ghost">表計算へ</button>
-        <button id="backFromGameStatsBtn" class="small ghost">戻る</button>
-      </div>
-    </div>
-    <div class="list" id="gameStatsBody"></div>
   </section>
 
   <!-- ================= 成績 ================= -->
@@ -673,7 +659,6 @@
 <script src="js/ui_match.js"></script>
 <script src="js/ui_history.js"></script>
 <script src="js/ui_players.js"></script>
-<script src="js/ui_gamestats.js"></script>
 <script src="js/ui_home.js"></script>
 <script src="js/money_game.js"></script>
 <script src="js/ui_money.js"></script>

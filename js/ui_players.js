@@ -26,7 +26,8 @@ const PLAYERS = (function () {
     // 名前を入れるまでスキルレベル欄は出さない。
     // 空欄のまま選択肢が並んでいると、何を設定しているのか分からなくなるため
     $("newPlayerName").addEventListener("input", renderNewSkill);
-    $("backFromPlayersBtn").addEventListener("click", function () { UI.showScreen("screenSetup"); });
+    // 選手一覧の「戻る」は本人の指示（2026-08-21・段階3）で撤去した。
+    // 下部タブで移動できるため、上の帯は登録ボタンだけにしている
 
     // 登録フォームの開閉。ふだんは畳んでおき、一覧を主役にする。
     // 自分と対戦相手で同じ欄を使い、どちらを登録中かだけを持つ
@@ -365,6 +366,14 @@ const PLAYERS = (function () {
       ]);
       const badge = classBadge(p.cls);
       if (badge) nameBox.appendChild(badge);
+      // 自分の印は名前の右に、短い札で付ける（本人の指示 2026-08-21・段階3）。
+      // 名前の欄の中に入れるのが要点。行の直下に置くと欄が1つ増え、
+      // .mc-main の3列レイアウトがずれて勝敗が他の人と違う位置に出てしまう
+      if (mine) {
+        nameBox.appendChild(
+          UI.el("span", { class: "self-badge", text: "★", title: "自分", "aria-label": "自分" })
+        );
+      }
       const nameRow = UI.el("div", { class: "mc-main" }, [
         nameBox,
         UI.el("span", {
@@ -372,13 +381,6 @@ const PLAYERS = (function () {
           text: st.matches ? st.wins + "勝" + st.losses + "敗" : "記録なし",
         }),
       ]);
-      // 自分には印を付ける。どれが成績に出ている人か一目で分かるようにする
-      if (mine) {
-        nameRow.insertBefore(
-          UI.el("span", { class: "self-badge", text: "自分" }),
-          nameRow.firstChild
-        );
-      }
       card.appendChild(nameRow);
 
       if (st.matches) {
@@ -652,20 +654,27 @@ const PLAYERS = (function () {
       // 冒頭に「自分の成績」「他選手の成績」を1行で置く（本人の指示 2026-08-21・D）
       body.appendChild(statsSwitchRow(null));
 
-      // 「種目ごとの成績」はホームのボタンを消したため入る道が無くなっていた。
-      // 成績ページから開けるようにする（本人の指示 2026-08-21）
-      if (typeof GAMESTATS !== "undefined") {
+      // 「種目ごとの成績」は本人の指示（2026-08-21・段階3）で削除した
+
+      // 「他選手の成績」に自分は出さない（本人の指示 2026-08-21・段階3）。
+      // 自分は左の「自分の成績」で見るため、ここに並べると二重になる
+      const me0 = STORE.getSelf();
+      const others = me0
+        ? players.filter(function (p) { return p.id !== me0.id; })
+        : players;
+
+      if (!others.length) {
         body.appendChild(
-          UI.el("button", {
-            class: "ghost stats-bygame",
-            text: "種目ごとの成績を見る",
-            onclick: function () { GAMESTATS.open(); },
-          })
+          UI.el("div", { class: "empty" }, [
+            UI.el("p", { text: "自分のほかに登録された選手がいません。" }),
+          ])
         );
+        UI.showScreen("screenStats");
+        return;
       }
 
-      // 全員の一覧（勝率順）
-      const rows = players
+      // 一覧（勝率順）
+      const rows = others
         .map(function (p) { return { p: p, st: STORE.playerStats(p.id) }; })
         .sort(function (a, b) {
           if (!a.st.matches) return 1;
