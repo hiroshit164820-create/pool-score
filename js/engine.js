@@ -323,6 +323,10 @@ function reduceMatch(match) {
     runScore: { A: 0, B: 0 }, // イニング内の連続得点（ハイラン算出用）
     rackBrokenBy: null,
     rackHadOpponentTurn: false,
+    // このラックがブレイクエースで終わったか（終わった側）。
+    // ブレイクエースとマスワリは別物なので、両方を数えないための印
+    // （本人の指示 2026-08-22）
+    rackBreakAce: null,
     lastRackWinner: null,
   };
 
@@ -399,6 +403,9 @@ function applyEvent(st, ev, ctx) {
     case "DEAD_BALLS":
       applyDeadBalls(st, ev, ctx);
       break;
+    case "MARK":
+      applyMark(st, ev, ctx);
+      break;
     case "TIMEOUT":
       if (ev.side) st.stats[ev.side].timeouts++;
       break;
@@ -425,6 +432,7 @@ function startRack(st, ev, ctx) {
   st.turn = st.breakSide;
   ctx.rackBrokenBy = st.breakSide;
   ctx.rackHadOpponentTurn = false;
+  ctx.rackBreakAce = null;
 }
 
 function applyPocket(st, ev, ctx) {
@@ -466,6 +474,9 @@ function applyPocket(st, ev, ctx) {
   // ブレイクエース: ブレイク一撃でキーボールが入る（9ボールのみ）
   if (onBreak && hitKey && ctx.base.hasBreakAce) {
     st.stats[side].breakAce++;
+    // マスワリ（ブレイクから撞き切った）とは別物なので、
+    // このラックはマスワリとして数えない（本人の指示 2026-08-22）
+    ctx.rackBreakAce = side;
   }
 
   if (hitKey) finishRack(st, side, ctx);
@@ -490,8 +501,10 @@ function finishRack(st, winnerSide, ctx) {
 
   if (ctx.rackBrokenBy === winnerSide) {
     st.stats[winnerSide].breakWins++;
-    // マスワリ（ブレイクランアウト）: ブレイクした本人が相手にターンを渡さず撞き切った
-    if (ctx.base.hasMasuwari && !ctx.rackHadOpponentTurn) {
+    // マスワリ（ブレイクランアウト）: ブレイクした本人が相手にターンを渡さず撞き切った。
+    // ブレイクエース（ブレイクの一撃で終わった）は別に数えるので、ここでは除く
+    if (ctx.base.hasMasuwari && !ctx.rackHadOpponentTurn
+        && ctx.rackBreakAce !== winnerSide) {
       st.stats[winnerSide].masuwari++;
     }
   }
@@ -664,6 +677,25 @@ function applyStep(st, ev, ctx) {
   } else {
     st.step[side] = cur + 1;
   }
+}
+
+/**
+ * 回数だけを数える印（マスワリ・ブレイクエース）。
+ *
+ * 本人の指示（2026-08-22）:
+ *   「マスワリもエースも押してもスコアボードの点数が増えないようにしてください。
+ *     カウントを記録するのみのボタンとします」
+ *
+ * 点・盤面・ラック・手番のどれも動かさない。回数だけを足す。
+ * 種目が持っていない項目（14-1のマスワリなど）は無視する。
+ */
+function applyMark(st, ev, ctx) {
+  const side = ev.side;
+  if (!side || !st.stats[side]) return;
+  const d = ev.d || {};
+  if (d.masuwari && ctx.base.hasMasuwari) st.stats[side].masuwari++;
+  if (d.breakAce && ctx.base.hasBreakAce) st.stats[side].breakAce++;
+  if (d.safety && ctx.base.safetyCallable) st.stats[side].safety++;
 }
 
 /**

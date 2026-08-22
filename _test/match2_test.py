@@ -53,7 +53,11 @@ FIT = """() => {
   return {botOut: Math.round(bb.bottom - window.innerHeight),
           clip: clip,
           scoreboardH: Math.round(sb.height),
-          sheetH: Math.round(sec.querySelector('.sheet-area').getBoundingClientRect().height),
+          // 2026-08-22: JPAのシートは画面に重ねて開くので、#screenMatch の外にも出る
+          sheetH: (() => {
+            const sa = document.getElementById('sheetArea');
+            return (sa && !sa.hidden) ? Math.round(sa.getBoundingClientRect().height) : 0;
+          })(),
           hScroll: document.documentElement.scrollWidth > window.innerWidth + 1};
 }"""
 
@@ -131,7 +135,8 @@ with sync_playwright() as p:
     check(pg.locator(".sheet-grid").count() >= 1, "得点マスが出る")
     check((pg.text_content("#sheetBtn") or "").find("閉じる") >= 0,
           "ボタンの文言が「閉じる」に変わる", pg.text_content("#sheetBtn"))
-    pg.click("#sheetBtn")
+    # 2026-08-22: シートは画面に重ねて開くので、閉じるのはシートの中の「閉じる」
+    pg.click(".sheet-bar .st-close")
     pg.wait_for_timeout(500)
     check(pg.evaluate("() => document.getElementById('sheetArea').hidden"),
           "もう一度押すと閉じる")
@@ -194,7 +199,7 @@ with sync_playwright() as p:
                                  "e => getComputedStyle(e).borderLeftWidth")
     check(border and border != "0px", "区切りの線が引かれている", border)
     pg.screenshot(path=os.path.join(SHOTS, "match2_sheet.png"), full_page=True)
-    pg.click("#sheetBtn")
+    pg.click(".sheet-bar .st-close")
     pg.wait_for_timeout(400)
 
     # ================= 9〜10. スコア修正 =================

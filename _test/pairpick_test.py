@@ -168,7 +168,8 @@ with sync_playwright() as p:
     print("   " + str(pk))
     check(pk and len(pk["chips"]) == 4, "他の欄の人も出る（4人）", pk and len(pk["chips"]))
     sato = [c for c in pk["chips"] if c["name"] == "佐藤"]
-    check(sato and sato[0]["at"] == "B1", "佐藤に「B1」の札が付く", sato)
+    # 2026-08-22：札の字をクラス（Be・C・B・A・SA・P）と紛れない位置の言葉に変えた
+    check(sato and sato[0]["at"] == "右1", "佐藤に「右1」の札が付く", sato)
 
     section("6. 押すと入れ替わる（ペアの組み替えが1回で済む）")
     click_chip(pg, "inNameA2", "佐藤")
@@ -199,7 +200,8 @@ with sync_playwright() as p:
     click_change(pg, "inNameA")
     pk = picker(pg, "inNameA")
     kis = [c for c in pk["chips"] if c["name"] == "岸川"]
-    check(kis and kis[0]["at"] == "B", "シングルスの札は「B」", kis)
+    # 2026-08-22：クラス（Be・C・B・A・SA・P）と紛れない字にした
+    check(kis and kis[0]["at"] == "右", "シングルスの札は「右」", kis)
     click_chip(pg, "inNameA", "岸川")
     n5 = pg.evaluate(NAMES)
     print("   " + str(n5))

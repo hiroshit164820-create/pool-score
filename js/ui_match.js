@@ -39,6 +39,9 @@ const MATCH = (function () {
   }
 
   function close() {
+    // スコアシートは画面に重ねて開くので、試合画面を離れるときに必ず閉じる
+    // （閉じないと他の画面の上に残る。本人の指示 2026-08-22の重ね表示に伴う後始末）
+    if (typeof SHEET !== "undefined" && SHEET.close) SHEET.close();
     if (clock) {
       clock.destroy();
       clock = null;
@@ -498,10 +501,15 @@ const MATCH = (function () {
     // 球1個=1点の種目（14-1）は、タップ1回を「1個ポケットした」として記録する。
     // ラック単位の種目とは記録するイベントが違う。
     if (isPerBallInput(r)) {
-      // マスワリ・ブレイクエースの札は、球1個ずつ入力する種目（JPAなど）でも
-      // 押せるようにしてある。ここで instant を渡さないと、ただの1球として
-      // 記録され「スコアだけ1点増えて回数は0のまま」になる（本人の指摘 2026-08-21）
-      recordOneBall(side, r, instant);
+      // マスワリ・ブレイクエースは「回数を数えるだけ」のボタンにする
+      // （本人の指示 2026-08-22）。点・盤面・ラックは動かさない。
+      // 2026-08-21 は「9番ぶんの点を入れる」形にしていたが、
+      // 点が二重に入るため取りやめた
+      if (instant === "masuwari" || instant === "breakAce") {
+        recordMark(side, r, instant);
+        return;
+      }
+      recordOneBall(side, r);
       return;
     }
 
@@ -627,29 +635,19 @@ const MATCH = (function () {
    * 球1個ぶんの得点を記録する（14-1）。
    * ballsPerRack 個たまったら、ブレイクボールを残してラックを組み直す（規程第13章第1条第3項）。
    */
-  function recordOneBall(side, r, instant) {
+  function recordOneBall(side, r) {
     const before = reduceMatch(match);
 
-    // マスワリ・ブレイクエースは「1球」ではなく、そのラックの形そのもの。
-    // 球単位の種目では、engine が判定できる形の POCKET に置き換える
-    // （本人の指摘 2026-08-21：押しても回数が増えずスコアだけ1点増えていた）
-    if (instant === "breakAce" || instant === "masuwari") {
-      const done = recordInstantByBalls(side, r, instant, before);
-      if (!done) return;
-    } else {
-      const ball = pickBallToPocket(side, before);
-      if (ball === null) {
-        UI.toast("この人が得点できる球が盤面に残っていません。", "warn");
-        return;
-      }
-      appendEvent(match, { t: "POCKET", side: side, d: { balls: [ball], onBreak: false } });
+    // マスワリ・ブレイクエースはここへ来ない（recordMark が回数だけ記録する。
+    // 本人の指示 2026-08-22。以前は9番ぶんの点を入れていた）
+    const ball = pickBallToPocket(side, before);
+    if (ball === null) {
+      UI.toast("この人が得点できる球が盤面に残っていません。", "warn");
+      return;
     }
+    appendEvent(match, { t: "POCKET", side: side, d: { balls: [ball], onBreak: false } });
 
     const after = reduceMatch(match);
-    // 直前に入れた球（instant のときは複数入ることがあるので最後の1個を見る）
-    const lastEv = match.events[match.events.length - 1];
-    const lastBalls = (lastEv && lastEv.d && lastEv.d.balls) || [];
-    const ball = lastBalls.length ? lastBalls[lastBalls.length - 1] : null;
     const perRack = r.base.ballsPerRack;
     if (perRack && after.onTable.length <= r.base.balls.length - perRack) {
       // 14個入れたので次のラックへ（ブレイクボール1個は残ったまま）
@@ -691,6 +689,33 @@ const MATCH = (function () {
   }
 
   /**
+   * 球単位の種目（JPAなど）で、マスワリ／ブレイクエースを「回数だけ」記録する。
+   *
+   * 本人の指示（2026-08-22）:
+   *   「マスワリもエースも押してもスコアボードの点数が増えないようにしてください。
+   *     カウントを記録するのみのボタンとします」
+   *   「エースを押すとマスワリも増えるので切り離してください。別物です」
+   *
+   * 点を入れる POCKET は積まない。engine の MARK が回数だけを足す。
+   * マスワリとエースはそれぞれ別の印なので、片方を押しても他方は増えない。
+   */
+  function recordMark(side, r, key) {
+    const base = r.base;
+    if (key === "masuwari" && !base.hasMasuwari) return;
+    if (key === "breakAce" && !base.hasBreakAce) return;
+    const d = {};
+    d[key] = true;
+    appendEvent(match, { t: "MARK", side: side, d: d });
+    save();
+    render();
+    bump(side);
+    UI.toast(
+      sideName(side) + " の" + (key === "masuwari" ? "マスワリ" : "ブレイクエース")
+        + "を1回記録しました（点は増えません）。"
+    );
+  }
+
+  /**
    * タップ1回で「どの球を入れたことにするか」を決める。
    *
    * 番号を1つずつ選ばせると台の脇での操作が重くなるため、こちらで選ぶ。
@@ -699,51 +724,6 @@ const MATCH = (function () {
    *
    * 得点になる球が残っていなければ null を返す（呼び出し側で知らせる）。
    */
-  /**
-   * 球単位の種目（JPAなど）で、マスワリ／ブレイクエースを記録する。
-   *
-   * engine は「盤面に入った球」から回数を数える作りなので、
-   * 札の on/off ではなく、その形になる POCKET を積む。
-   *   ブレイクエース … ブレイクの一撃でキーボール（9番）が入った
-   *   マスワリ       … そのラックの残り球を全部その人が入れた（撞き切った）
-   * どちらも入れられない状態のときは、何も記録せず知らせて戻る。
-   *
-   * @returns {boolean} 記録したら true
-   */
-  function recordInstantByBalls(side, r, instant, before) {
-    const onTable = (before.onTable || []).slice();
-    const key = r.base.keyBall;
-
-    if (instant === "breakAce") {
-      if (!key || onTable.indexOf(key) < 0) {
-        UI.toast(key + "番が盤面に残っていないので、ブレイクエースにできません。", "warn");
-        return false;
-      }
-      // onBreak を立てると engine がブレイクエースとして数える（engine.js）
-      appendEvent(match, {
-        t: "POCKET", side: side, d: { balls: [key], onBreak: true },
-      });
-      return true;
-    }
-
-    // マスワリ: 残っている球を全部入れる。キーボールは最後に回して、
-    // 「撞き切ってラックが終わった」順序になるようにする
-    if (!onTable.length) {
-      UI.toast("盤面に球が残っていないので、マスワリにできません。", "warn");
-      return false;
-    }
-    const rest = onTable.filter(function (b) { return b !== key; });
-    const balls = key && onTable.indexOf(key) >= 0 ? rest.concat([key]) : rest;
-    if (!balls.length) {
-      UI.toast("入れられる球がありません。", "warn");
-      return false;
-    }
-    appendEvent(match, {
-      t: "POCKET", side: side, d: { balls: balls, onBreak: false },
-    });
-    return true;
-  }
-
   function pickBallToPocket(side, st) {
     const onTable = st.onTable || [];
     if (!onTable.length) return null;
@@ -1099,18 +1079,31 @@ const MATCH = (function () {
     // セーフティ数は試合結果・成績・履歴に出す（本人の指示 2026-08-20）。
     // 試合中の帯にも出すと行が増え、下の操作ボタンが画面からはみ出すため置かない。
 
-    // マスワリの合計。1回も出ていないうちは出さない（本人の指示）
+    // マスワリの合計表示は消した（本人の指示 2026-08-22）。
+    //   「交代ボタンの下にあるマスワリの記録表示を削除」
+    // 回数は各プレーヤーのパネルの「マスワリ」ボタンの中に出ていて、
+    // 試合結果・成績・履歴でも読めるので、ここでは繰り返さない。
+    // 箱そのものは index.html にあるので、必ず隠しておく
     const masuNode = $("masuwariInfo");
     if (masuNode) {
-      const mA = (st.stats.A && st.stats.A.masuwari) || 0;
-      const mB = (st.stats.B && st.stats.B.masuwari) || 0;
-      if (mA + mB > 0) {
-        masuNode.hidden = false;
-        masuNode.textContent = "マスワリ " + (mA + mB)
-          + "（" + sideName("A") + mA + "・" + sideName("B") + mB + "）";
-      } else {
-        masuNode.hidden = true;
-      }
+      masuNode.hidden = true;
+      masuNode.textContent = "";
+    }
+
+    // 無効球がいま何個あるかを出す（本人の指示 2026-08-22）。
+    //   「無効球を押しても試合画面上で今何個あるのかわからないので、
+    //     カウントが表示されるように」
+    // 置き場所はラック数・イニング数と同じ帯（横向きでは上の帯へ移る）
+    const dA = (st.stats.A && st.stats.A.deadBalls) || 0;
+    const dB = (st.stats.B && st.stats.B.deadBalls) || 0;
+    const deadTotal = dA + dB;
+    const deadNode = ensureDeadInfo();
+    if (deadNode) {
+      const showDead = isJpaBallInput(r) && deadTotal > 0;
+      deadNode.hidden = !showDead;
+      deadNode.textContent = showDead
+        ? "無効球 " + deadTotal + "個（" + sideName("A") + dA + "・" + sideName("B") + dB + "）"
+        : "";
     }
 
     // 「次のラックへ」。JPAは無効球があり、10点に届かないままラックが
@@ -1129,7 +1122,12 @@ const MATCH = (function () {
     }
     // 無効球は、球1個ずつ点を入れる種目（JPA）でだけ意味がある
     const deadBtn = $("deadBallBtn");
-    if (deadBtn) deadBtn.hidden = !(isJpaBallInput(r) && !st.winner);
+    if (deadBtn) {
+      deadBtn.hidden = !(isJpaBallInput(r) && !st.winner);
+      // ボタン自身にも今の個数を出す。押したあと帯を見に行かなくても分かる
+      const dtx = deadBtn.querySelector(".bb-tx");
+      if (dtx) dtx.textContent = deadTotal ? "無効球 " + deadTotal : "無効球";
+    }
 
     const nextRackBtn = $("nextRackBtn");
     if (nextRackBtn) {
@@ -1159,11 +1157,18 @@ const MATCH = (function () {
       : gridMode || stepMode
       ? "" // 盤面・段階の入力側に案内を出すのでここは空にする
       : perBall
+      // JPAは案内を出さない（本人の指示 2026-08-22:
+      // 「球を入れたらその人のスコアをタップ」を削除）。
+      // ボールハンデがあるときだけ「どの球が点になるか」を残す。
+      // 14-1（キーボールが無い球単位の種目）は今までどおり案内を出す
       ? (hasAnyHandicap()
           ? "得点になる球を入れてスコアをタップ"
+          : isJpaBallInput(r)
+          ? ""
           : "球を入れたら、その人のスコアをタップ")
       : "取った側のスコアをタップ（長押しで戻す）";
-    $("tapHint").hidden = (gridMode || stepMode) && !finished;
+    $("tapHint").hidden = ((gridMode || stepMode) && !finished)
+      || !$("tapHint").textContent;
 
     // ターン交代ボタン。
     // 「いま誰の番か」と「押すと誰に渡るか」を別々に出す。
@@ -1317,19 +1322,34 @@ const MATCH = (function () {
     const after = reduceMatch(match);
     // 盤面が空になったら次のラックへ。
     // ローテーションは得点がラックを跨いで続くので、ここは仕切り直しではない
+    let refilled = false;
     if (!after.winner && (!after.onTable || !after.onTable.length)) {
       appendEvent(match, {
         t: "RACK_START",
         side: null,
         d: { rackNo: after.rackNo + 1, breakSide: side, auto: true, continuation: true },
       });
-      UI.toast("全部入りました。次のラックを組んでください。");
+      refilled = true;
     }
 
     save();
-    render();
-    bump(side);
-    UI.toast(sideName(side) + " " + ball + "番（+" + r.scoring.scoreOf(ball) + "点）");
+
+    // 横向きの盤面（ローテーション）は、押した反応を
+    // 「点の数字が増える」と「押した球が薄くなる」だけにする（本人の指示 2026-08-22）。
+    //   「横向きにすると点数入力したあとの表示が長いので、数字のカウントと
+    //     ボールの透過だけのアクションにして、ボールを連続で押せるようにして」
+    // 通知（数秒出る）と画面の作り直しがあると、その間に次の球を押しにくかった。
+    // 盤面が組み直しになるときと決着したときだけは、作り直しが要るので通す。
+    // 縦向きは今までどおり（本人の指示は横向きに限っている）
+    const quiet = isTightLandscape() && usesBallGrid(r) && !after.winner && !refilled;
+    if (quiet) {
+      quickBallFeedback(ball, after);
+    } else {
+      render();
+      bump(side);
+      if (refilled) UI.toast("全部入りました。次のラックを組んでください。");
+      UI.toast(sideName(side) + " " + ball + "番（+" + r.scoring.scoreOf(ball) + "点）");
+    }
 
     const final = reduceMatch(match);
     if (final.winner) {
@@ -1339,6 +1359,34 @@ const MATCH = (function () {
       if (after.rackNo !== before.rackNo) clock.resetRack();
       startClockForCurrentTurn();
     }
+  }
+
+  /**
+   * 横向きのローテーションで、押したことだけを最小限に伝える。
+   *
+   * 画面全体を作り直さないので、指を置いたまま次の球を続けて押せる。
+   * 変えるのは「押した球を薄くする（押せなくする）」と
+   * 「両者の点の数字と進み具合の帯」だけ。
+   */
+  function quickBallFeedback(ball, st) {
+    const btn = document.querySelector(
+      '#ballGrid .ball-btn[data-ball="' + ball + '"]'
+    );
+    if (btn) {
+      btn.classList.add("gone");
+      btn.disabled = true;
+    }
+    const cur = displayScore(st);
+    ["A", "B"].forEach(function (sd) {
+      const node = $("score" + sd);
+      if (node) node.textContent = String(cur[sd]);
+      const bar = $("bar" + sd);
+      const target = match.goal.targets[sd];
+      if (bar && target) {
+        bar.style.width = Math.min(100, Math.round((cur[sd] / target) * 100)) + "%";
+      }
+    });
+    fitScoreFont();
   }
 
   /** ボウラードか（1人用・フレーム制） */
@@ -1645,8 +1693,24 @@ const MATCH = (function () {
    * 上の帯（種目名の行）には横の余白が余っているので、そこへ寄せる。
    * 縦向きに戻したら元の場所へ戻す。
    */
+  /**
+   * 無効球の個数を出す箱。index.html は他の作業と重なるので、
+   * ここで1回だけ作ってラック数・イニング数と同じ並びに入れる
+   * （横向きでは syncMetaPlace が上の帯へまとめて移す）。
+   */
+  function ensureDeadInfo() {
+    let node = $("deadInfo");
+    if (!node) {
+      node = UI.el("span", { id: "deadInfo", class: "dead-info", hidden: "hidden" });
+    }
+    const inning = $("inningInfo");
+    const home = inning && inning.parentNode;
+    if (home && node.parentNode !== home) home.insertBefore(node, inning.nextSibling);
+    return node;
+  }
+
   // 移すのはラック数とイニング数だけ。マスワリの合計は元の場所に残す
-  const META_MOVE = ["rackInfo", "inningInfo"];
+  const META_MOVE = ["rackInfo", "inningInfo", "deadInfo"];
 
   /**
    * 横向きで高さが足りない状態か（css/v2.css の横向き用の指定と同じ条件）。
@@ -1869,6 +1933,13 @@ const MATCH = (function () {
           return sum + scoreOf(b);
         }, 0);
         return nm + " が " + pts + "点 追加";
+      }
+      case "MARK": {
+        const tags = [];
+        if (e.d && e.d.masuwari) tags.push("マスワリ");
+        if (e.d && e.d.breakAce) tags.push("ブレイクエース");
+        if (e.d && e.d.safety) tags.push("セーフティ");
+        return nm + " の" + (tags.join("・") || "記録") + "（回数のみ）";
       }
       case "DEAD_BALLS": {
         const n = (e.d.balls && e.d.balls.length) || e.d.count || 1;

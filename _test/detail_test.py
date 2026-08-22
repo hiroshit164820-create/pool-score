@@ -251,15 +251,18 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     check(pg.eval_on_selector(".detail-card", "e => e.open"), "押すと開く")
     txt = card_text(pg)
+    # 2026-08-22 から項目名は「主題」と「条件（括弧の中）」の2行組みになった。
+    # innerText には行の間に改行が入るので、突き合わせは改行を落とした形で行う
+    flat = txt.replace(chr(10), "")
     pg.screenshot(path=os.path.join(SHOTS, "detail_card.png"), full_page=True)
 
     # ================= 2. 一般種目 =================
     section("2. 9ボール")
     for k in ["勝敗数", "勝率", "マスワリ数／率", "ブレイクエース",
-              "1ラックあたりの平均セーフティ数", "1試合あたりの平均セーフティ数",
-              "1ラックあたりの平均イニング数", "ショットクロック平均タイム",
-              "1試合あたりのエクステンション使用回数"]:
-        check(k in txt, "「" + k + "」がある")
+              "平均セーフティ数（1ラックあたり）", "平均セーフティ数（1試合あたり）",
+              "平均イニング数（1ラックあたり）", "平均タイム（ショットクロック）",
+              "エクステンション（1試合あたりの回数）"]:
+        check(k in flat, "「" + k + "」がある")
     check("9ボール" in txt, "種目名が出る")
 
     # ================= 3. ローテーション =================
@@ -268,11 +271,22 @@ with sync_playwright() as p:
     check("120点の勝率" in txt, "点数別の勝率がある")
     check("Aハイラン数／率" in txt, "Aハイランがある")
     check("Bハイラン数／率" in txt, "Bハイランがある")
-    # 項目名の欄が潰れて縦に割れていないこと（本人の指摘で直した箇所）
-    narrow = pg.evaluate("""() => [...document.querySelectorAll('.detail-card .stat-key')]
-      .filter(e => e.getBoundingClientRect().width < 60)
-      .map(e => e.textContent.slice(0, 20))""")
-    check(not narrow, "項目名の欄が潰れていない", narrow)
+    # 項目名が半端な位置で折り返していないこと（本人の指摘で直した箇所）。
+    # 欄の幅ではなく、実際に何行に割れたかを測る（2026-08-22 に測り方を変えた。
+    # 幅で見ると「勝敗数」のような短い項目まで拾ってしまうため）。
+    # 中身に Range を張ると行ごとに矩形が返る（要素そのものは display:block で1つ）
+    narrow = pg.evaluate("""() => {
+      const bad = [];
+      document.querySelectorAll('.detail-card .stat-key .sl-main,'
+        + ' .detail-card .stat-key .sl-sub').forEach(sp => {
+        if (!sp.getClientRects().length) return;
+        const r = document.createRange();
+        r.selectNodeContents(sp);
+        if (r.getClientRects().length > 1) bad.push(sp.textContent.slice(0, 20));
+      });
+      return bad;
+    }""")
+    check(not narrow, "項目名が半端な位置で折り返していない", narrow)
     detail = pg.evaluate("""() => {
       const p = STORE.listPlayers().find(x => x.name === 'たいら');
       return STORE.gameDetail(p.id);
@@ -290,15 +304,15 @@ with sync_playwright() as p:
     section("5. ボウラード")
     for k in ["平均スコア（過去10回）", "平均スコア（過去30回）", "平均スコア（過去50回）",
               "最高スコア", "累計ストライク数", "累計スペア数", "累計ミス数"]:
-        check(k in txt, "「" + k + "」がある")
+        check(k in flat, "「" + k + "」がある")
 
     # ================= 6. JPA =================
     section("6. JPA 9ボール")
-    for k in ["累計獲得ポイント数", "1試合あたりの平均獲得ポイント数",
-              "1試合あたりの平均獲得ポイント率", "あがりまでの最小イニング数",
-              "あがりまでの最大イニング数", "対戦相手のスキルレベル平均"]:
-        check(k in txt, "「" + k + "」がある")
-    check("相手SL5 の勝敗数／勝率" in txt, "相手のSL別が出る", txt[:300])
+    for k in ["累計獲得ポイント数", "平均獲得ポイント数（1試合あたり）",
+              "平均獲得ポイント率（1試合あたり）", "最小イニング数（あがりまで）",
+              "最大イニング数（あがりまで）", "スキルレベル平均（対戦相手）"]:
+        check(k in flat, "「" + k + "」がある")
+    check("相手SL5（勝敗数・勝率）" in flat, "相手のSL別が出る", flat[:300])
     jpa = detail["byGame"].get("jpa_9ball")
     check(jpa and jpa["oppSlCount"] == 1 and jpa["oppSlSum"] == 5,
           "相手のSLを5として数えている", jpa and (jpa["oppSlSum"], jpa["oppSlCount"]))
@@ -313,14 +327,14 @@ with sync_playwright() as p:
     check(seg is not None, "ダブルスの節がある", txt[:300])
     seg = seg or ""
     check("累計獲得ポイント数" not in seg, "ダブルスにポイントの行は出さない", seg[:200])
-    check("対戦相手のスキルレベル平均" not in seg, "ダブルスにSL平均は出さない", seg[:200])
+    check("スキルレベル平均" not in seg, "ダブルスにSL平均は出さない", seg[:200])
     check("マスワリ数／率" in seg, "ダブルスにもマスワリは出す", seg[:200])
 
     # ================= 8. ハウスゲーム =================
     section("8. ハウスゲーム")
     check("カイルン" in txt, "カイルンの節がある")
     check("最大連続得点" in txt, "最大連続得点がある")
-    check("獲得得点の履歴（新しい順）" in txt, "得点の履歴がある")
+    check("獲得得点の履歴（新しい順）" in flat, "得点の履歴がある")
     house = detail["byHouse"]
     check(house.get("kailun", {}).get("maxRun") == 3, "カイルンの最大連続得点が3",
           house.get("kailun"))

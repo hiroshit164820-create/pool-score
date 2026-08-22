@@ -61,23 +61,28 @@ with sync_playwright() as p:
     inbar = pg.eval_on_selector("#layoutSaveBtn", "e => !!e.closest('.topbar')")
     check(inbar, "保存ボタンが .topbar の中")
     th = pg.eval_on_selector("#poolTable", "e => e.getBoundingClientRect().height")
-    check(th > 330, "盤面の高さが330pxより大きい（以前は約310px）", round(th))
+    # 2026-08-22：右の列を無くし、台の下の「直線／描画」の行も左へ移したので
+    # 盤面はさらに大きくなった（実測 456px → 556px @390×844）
+    check(th > 500, "盤面の高さが500pxより大きい（以前は約456px）", round(th))
 
-    print("\n-- 4/5. 左右のボタン列 --")
-    lf = pg.eval_on_selector("#layoutUndoBtn", "e => !!e.closest('.lay-left')")
-    lc = pg.eval_on_selector("#layoutClearBtn", "e => !!e.closest('.lay-left')")
-    rr = pg.eval_on_selector("#layoutRedoBtn", "e => !!e.closest('.lay-right')")
-    check(lf, "「一つ前に戻る」が左列")
-    check(lc, "「全部どける」が左列")
-    check(rr, "「一つ次に進む」が右列")
+    # 2026-08-22：本人の指示で「一つ次に進む」「直線を引く」「描画する」も左へ移した。
+    # 右の列は無くし、空いたぶんを台の幅に回している
+    print("\n-- 4/5. ボタンは全部、台の左の列 --")
+    ids = ["#layoutUndoBtn", "#layoutRedoBtn", "#layoutClearBtn",
+           "#layoutLineBtn", "#layoutDrawBtn"]
+    for bid in ids:
+        check(pg.eval_on_selector(bid, "e => !!e.closest('.lay-left')"),
+              bid + " が左列")
+    nright = pg.eval_on_selector_all(".lay-right", "e => e.length")
+    check(nright == 0, "右の列は無い", nright)
     check(pg.inner_text("#layoutUndoBtn").strip() == "一つ前に戻る", "左のラベル", pg.inner_text("#layoutUndoBtn"))
-    check(pg.inner_text("#layoutRedoBtn").strip() == "一つ次に進む", "右のラベル", pg.inner_text("#layoutRedoBtn"))
-    lx = pg.eval_on_selector("#layoutUndoBtn", "e => e.getBoundingClientRect().left")
+    check(pg.inner_text("#layoutRedoBtn").strip() == "一つ次に進む", "進むのラベル", pg.inner_text("#layoutRedoBtn"))
     tx = pg.eval_on_selector("#poolTable", "e => e.getBoundingClientRect().left")
-    rx = pg.eval_on_selector("#layoutRedoBtn", "e => e.getBoundingClientRect().left")
     trx = pg.eval_on_selector("#poolTable", "e => e.getBoundingClientRect().right")
-    check(lx < tx, "左列は台より左", (lx, tx))
-    check(rx > trx, "右列は台より右", (rx, trx))
+    for bid in ids:
+        bx = pg.eval_on_selector(bid, "e => e.getBoundingClientRect().right")
+        check(bx <= tx, bid + " は台より左にある", (bx, tx))
+    check(trx > tx, "台に幅がある", (tx, trx))
     # 台がはみ出していないこと
     over = pg.evaluate("() => document.documentElement.scrollWidth > document.documentElement.clientWidth")
     check(not over, "横スクロールが出ていない")

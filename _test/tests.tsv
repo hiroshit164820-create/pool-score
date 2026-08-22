@@ -64,3 +64,8 @@ python	sheetdata_test.py	終わった試合のスコア表データ（08-22）
 python	sheetview_test.py	スコア表を履歴・成績から見る（08-22）
 python	storage_test.py	保存容量の掃除（実削除・古い試合のイベント間引き）（08-22）
 python	compactui_test.py	「保存を軽くする」の入口（08-22）
+python	fix_csv_test.py	表計算への書き出し（日付化け・数式・数えない項目の「-」）
+python	fix_stats_test.py	成績の表記（対戦相手別＝試合数順・パートナー別＝勝率順・項目名の2行組み・種目カードの色／08-22）
+python	fix_layout_test.py	配置画面とルール選択画面の手直し（左に集約・球を小さく・札の表記・時計の段ずれ、08-22）
+python	fix_match_test.py	試合画面の手直し（横向き連続入力・シート重ね表示・エース／マスワリ・無効球カウント、08-22）
+python	fix_home_test.py	ホーム画面のボタン（金色をやめる・押せると分かる形／08-22）

@@ -70,7 +70,8 @@ with sync_playwright() as p:
     pg.click("#sheetBtn")
     pg.wait_for_timeout(400)
     check(pg.eval_on_selector_all(".sheet-grid", "e => e.length") == 2, "押すと開く")
-    pg.click("#sheetBtn")
+    # 2026-08-22: シートは画面に重ねて開くので、閉じるのはシートの中の「閉じる」
+    pg.click(".sheet-bar .st-close")
     pg.wait_for_timeout(200)
     check(pg.eval_on_selector_all(".sheet-grid", "e => e.length") == 0, "もう一度押すと閉じる")
 
@@ -105,7 +106,7 @@ with sync_playwright() as p:
                                 " img: getComputedStyle(e).backgroundImage})")
     check("255, 140, 26" in style["shadow"], "明るいオレンジの枠", style["shadow"])
     check("repeating-linear-gradient" in style["img"], "斜線が入っている", style["img"][:60])
-    pg.click("#sheetBtn")
+    pg.click(".sheet-bar .st-close")
     pg.wait_for_timeout(150)
 
     # --- 20 マスワリの自動記録 ---
@@ -118,10 +119,16 @@ with sync_playwright() as p:
         pg.click(panel2)
         pg.wait_for_timeout(140)
     pg.wait_for_timeout(400)
-    masu_visible = pg.is_visible("#masuwariInfo")
-    masu_text = pg.inner_text("#masuwariInfo") if masu_visible else ""
-    check(masu_visible, "マスワリが出たら合計が表示される", masu_text)
-    check("マスワリ" in masu_text, "合計が読める", masu_text)
+    # 2026-08-22 に「交代ボタンの下のマスワリ表示」を削除した（本人の指示）。
+    # 回数は各プレーヤーのパネルのマスワリボタンの中に出る
+    check(not pg.is_visible("#masuwariInfo"),
+          "下の帯のマスワリ表示は出さない（2026-08-22に削除）")
+    masu_n = pg.evaluate('''() => {
+      const btns = [...document.querySelectorAll('.panel-flags button')];
+      const b = btns.filter(x => x.querySelector('.sf-name').textContent === 'マスワリ');
+      return b.reduce((s, x) => s + Number(x.querySelector('.sf-count').textContent), 0);
+    }''')
+    check(masu_n >= 1, "マスワリの回数がボタンに出る", masu_n)
 
     # 決着まで進める
     for _ in range(60):

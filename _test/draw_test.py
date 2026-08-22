@@ -94,13 +94,16 @@ with sync_playwright() as p:
     for bid in ["#layoutLineBtn", "#layoutDrawBtn"]:
         box = pg.locator(bid).bounding_box()
         check(box and box["height"] >= 44, bid + " が44px以上", box)
-    # 横に並んでいる（同じ高さで左右）
+    # 2026-08-22：本人の指示で台の左の列へ移した。縦に並ぶ（同じ左端で上下）
     pos = pg.evaluate("""() => {
       const a = document.getElementById('layoutLineBtn').getBoundingClientRect();
       const b = document.getElementById('layoutDrawBtn').getBoundingClientRect();
-      return {sameRow: Math.abs(a.top - b.top) < 4, order: a.left < b.left};
+      const t = document.getElementById('poolTable').getBoundingClientRect();
+      return {sameCol: Math.abs(a.left - b.left) < 4, order: a.top < b.top,
+              leftOfTable: a.right <= t.left && b.right <= t.left};
     }""")
-    check(pos["sameRow"] and pos["order"], "2つが横に並ぶ", pos)
+    check(pos["sameCol"] and pos["order"], "2つが縦に並ぶ", pos)
+    check(pos["leftOfTable"], "2つとも台の左にある", pos)
 
     pg.click("#layoutDrawBtn")
     pg.wait_for_timeout(300)

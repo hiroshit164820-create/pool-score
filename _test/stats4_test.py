@@ -195,7 +195,11 @@ with sync_playwright() as p:
     part = part or ""
     check("きりの" in part, "組んだ相手が出る", part[:200])
     check("マスワリ" in part, "マスワリ回数／率が出る", part[:200])
-    check("勝" in part and "勝率" in part, "勝敗数と勝率が出る", part[:200])
+    # 2026-08-22 から値は2行組み（上に勝敗数、下に「N試合・勝率」）になった
+    flat_part = part.replace(chr(10), "")
+    check("勝" in flat_part and "敗" in flat_part and "試合" in flat_part
+          and "%" in flat_part,
+          "勝敗数と勝率が出る", part[:200])
 
     section("8. 直近5人＋ほかN人")
     opp5 = pg.evaluate("""() => {
@@ -246,8 +250,11 @@ with sync_playwright() as p:
     }""")
     nine = nine or ""
     check("対戦クラス" in nine, "9ボールに対戦クラス別の行がある", nine[:300])
+    # 項目名は「対戦クラス SA」＋次の行に「（勝敗数・勝率）」の2行組みになった
+    # （本人の指示 2026-08-22）
+    flat_nine = nine.replace(chr(10), "")
     for c in ["Be", "C", "B", "A", "SA", "P"]:
-        check("対戦クラス " + c + " の勝敗数・勝率" in nine,
+        check("対戦クラス " + c + "（勝敗数・勝率）" in flat_nine,
               "クラス " + c + " の行がある", nine[:400])
     detail = pg.evaluate("() => STORE.gameDetail(STORE.getSelfId()).byGame['9ball'].byClass")
     check(detail and detail.get("P", {}).get("wins") == 1,

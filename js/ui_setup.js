@@ -338,6 +338,7 @@ const SETUP = (function () {
       // ショットクロックとチェスクロックは同時には使わない
       $("scDetail").hidden = v !== "shot";
       $("ccDetail").hidden = v !== "chess";
+      alignRowLabels();
     });
     UI.bindToggle($("scModeToggle"), function () {});
     $("startMatchBtn").addEventListener("click", UI.guard(startMatch));
@@ -355,6 +356,44 @@ const SETUP = (function () {
       });
     }
     renderStartSummary();
+
+    // 横に2つ並ぶ欄（時計の「持ち時間」「残り何秒で警告」など）の
+    // 見出しの高さをそろえる。文字数の差で入力欄が上下にずれるため
+    alignRowLabels();
+    window.addEventListener("resize", alignRowLabels);
+    window.addEventListener("orientationchange", alignRowLabels);
+  }
+
+  /**
+   * 横に2つ並ぶ欄（.row の中の .field）の見出しの高さをそろえる。
+   *
+   * 「持ち時間（分・1人あたり）」は2行に折り返し、「残り何秒で警告」は1行なので、
+   * そのままだと入力欄の上端が 23.8px ずれる（本人の指摘 2026-08-22 の画像）。
+   * 行の中でいちばん高い見出しに min-height をそろえて、入力欄の上端を合わせる。
+   *
+   * 画面の幅で折り返しの行数が変わるため、幅が変わるたびに測り直す。
+   * CSSは別の係が使っているので style 属性で当てている。
+   */
+  function alignRowLabels() {
+    const screen = $("screenSetup");
+    if (!screen) return;
+    Array.prototype.forEach.call(screen.querySelectorAll(".row"), function (row) {
+      const labels = [];
+      Array.prototype.forEach.call(row.children, function (col) {
+        const lab = col.querySelector(":scope > label");
+        if (lab) labels.push(lab);
+      });
+      if (labels.length < 2) return;
+      // いったん解除してから測る（前回そろえた値のまま測ると縮まなくなる）
+      labels.forEach(function (l) { l.style.minHeight = ""; });
+      let max = 0;
+      labels.forEach(function (l) {
+        const h = l.getBoundingClientRect().height;
+        if (h > max) max = h;
+      });
+      if (!max) return;
+      labels.forEach(function (l) { l.style.minHeight = max + "px"; });
+    });
   }
 
   /** まとめの描き直しは1フレームに1回にまとめる（連打で何度も組み立てないため） */
@@ -550,6 +589,24 @@ const SETUP = (function () {
     const firstField = $("firstSideField");
     if (breakTitle) breakTitle.hidden = !!g.solo;
     if (firstField) firstField.hidden = !!g.solo;
+
+    // ダブルスではブレイクするのは個人ではなくチーム。
+    // 見出しも選択肢も「チーム」に言い換える（本人の指示 2026-08-22）。
+    // index.html は別の係が触っているので、ここから文言を入れている
+    const isDoubles = g.playersPerSide === 2;
+    if (firstField) {
+      const lab = firstField.querySelector("label");
+      if (lab) lab.textContent = isDoubles ? "先にブレイクするチーム" : "先にブレイクする人";
+    }
+    const fsToggle = $("firstSideToggle");
+    if (fsToggle) {
+      Array.prototype.forEach.call(fsToggle.querySelectorAll("button"), function (b) {
+        const v = b.getAttribute("data-v");
+        b.textContent = isDoubles
+          ? (v === "A" ? "チームA" : "チームB")
+          : (v === "A" ? "プレーヤーA" : "プレーヤーB");
+      });
+    }
 
     // ローテーションやJPAのようにブレイク方式が決まっている種目では
     // 選択肢を出さない（選べるように見せて engine が無視するのは不誠実なため）
@@ -870,12 +927,29 @@ const SETUP = (function () {
     return { quick: quick, rest: rest };
   }
 
-  /** 名前欄のIDを「A」「A2」のような短い名札にする（どこに誰がいるかを示す用） */
+  /**
+   * 名前欄のIDを短い名札にする（その人がいま「どこの欄にいるか」を示す用）。
+   *
+   * 以前は「A」「A2」のように出していたが、選手のクラス（Be・C・B・A・SA・P）と
+   * 字がぶつかって、クラスの表示に見えるという指摘があった（本人 2026-08-22）。
+   * クラスに使われていない字にそろえる必要があるので、**位置の言葉**にした。
+   *
+   *   シングルス: 「左」「右」
+   *   ダブルス  : 「左1」「左2」「右1」「右2」
+   *
+   * A＝左＝青、B＝右＝赤 はこのアプリの元からの決め（style.css の --side-a / --side-b）で、
+   * 試合画面のパネルの並びとも一致する。札には同じ色も付ける（下の sideColor）。
+   */
   function slotLabel(id) {
     const g = GAMES[selectedGame];
-    const side = id.indexOf("A") >= 0 ? "A" : "B";
+    const side = id.indexOf("A") >= 0 ? "左" : "右";
     if (!g || g.playersPerSide !== 2) return side;
     return side + (id.slice(-1) === "2" ? "2" : "1");
+  }
+
+  /** 札の地の色。A側＝青、B側＝赤（style.css の --side-a / --side-b と同じ値） */
+  function slotColor(id) {
+    return id.indexOf("A") >= 0 ? "#0b63d6" : "#d43b12";
   }
 
   /** その名前がいま入っている欄のID。無ければ null */
@@ -958,7 +1032,13 @@ const SETUP = (function () {
       }, [
         UI.el("span", { class: "pc-name", text: p.name }),
         jpaKind() && slTag ? UI.el("span", { class: "pc-sl", text: "SL" + slTag }) : null,
-        at ? UI.el("span", { class: "pc-at", text: slotLabel(at) }) : null,
+        at ? (function () {
+          // 地の色でも「どちら側の欄か」が分かるようにする。
+          // CSSは別の係が使っているため style 属性で当てている
+          const tag = UI.el("span", { class: "pc-at", text: slotLabel(at) });
+          tag.style.background = slotColor(at);
+          return tag;
+        }()) : null,
       ]);
     }
 
@@ -2036,7 +2116,10 @@ const SETUP = (function () {
     }
     if (!g.solo) {
       const first = UI.toggleValue($("firstSideToggle")) || "A";
-      add("先にブレイクする人", sideName(first));
+      // ダブルスはブレイクするのが個人ではなくチームなので言い方を変える
+      // （本人の指示 2026-08-22）
+      add(g.playersPerSide === 2 ? "先にブレイクするチーム" : "先にブレイクする人",
+          sideName(first));
     }
 
     // 時計

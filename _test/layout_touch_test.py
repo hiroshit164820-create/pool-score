@@ -5,7 +5,8 @@
 
 確認する内容:
   1. 球が試合画面と同じ描き方（番号が白い丸の中／選んだセットの色）
-  2. 指で掴める大きさ（台の球40px以上・一覧の球44px以上）
+  2. 指で掴める大きさ（台の球30px以上・一覧の球44px以上）
+     ※台の球は 2026-08-22 に 40px → 34px へ一回り小さくした
   3. 取り消しができる（どける・動かす・全部どける）
 
 実行: python _test/layout_touch_test.py
@@ -89,9 +90,12 @@ with sync_playwright() as p:
       const r = document.querySelector('.tb-ball').getBoundingClientRect();
       return { w: Math.round(r.width), h: Math.round(r.height) };
     }""")
-    # 44px から 40px へ下げた（台に対して球が大きすぎるという指摘 2026-08-20 第3便）。
-    # 指で掴む的なので、これより小さくはしない
-    check(size["w"] >= 40 and size["h"] >= 40, "台の球が40px以上", size)
+    # 44px → 40px → 34px と下げてきた
+    # （「もう一回り小さく」という指摘 2026-08-22。実測 40px → 34px）。
+    # 台の球は「掴んで動かすもの」なので押しボタンの44pxは当てはめないが、
+    # 掴めなくなる大きさにはしない。下限は30px
+    check(size["w"] >= 30 and size["h"] >= 30, "台の球が30px以上（掴める）", size)
+    check(size["w"] < 40, "以前の40pxより一回り小さい", size["w"])
 
     tray = pg.evaluate("""() => {
       const r = document.querySelector('.tray-ball').getBoundingClientRect();

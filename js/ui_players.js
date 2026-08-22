@@ -751,7 +751,9 @@ const PLAYERS = (function () {
     const main = [
       ["試合数", st.matches + "試合"],
       ["W-L", st.wins + " - " + st.losses],
-      ["勝率", pct(st.winRate) + "（" + st.wins + "勝" + st.losses + "敗）"],
+      ["勝敗数・勝率",
+        [st.wins + "勝" + st.losses + "敗",
+         "（" + st.matches + "試合・" + pct(st.winRate) + "）"]],
       ["ラック取得率", pct(st.rackWinRate)],
       ["マスワリ", st.masuwari + "回" + (st.masuwariRate !== null ? "（" + pct(st.masuwariRate) + "）" : "")],
       ["ブレイクエース", st.breakAce + "回"],
@@ -765,26 +767,30 @@ const PLAYERS = (function () {
     function splitRow(label, b) {
       if (!b || !b.matches) return;
       split.push([label,
-        b.wins + "勝" + b.losses + "敗（" + b.matches + "試合・勝率 "
-        + pct(b.winRate) + "）"]);
+        [b.wins + "勝" + b.losses + "敗",
+         "（" + b.matches + "試合・" + pct(b.winRate) + "）"]]);
     }
     splitRow("一般種目", st.general);
     splitRow("JPA", st.jpa);
     if (split.length) body.appendChild(foldTable("一般種目とJPAの内訳", split));
 
-    // ---- 3. 対戦相手別（直近5人＋開くと全数） ----
-    const oppRows = recentFirst(st.opponents).map(function (e) {
+    // ---- 3. 対戦相手別（試合数の多い順・上位5人＋開くと全数） ----
+    // 並びは本人の指示（2026-08-22）で「よく当たる人が上」に変えた
+    const oppRows = byMatches(st.opponents).map(function (e) {
       const o = e.v;
-      return [e.k, o.matches + "試合 " + o.wins + "勝（" + pct(o.winRate) + "）"];
+      return [e.k,
+        [o.wins + "勝" + o.losses + "敗",
+         "（" + o.matches + "試合・" + pct(o.winRate) + "）"]];
     });
     if (oppRows.length) body.appendChild(foldTable("対戦相手別", oppRows, 5));
 
-    // ---- 4. パートナー別（勝敗数・勝率・マスワリ回数／率） ----
-    const partRows = recentFirst(st.partners).map(function (e) {
+    // ---- 4. パートナー別（勝率の高い順・本人の指示 2026-08-22） ----
+    const partRows = byWinRate(st.partners).map(function (e) {
       const pt = e.v;
       return [e.k,
-        pt.wins + "勝" + pt.losses + "敗（勝率 " + pct(pt.winRate) + "）"
-        + "／マスワリ " + cntRate(pt.masuwari, pt.breaks)];
+        [pt.wins + "勝" + pt.losses + "敗",
+         "（" + pt.matches + "試合・" + pct(pt.winRate) + "）",
+         "マスワリ " + cntRate(pt.masuwari, pt.breaks)]];
     });
     if (partRows.length) body.appendChild(foldTable("パートナー別", partRows, 5));
 
@@ -823,15 +829,48 @@ const PLAYERS = (function () {
    * 日付を持っていない古い記録は後ろにまとめ、名前順にする。
    */
   function recentFirst(map) {
-    return Object.keys(map || {}).map(function (k) {
-      return { k: k, v: map[k] };
-    }).sort(function (a, b) {
+    return entries(map).sort(function (a, b) {
       const ta = a.v.last || "";
       const tb = b.v.last || "";
       if (ta && tb && ta !== tb) return tb.localeCompare(ta);
       if (ta && !tb) return -1;
       if (!ta && tb) return 1;
       return a.k.localeCompare(b.k, "ja");
+    });
+  }
+
+  /**
+   * 試合数の多い順（同数なら勝率、それも同じなら名前）。
+   * 対戦相手別で使う（本人の指示 2026-08-22）。
+   */
+  function byMatches(map) {
+    return entries(map).sort(function (a, b) {
+      if (b.v.matches !== a.v.matches) return b.v.matches - a.v.matches;
+      const ra = a.v.winRate || 0;
+      const rb = b.v.winRate || 0;
+      if (rb !== ra) return rb - ra;
+      return a.k.localeCompare(b.k, "ja");
+    });
+  }
+
+  /**
+   * 勝率の高い順（同率なら試合数の多い順、それも同じなら名前）。
+   * パートナー別で使う（本人の指示 2026-08-22）。
+   */
+  function byWinRate(map) {
+    return entries(map).sort(function (a, b) {
+      const ra = a.v.winRate === null || a.v.winRate === undefined ? -1 : a.v.winRate;
+      const rb = b.v.winRate === null || b.v.winRate === undefined ? -1 : b.v.winRate;
+      if (rb !== ra) return rb - ra;
+      if (b.v.matches !== a.v.matches) return b.v.matches - a.v.matches;
+      return a.k.localeCompare(b.k, "ja");
+    });
+  }
+
+  /** オブジェクト（名前 → 成績）を {k, v} の配列にする */
+  function entries(map) {
+    return Object.keys(map || {}).map(function (k) {
+      return { k: k, v: map[k] };
     });
   }
 
@@ -858,10 +897,52 @@ const PLAYERS = (function () {
     return box;
   }
 
+  /**
+   * 項目名・値を「主題」と「条件（括弧の中）」に分ける（本人の指示 2026-08-22）。
+   *
+   * 例:「1ラックあたりの平均セーフティ数」→ 上に「平均セーフティ数」、
+   *    下に「（1ラックあたり）」。スマホの幅で半端な位置に改行が入るのを止める。
+   *
+   * 配列で渡されたときはそのまま（1つ目が上の行、2つ目以降が下の行）。
+   * 文字列のときは、末尾の（…）と、先頭の「1ラックあたりの」等を下の行に送る。
+   */
+  function lines(v) {
+    if (Array.isArray(v)) {
+      return v.map(function (x) { return String(x); })
+        .filter(function (x) { return x !== ""; });
+    }
+    const s = String(v);
+    const head = s.match(/^(1(?:ラック|試合|ゲーム)あたり)の(.+)$/);
+    if (head) return [head[2], "（" + head[1] + "）"];
+    const tail = s.match(/^(.+?)（(.+)）$/);
+    if (tail) return [tail[1].replace(/\s+$/, ""), "（" + tail[2] + "）"];
+    return [s];
+  }
+
+  /** 主題（1行目）と条件（2行目以降）を1つの欄に積む */
+  function cell(cls, parts) {
+    const box = UI.el("span", { class: cls });
+    parts.forEach(function (t, i) {
+      box.appendChild(UI.el("span", {
+        class: (i === 0 ? "sl-main" : "sl-sub"),
+        text: t,
+      }));
+    });
+    return box;
+  }
+
+  /**
+   * 成績の1行。
+   * r = [項目名, 値] または [項目名, 値, オプション]。
+   * 項目名・値はどちらも配列で「上の行／下の行」を明示できる。
+   * オプション {note:true} は、長い説明文や履歴のように
+   * 折り返してよい行に付ける（検証で「意図した折り返し」として扱う）。
+   */
   function statRow(r) {
-    return UI.el("div", { class: "stat-row" }, [
-      UI.el("span", { class: "stat-key", text: r[0] }),
-      UI.el("span", { class: "stat-val", text: String(r[1]) }),
+    const opt = r[2] || {};
+    return UI.el("div", { class: "stat-row" + (opt.note ? " is-note" : "") }, [
+      cell("stat-key", lines(r[0])),
+      cell("stat-val", lines(r[1])),
     ]);
   }
 
@@ -888,15 +969,15 @@ const PLAYERS = (function () {
     const rate = g.matches ? pct(g.wins / g.matches) : "—";
 
     function safetyRows() {
-      rows.push(["1ラックあたりの平均セーフティ数", avg(g.safety, g.racks)]);
-      rows.push(["1試合あたりの平均セーフティ数", avg(g.safety, g.matches)]);
+      rows.push([["平均セーフティ数", "（1ラックあたり）"], avg(g.safety, g.racks)]);
+      rows.push([["平均セーフティ数", "（1試合あたり）"], avg(g.safety, g.matches)]);
     }
     function inningRow() {
       // 分母は「イニングを数えた試合」のラック数だけ（本人の指示 2026-08-21）。
       // 数えない試合が混ざると平均が薄まるため。古い集計には無いので racks で補う
       const den = g.inningRacks != null ? g.inningRacks : g.racks;
       if (!den) return; // 数えた試合が1つも無ければ行ごと出さない
-      rows.push(["1ラックあたりの平均イニング数", avg(g.innings, den)]);
+      rows.push([["平均イニング数", "（1ラックあたり）"], avg(g.innings, den)]);
     }
     // 対戦相手のクラス別（本人の指示 2026-08-21・D）。
     // 一般種目だけに出す（JPAはスキルレベルで見る）。
@@ -905,28 +986,29 @@ const PLAYERS = (function () {
       const order = (STORE.PLAYER_CLASSES || []);
       const keys = order.filter(function (c) { return g.byClass && g.byClass[c]; });
       if (!keys.length) {
-        rows.push(["対戦クラス別の勝敗数・勝率",
-          "記録がありません（相手にクラスを登録すると出ます）"]);
+        rows.push([["対戦クラス別", "（勝敗数・勝率）"],
+          ["記録なし", "（相手にクラスを登録すると出ます）"], { note: true }]);
         return;
       }
       keys.forEach(function (c) {
         const b = g.byClass[c];
-        rows.push(["対戦クラス " + c + " の勝敗数・勝率",
-          b.wins + "勝" + b.losses + "敗（" + b.matches + "試合・"
-          + (b.matches ? pct(b.wins / b.matches) : "—") + "）"]);
+        rows.push([["対戦クラス " + c, "（勝敗数・勝率）"],
+          [b.wins + "勝" + b.losses + "敗",
+           "（" + b.matches + "試合・"
+           + (b.matches ? pct(b.wins / b.matches) : "—") + "）"]]);
       });
     }
     function shotClockRows() {
-      rows.push(["ショットクロック平均タイム",
+      rows.push([["平均タイム", "（ショットクロック）"],
         g.scShots ? sec(g.scSec / g.scShots) : "—"]);
-      rows.push(["1試合あたりのエクステンション使用回数", avg(g.scExt, g.matches)]);
+      rows.push([["エクステンション", "（1試合あたりの回数）"], avg(g.scExt, g.matches)]);
     }
 
     // ---- ボウラード（1人でやる種目） ----
     if (id === "bowlard") {
       [10, 30, 50].forEach(function (n) {
         const take = g.bowlardTotals.slice(0, n);
-        rows.push(["平均スコア（過去" + n + "回）",
+        rows.push([["平均スコア", "（過去" + n + "回）"],
           take.length
             ? Math.round((take.reduce(function (a, b) { return a + b; }, 0) / take.length) * 10) / 10
               + "点（" + take.length + "回ぶん）"
@@ -955,12 +1037,10 @@ const PLAYERS = (function () {
         rows.push(["勝敗数", wl]);
         rows.push(["勝率", rate]);
       }
-      // 率の分母は項目名の側に書く。値が長くなると項目名の欄が潰れて
-      // 「A ハ イ ラ ン」と縦に割れるため
-      rows.push(["Aハイラン数／率（自分がブレイクした" + g.brokeFirst + "試合中）",
-        cntRate(g.aHighRun, g.brokeFirst)]);
-      rows.push(["Bハイラン数／率（相手がブレイクした" + g.oppBrokeFirst + "試合中）",
-        cntRate(g.bHighRun, g.oppBrokeFirst)]);
+      // 分母の説明（「自分がブレイクした N 試合中」）は本人の指示（2026-08-22）で消した。
+      // 項目名は主題だけにして、率は値の側の2行目に出す
+      rows.push([["Aハイラン数／率", ""], cntRate(g.aHighRun, g.brokeFirst)]);
+      rows.push([["Bハイラン数／率", ""], cntRate(g.bHighRun, g.oppBrokeFirst)]);
       classRows();
       safetyRows();
       inningRow();
@@ -985,9 +1065,9 @@ const PLAYERS = (function () {
       rows.push(["勝率", rate]);
       if (!doubles) {
         rows.push(["累計獲得ポイント数", g.jpaPoints + "P"]);
-        rows.push(["1試合あたりの平均獲得ポイント数",
+        rows.push([["平均獲得ポイント数", "（1試合あたり）"],
           g.jpaMatches ? avg(g.jpaPoints, g.jpaMatches) + "P" : "—"]);
-        rows.push(["1試合あたりの平均獲得ポイント率",
+        rows.push([["平均獲得ポイント率", "（1試合あたり）"],
           g.jpaFull ? pct(g.jpaPoints / g.jpaFull) : "—"]);
       }
       rows.push(["マスワリ数／率", cntRate(g.masuwari, g.breaks)]);
@@ -995,17 +1075,18 @@ const PLAYERS = (function () {
       safetyRows();
       inningRow();
       if (!doubles) {
-        rows.push(["あがりまでの最小イニング数",
+        rows.push([["最小イニング数", "（あがりまで）"],
           g.winInnMin === null ? "—" : g.winInnMin + "イニング"]);
-        rows.push(["あがりまでの最大イニング数",
+        rows.push([["最大イニング数", "（あがりまで）"],
           g.winInnMax === null ? "—" : g.winInnMax + "イニング"]);
-        rows.push(["対戦相手のスキルレベル平均",
+        rows.push([["スキルレベル平均", "（対戦相手）"],
           g.oppSlCount ? "SL " + avg(g.oppSlSum, g.oppSlCount) : "—"]);
         const sls = Object.keys(g.bySl).sort(function (a, b) { return a - b; });
         sls.forEach(function (n) {
           const b = g.bySl[n];
-          rows.push(["相手SL" + n + " の勝敗数／勝率",
-            b.wins + "勝" + b.losses + "敗（" + pct(b.wins / b.matches) + "）"]);
+          rows.push([["相手SL" + n, "（勝敗数・勝率）"],
+            [b.wins + "勝" + b.losses + "敗",
+             "（" + b.matches + "試合・" + pct(b.wins / b.matches) + "）"]]);
         });
       }
       return rows;
@@ -1031,7 +1112,10 @@ const PLAYERS = (function () {
     rows.push(["回数", h.plays + "回"]);
     if (h.gameId === "kailun") {
       rows.push(["最大連続得点",
-        h.maxRun === null ? "記録がありません（2026-08-21以降の試合から）" : h.maxRun + "点"]);
+        h.maxRun === null
+          ? ["記録なし", "（2026-08-21以降の試合から）"]
+          : h.maxRun + "点",
+        { note: h.maxRun === null }]);
     } else {
       // ブレイクエースは 5-9 / 5-10 に入力の手立てが無く常に0になるため出さない
       // （本人の指示 2026-08-21：行ごと消す）
@@ -1041,8 +1125,9 @@ const PLAYERS = (function () {
     const list = h.scores.slice(0, 20).map(function (x) {
       return (x.score > 0 ? "+" : "") + x.score;
     });
-    rows.push(["獲得得点の履歴（新しい順）",
-      list.length ? list.join("　") + (h.scores.length > 20 ? "　…" : "") : "—"]);
+    rows.push([["獲得得点の履歴", "（新しい順）"],
+      list.length ? list.join("　") + (h.scores.length > 20 ? "　…" : "") : "—",
+      { note: true }]);
     return rows;
   }
 
@@ -1077,11 +1162,16 @@ const PLAYERS = (function () {
         || ((typeof GAMES !== "undefined" && GAMES[id]) ? GAMES[id].label : id);
       const has = !!(g || h);
 
+      // 記録のある種目は色を付けて、記録なし（グレー）とはっきり差をつける
+      // （本人の指示 2026-08-22）
       const card = UI.el("details", {
-        class: "match-card game-card" + (has ? "" : " is-empty"),
+        class: "match-card game-card" + (has ? " has-rec" : " is-empty"),
       });
+      // 種目名も項目名と同じ組みにする。
+      // 「14-1（ストレートプール）」が 320px で「14-1（ストレートプー／ル）」と
+      // 半端に割れていたため（実測 2026-08-22）
       card.appendChild(UI.el("summary", { class: "dc-game" }, [
-        UI.el("span", { class: "dc-game-name", text: label }),
+        cell("dc-game-name", lines(label)),
         UI.el("span", { class: "dc-game-note", text: has ? "" : "記録なし" }),
       ]));
       if (has) {
@@ -1160,12 +1250,7 @@ const PLAYERS = (function () {
     // 見た目は他の表（statTable）と同じ組みにそろえる
     const table = UI.el("div", { class: "dc-rows" });
     rows.forEach(function (r) {
-      table.appendChild(
-        UI.el("div", { class: "stat-row" }, [
-          UI.el("span", { class: "stat-key", text: r[0] }),
-          UI.el("span", { class: "stat-val", text: String(r[1]) }),
-        ])
-      );
+      table.appendChild(statRow(r));
     });
     return table;
   }
@@ -1174,12 +1259,7 @@ const PLAYERS = (function () {
     const wrap = UI.el("div", { class: "match-card" });
     wrap.appendChild(UI.el("div", { class: "stat-title", text: title }));
     rows.forEach(function (r) {
-      wrap.appendChild(
-        UI.el("div", { class: "stat-row" }, [
-          UI.el("span", { class: "stat-key", text: r[0] }),
-          UI.el("span", { class: "stat-val", text: r[1] }),
-        ])
-      );
+      wrap.appendChild(statRow(r));
     });
     return wrap;
   }

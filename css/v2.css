@@ -2506,15 +2506,60 @@ button::after {
 
 /* ============ ホームの入り口（本人の指示 2026-08-22） ============
    ・「試合を始める」をいちばん上に
-   ・成績と直近の試合の間に「試合結果を取り込む」 */
-#screenHome .home-start,
-#screenHome .home-import {
+   ・成績と直近の試合の間に「試合結果を取り込む」
+
+   金色（button.primary）は「選んである札」と同じ色なので、
+   「試合を始める」が最初から選択されているように見えるという指摘があった。
+   ここだけ緑（--accent＝決定・肯定の色）にして、押すものだと分かるようにする */
+#screenHome .home-start {
+  width: 100%;
+  min-height: 60px;
+  margin-bottom: 14px;
+  /* --accent（#3aa63a）に白文字だと明暗の差が3.14:1しかなく、
+     読みやすさの下限4.5:1を割る（実測 2026-08-22）。
+     同じ緑の系統で少し暗くして5.17:1にする */
+  background: #2a7d2a;
+  color: #fff;
+  font-family: var(--font-pixel);
+  font-size: 19px;
+  letter-spacing: 0.04em;
+}
+
+/* 行き先のあるボタン（成績・取り込み・履歴）。
+   枠だけだと字に見えて押せると気づかれなかったので、
+   右端に「›」を置いて、行き先があることを形で示す */
+#screenHome .home-go {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   min-height: 52px;
-  margin-bottom: 14px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--surface-2);
+  font-size: 16px;
+  font-weight: 900;
 }
-#screenHome .home-start {
+#screenHome .home-go .hg-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#screenHome .home-go .hg-arrow {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--ink);
+  background: var(--block);
+  font-family: var(--font-pixel);
   font-size: 18px;
+  line-height: 1;
+}
+/* 成績と直近の試合の間に置くぶんは、カードの外なので下に余白を取る */
+#screenHome .home-import {
+  margin-bottom: 14px;
 }
 
 /* 直近の試合の種目バッジ。名前より先に読めるよう左端に置く */
@@ -3042,4 +3087,116 @@ select.goal-more.is-picked {
   min-height: 1em;
   color: var(--danger, #c0392b);
   font-weight: 700;
+}
+
+/* ============ 成績の表記を整える（本人の指示 2026-08-22・成績係） ============ */
+/* 直したのは3つ。
+   1. 項目名を「主題」と「条件（括弧の中）」の2行に分ける
+      （「1ラックあたりの平均セーフ｜ティ数」のような半端な折り返しを止める）
+   2. 値も「勝敗数」と「試合数・勝率」の2行にする
+   3. 記録のある種目のカードに色を付け、記録なし（グレー）と差をつける
+   幅は 320 / 360 / 375 / 390px で実測して決めた（_test/fix_stats_test.py）。 */
+
+/* 1行目（主題）と2行目以降（条件）を縦に積む。
+   欄そのものは flex の子なので、中身を block にして積む */
+.stat-key,
+.stat-val {
+  display: block;
+}
+.stat-row .sl-main {
+  display: block;
+  line-height: 1.3;
+}
+.stat-row .sl-sub {
+  display: block;
+  /* 条件は補足なので一段小さく、色も落とす。
+     10px 未満にすると読めなくなるので下げすぎない */
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-dim, #6b5c48);
+}
+/* 値の側は右そろえのまま2行にする */
+.stat-val .sl-main,
+.stat-val .sl-sub {
+  text-align: right;
+}
+/* 主題と条件は、それ自体が半端な位置で折り返さないように1行で通す。
+   欄の幅は下の flex 配分で足りることを実測で確かめている */
+.fold-card .stat-row .sl-main,
+.fold-card .stat-row .sl-sub,
+.detail-card .stat-row .sl-main,
+.detail-card .stat-row .sl-sub {
+  white-space: nowrap;
+}
+/* 長い説明文・得点の履歴は折り返してよい行（意図した折り返し）。
+   折り返してよいのは値の側だけ。項目名まで折り返すと
+   「対戦クラス／別」と半端に割れる（320px で実測 2026-08-22） */
+.stat-row.is-note .stat-val .sl-main,
+.stat-row.is-note .stat-val .sl-sub {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* 折り返してよい行（長い説明文・得点の履歴）は、値を項目名の下に丸ごと置く。
+   横に並べたままだと、項目名の条件（勝敗数・勝率）と説明文が同じ行に並んで
+   読みにくい（320px で実測 2026-08-22） */
+.fold-card .stat-row.is-note,
+.detail-card .stat-row.is-note {
+  flex-wrap: wrap;
+}
+.fold-card .stat-row.is-note .stat-key,
+.detail-card .stat-row.is-note .stat-key,
+.fold-card .stat-row.is-note .stat-val,
+.detail-card .stat-row.is-note .stat-val {
+  flex: 1 1 100%;
+}
+
+/* 種目名（カードの見出し）も同じ2行組みにする。
+   「14-1（ストレートプール）」が半端な位置で折り返していたため */
+.dc-game-name {
+  display: block;
+  min-width: 0;
+}
+.dc-game-name .sl-main,
+.dc-game-name .sl-sub {
+  display: block;
+  white-space: nowrap;
+}
+.dc-game-name .sl-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim, #6b5c48);
+}
+/* 幅の取り合い。項目名は中身ぶんだけ取り、余りを値に渡す */
+.fold-card .stat-row,
+.detail-card .stat-row {
+  align-items: flex-start;
+  gap: 8px;
+}
+.fold-card .stat-key,
+.detail-card .stat-key {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13px;
+}
+.fold-card .stat-val,
+.detail-card .stat-val {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 14px;
+}
+
+/* 記録のある種目のカード。記録なし（#e9e9e9 のグレー）と色で分ける */
+.detail-card .game-card.has-rec {
+  background: #dff2d8;
+  border-color: var(--ink, #241a12);
+}
+.detail-card .game-card.has-rec > summary .dc-game-name {
+  color: var(--ink, #241a12);
+}
+/* 記録なしの側は、押しても中身が無いことが分かるように薄いまま置く */
+.detail-card .game-card.is-empty {
+  opacity: 0.85;
 }

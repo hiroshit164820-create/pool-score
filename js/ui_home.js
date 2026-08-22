@@ -92,9 +92,12 @@ const HOME = (function () {
     // ホームがアプリの入り口になったので、いちばん使う用事を最上部に置く
     // （本人の指示 2026-08-22）。中断中の試合があるときは、
     // 続きの案内を先に読ませたいのでその下に出す
+    // 金色（.primary）は「選んである札」と同じ色なので、
+    // 最初から選択されているように見えるという指摘があった（本人 2026-08-22）。
+    // ホームの主役のボタンだけ別の色にして、押すものだと分かるようにする
     body.appendChild(
       UI.el("button", {
-        class: "primary home-start",
+        class: "home-start",
         text: "試合を始める",
         onclick: UI.guard(function () { UI.showScreen("screenSetup"); }),
       })
@@ -112,11 +115,7 @@ const HOME = (function () {
           stat("負け", String(st.losses)),
           stat("試合", String(st.matches)),
         ]),
-        UI.el("button", {
-          class: "ghost",
-          text: "くわしい成績を見る",
-          onclick: function () { PLAYERS.openStats(me.player); },
-        }),
+        goButton("くわしい成績を見る", function () { PLAYERS.openStats(me.player); }),
       ]);
       body.appendChild(card);
     }
@@ -127,11 +126,7 @@ const HOME = (function () {
     // 成績と直近の試合の間に置く
     if (typeof IMPORTUI !== "undefined") {
       body.appendChild(
-        UI.el("button", {
-          class: "ghost home-import",
-          text: "試合結果を取り込む",
-          onclick: UI.guard(function () { IMPORTUI.openPaste(); }),
-        })
+        goButton("試合結果を取り込む", function () { IMPORTUI.openPaste(); }, "home-import")
       );
     }
 
@@ -158,13 +153,7 @@ const HOME = (function () {
           ])
         );
       });
-      card.appendChild(
-        UI.el("button", {
-          class: "ghost",
-          text: "履歴をぜんぶ見る",
-          onclick: function () { HISTORY.open(); },
-        })
-      );
+      card.appendChild(goButton("履歴をぜんぶ見る", function () { HISTORY.open(); }));
       body.appendChild(card);
     }
 
@@ -228,6 +217,22 @@ const HOME = (function () {
     const label = (g && (g.shortLabel || g.label)) || m.gameLabel || m.gameId || "";
     // 「14-1（ストレートプール）」→「14-1」
     return String(label).split("（")[0];
+  }
+
+  /**
+   * 「押すと別の画面に行く」ボタン（本人の指示 2026-08-22）。
+   *
+   * 枠だけのボタン（.ghost）は、字だけに見えて押せると気づかれなかった。
+   * 右端に「›」を添えて、行き先があることを形で示す。
+   */
+  function goButton(label, onclick, extraClass) {
+    return UI.el("button", {
+      class: "home-go" + (extraClass ? " " + extraClass : ""),
+      onclick: UI.guard(onclick),
+    }, [
+      UI.el("span", { class: "hg-label", text: label }),
+      UI.el("span", { class: "hg-arrow", "aria-hidden": "true", text: "›" }),
+    ]);
   }
 
   function stat(label, value) {

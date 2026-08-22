@@ -223,7 +223,8 @@ with sync_playwright() as p:
         .find(x => (x.querySelector('.pc-name') || {}).textContent === 'あきら');
       return b ? (b.querySelector('.pc-at') || {}).textContent : null;
     }""")
-    check(at == "A1", "1人目に選んだ人には「A1」の札が付く", at)
+    # 2026-08-22：クラス（A・B・SA…）と紛れないよう「左1」「右1」に変えた
+    check(at == "左1", "1人目に選んだ人には「左1」の札が付く", at)
 
     pg.evaluate(PICK_SECOND_JS, "いすず")
     pg.wait_for_timeout(350)

@@ -1,18 +1,25 @@
 # -*- coding: utf-8 -*-
-"""flag_jpa_test.py — 球単位の種目でマスワリ・ブレイクエースが数えられない不具合
+"""flag_jpa_test.py — 球単位の種目のマスワリ・ブレイクエースの数え方
 
-本人の指摘（2026-08-21）:
-  「エースのボタンを押してもカウントされない。スコアだけが1点増える」
+本人の指示（2026-08-22。2026-08-21の指示を差し替える）:
+  「エースを押すとマスワリも増えるので切り離してください。別物です」
+  「マスワリもエースも押してもスコアボードの点数が増えないようにしてください。
+    カウントを記録するのみのボタンとします」
 
-原因: JPAのように球1個ずつ入力する種目では、札を押しても instant が捨てられ、
-      ただの「1球ポケット」として記録されていた。
+2026-08-21 は「押したら9番ぶんの点も入る」形にしていた（下の履歴）。
+本人の 08-22 の指示で、JPAでは**回数だけ**を数える形に変えた。
+
+  旧: 押すと POCKET が積まれ、スコアが 2点／10点 増えていた
+  新: MARK（回数だけの記録）を積む。点・盤面・ラックは動かさない
 
 対象:
   1. JPA 9ボールでブレイクエースを押すと、回数が1増える
-  2. そのとき9番が入った扱いになり、スコアも9番ぶん増える（1点ではない）
-  3. JPA 9ボールでマスワリを押すと、回数が1増える（残り球を撞き切った扱い）
-  4. 記録が保存され、読み直しても残る
-  5. ラック単位の種目（9ボール）は今までどおり
+  2. そのときスコアは増えない（0点のまま）／球の記録も積まない
+  3. ブレイクエースを押してもマスワリは増えない（別物）
+  4. JPA 9ボールでマスワリを押すと、回数が1増える。スコアは増えない
+  5. マスワリを押してもブレイクエースは増えない
+  6. 記録が保存され、読み直しても残る
+  7. ラック単位の種目（9ボール）は今までどおり（1ラックぶん＝1点）
 
 実行: python _test/flag_jpa_test.py
 """
@@ -103,20 +110,20 @@ with sync_playwright() as p:
     pg.wait_for_timeout(700)
     after = pg.evaluate(COUNTS)
     check(n_of(after, "A", "ブレイクエース") == 1, "押すと1回に増える", after["A"])
-    check(after["scoreA"] != "1", "1点だけ増える形になっていない（9番ぶん入る）",
-          after["scoreA"])
-    check(int(after["scoreA"]) >= 2, "9番ぶんの点が入る", after["scoreA"])
-    ace = [x for x in after["pockets"] if x["onBreak"]]
-    check(len(ace) == 1 and ace[0]["balls"] == [9],
-          "ブレイクで9番を入れた記録になっている", after["pockets"])
+    check(after["scoreA"] == "0", "点は増えない（カウントのみ）", after["scoreA"])
+    check(n_of(after, "A", "マスワリ") == 0,
+          "エースを押してもマスワリは増えない（別物）", after["A"])
+    check(not after["pockets"], "球の記録（POCKET）は積まない", after["pockets"])
+    check(after["lastEvent"] and after["lastEvent"]["t"] == "MARK",
+          "回数だけの記録（MARK）になっている", after["lastEvent"])
 
     section("2. 記録に残る（成績にも出る）")
     saved = pg.evaluate("""() => {
       const m = STORE.findOngoing();
-      const st = STORE.reduce ? null : null;
-      return {events: m.events.length};
+      return {events: m.events.length,
+              marks: m.events.filter(e => e.t === 'MARK').length};
     }""")
-    check(saved["events"] >= 4, "保存されている", saved)
+    check(saved["marks"] == 1, "記録が1件保存されている", saved)
 
     # ================= 3. JPAのマスワリ =================
     section("3. JPA 9ボールのマスワリ")
@@ -130,25 +137,25 @@ with sync_playwright() as p:
     pg2.wait_for_timeout(700)
     m2 = pg2.evaluate(COUNTS)
     check(n_of(m2, "A", "マスワリ") == 1, "押すと1回に増える", m2["A"])
-    check(int(m2["scoreA"]) >= 10, "残り球を撞き切ったぶんの点が入る", m2["scoreA"])
-    pk = m2["pockets"]
-    check(len(pk) == 1 and len(pk[0]["balls"]) >= 9 and pk[0]["balls"][-1] == 9,
-          "9番を最後に、残り球を全部入れた記録になっている", pk)
+    check(m2["scoreA"] == "0", "点は増えない（カウントのみ）", m2["scoreA"])
+    check(n_of(m2, "A", "ブレイクエース") == 0,
+          "マスワリを押してもエースは増えない（別物）", m2["A"])
+    check(not m2["pockets"], "球の記録（POCKET）は積まない", m2["pockets"])
 
-    # ================= 4. 9番が無いとき =================
+    # ラックも進まない（点の記録ではないため）
+    rack = pg2.inner_text("#rackInfo")
+    check("1" in rack, "ラックも進まない", rack)
+
     section("4. 読み直しても残る")
-    # 保存されているかを、ページを開き直して確かめる
-    pg2.evaluate("""() => {
-      const m = STORE.findOngoing();
-      m.events.push({t: 'POCKET', side: 'A', at: new Date().toISOString(),
-                     d: {balls: [1,2,3,4,5,6,7,8], onBreak: false}});
-      STORE.saveMatch(m);
-    }""")
     pg2.reload()
     pg2.wait_for_timeout(900)
-    # 中断していた試合を再開する
     resumed = pg2.evaluate("() => !!STORE.findOngoing()")
     check(resumed, "試合が残っている", resumed)
+    kept = pg2.evaluate("""() => {
+      const m = STORE.findOngoing();
+      return m.events.filter(e => e.t === 'MARK' && e.d && e.d.masuwari).length;
+    }""")
+    check(kept == 1, "マスワリの記録が残っている", kept)
 
     section("5. ラック単位の種目（9ボール）は今までどおり")
     pg3 = br.new_page(viewport={"width": 390, "height": 844})
@@ -163,6 +170,8 @@ with sync_playwright() as p:
     check(n_of(n9, "A", "ブレイクエース") == 1, "9ボールでも1回に増える", n9["A"])
     check(n9["scoreA"] == "1", "9ボールはラック1つぶん（1点）", n9["scoreA"])
     check(not n9["pockets"], "球単位の記録は積まない", n9["pockets"])
+    check(n_of(n9, "A", "マスワリ") == 0,
+          "9ボールでもエースとマスワリは切り離されている", n9["A"])
 
     section("エラー")
     check(not errs and not e2 and not e3, "画面のエラーが無い",

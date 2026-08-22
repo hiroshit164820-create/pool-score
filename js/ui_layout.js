@@ -65,7 +65,8 @@ const LAYOUT = (function () {
    * 画面の骨組みを組み替える。
    *
    * ・「配置を保存」を上の帯へ動かし、そのぶん盤面を大きく取る
-   * ・「一つ前に戻る」「全部どける」を台の左、「一つ次に進む」を台の右に縦に並べる
+   * ・操作のボタン（戻る・進む・全部どける・直線・描画）は**すべて台の左**に縦に並べる
+   *   （本人の指示 2026-08-22。右の列を無くしたぶん、台を横に広げられる）
    * ・一言メモの入力欄を足す
    *
    * 本来は index.html を直接書き換える箇所だが、同じ時間に別のセッションが
@@ -85,17 +86,20 @@ const LAYOUT = (function () {
       topbar.appendChild(saveBtn);
     }
 
-    // 台の左右にボタンの列を作る
+    // 台の左にだけボタンの列を作る（右の列は作らない）
     const wrap = screen.querySelector(".table-wrap");
     if (!wrap || !wrap.parentNode) return;
     const stage = UI.el("div", { class: "lay-stage" });
     wrap.parentNode.insertBefore(stage, wrap);
 
     const left = UI.el("div", { class: "lay-side lay-left" });
-    const right = UI.el("div", { class: "lay-side lay-right" });
+    // 列の幅は css/v2.css では 60px。5つ縦に並べると「直線を引く」が
+    // 3行に折り返して窮屈なので、ここで少しだけ広げる。
+    // （CSSは別の係が使っているため、style属性で足している）
+    left.style.flex = "0 0 " + SIDE_W + "px";
+    left.style.width = SIDE_W + "px";
     stage.appendChild(left);
     stage.appendChild(wrap);
-    stage.appendChild(right);
 
     const undoBtn = $("layoutUndoBtn");
     const clearBtn = $("layoutClearBtn");
@@ -104,40 +108,38 @@ const LAYOUT = (function () {
       undoBtn.textContent = "一つ前に戻る";
       left.appendChild(undoBtn);
     }
+    // 「一つ次に進む」も左へ（本人の指示 2026-08-22）
+    left.appendChild(
+      UI.el("button", {
+        type: "button", id: "layoutRedoBtn", class: "ghost", text: "一つ次に進む",
+      })
+    );
     if (clearBtn) {
       clearBtn.className = "ghost";
       clearBtn.textContent = "全部どける";
       left.appendChild(clearBtn);
     }
-    right.appendChild(
-      UI.el("button", {
-        type: "button", id: "layoutRedoBtn", class: "ghost", text: "一つ次に進む",
-      })
-    );
 
     // ボタンを抜いたあとの元の並びは空になるので畳む
     const actions = screen.querySelector(".layout-actions");
     if (actions && !actions.querySelector("button")) actions.hidden = true;
 
-    // 「直線を引く」と「描画する」の切り替え。球の一覧の上に横に並べる。
-    // 台の左右の列は細く、ここに置くと文字が読めなくなるため
-    const hint = $("layoutHint");
-    if (hint && hint.parentNode && !$("layoutLineBtn")) {
-      const tools = UI.el("div", { class: "lay-tools" }, [
-        UI.el("button", {
-          type: "button", id: "layoutLineBtn", class: "ghost",
-          text: "直線を引く",
-          "aria-pressed": "false",
-          onclick: function () { setMode(mode === "line" ? null : "line"); },
-        }),
-        UI.el("button", {
-          type: "button", id: "layoutDrawBtn", class: "ghost",
-          text: "描画する",
-          "aria-pressed": "false",
-          onclick: function () { setMode(mode === "draw" ? null : "draw"); },
-        }),
-      ]);
-      hint.parentNode.insertBefore(tools, hint);
+    // 「直線を引く」と「描画する」も同じ左の列へ縦に並べる。
+    // 球の一覧の上に置いていた横1行（.lay-tools）はやめた。
+    // 台の下の1行が消えるぶん、台に回せる縦も増える
+    if (!$("layoutLineBtn")) {
+      left.appendChild(UI.el("button", {
+        type: "button", id: "layoutLineBtn", class: "ghost",
+        text: "直線を引く",
+        "aria-pressed": "false",
+        onclick: function () { setMode(mode === "line" ? null : "line"); },
+      }));
+      left.appendChild(UI.el("button", {
+        type: "button", id: "layoutDrawBtn", class: "ghost",
+        text: "描画する",
+        "aria-pressed": "false",
+        onclick: function () { setMode(mode === "draw" ? null : "draw"); },
+      }));
     }
 
     // 一言メモ（球の一覧のすぐ下）
@@ -214,8 +216,46 @@ const LAYOUT = (function () {
     strokes = (snap && snap.strokes) ? snap.strokes : [];
   }
 
-  /** 球の直径（px）。css/v2.css の .tb-ball と揃える */
-  const BALL_PX = 40;
+  /**
+   * 球の直径（px）。
+   *
+   * css/v2.css の .tb-ball は 40px。本人の指示（2026-08-22）で
+   * 「もう一回り小さく」するため、ここで 34px を style 属性で上書きする。
+   * CSSは別の係が同時に使っているので JS 側から当てている。
+   *
+   * 44px（指で押せる大きさ）はここには当てはめない。台の球は
+   * 「掴んで動かすもの」で、押しボタンではないため。
+   * ただし小さすぎると掴めなくなるので 34px を下限とする。
+   */
+  const BALL_PX = 34;
+
+  /** ボタンの列の幅（px）。5つ縦に並ぶので css/v2.css の 60px より少し広い */
+  const SIDE_W = 68;
+
+  /**
+   * 球1個ぶんの大きさを style 属性で入れる。
+   * 番号の札も同じ割合で詰める（40px のときの寸法 × BALL_PX/40）。
+   */
+  function sizeBall(node) {
+    const d = BALL_PX + "px";
+    node.style.width = d;
+    node.style.height = d;
+    node.style.minWidth = d;
+    node.style.minHeight = d;
+    node.style.margin = (-BALL_PX / 2) + "px 0 0 " + (-BALL_PX / 2) + "px";
+    const num = node.querySelector(".bb-num");
+    if (!num) return;
+    const k = BALL_PX / 40;
+    const round = function (v) { return Math.round(v * k) + "px"; };
+    // css/v2.css の .tb-ball .bb-num（24×24 / 三角27×24 / 菱形27×27）を縮める
+    const tri = num.classList.contains("shape-triangle");
+    const dia = num.classList.contains("shape-diamond");
+    num.style.width = round(tri || dia ? 27 : 24);
+    num.style.height = round(dia ? 27 : 24);
+    // 文字は 16px → 15px。css/v2.css の決めどおり 15px を下限にする
+    // （_test/layout2_test.py で「15px以上」を見ている）
+    num.style.fontSize = Math.max(15, Math.round(16 * k)) + "px";
+  }
 
   /** いまの盤面を控える。盤面を変える操作の直前に呼ぶ */
   function remember() {
@@ -327,13 +367,16 @@ const LAYOUT = (function () {
     Array.prototype.forEach.call(stage.querySelectorAll(".lay-side"), function (n) {
       used += n.getBoundingClientRect().width;
     });
-    const gaps = 12; // .lay-stage の gap 6px × 2か所
+    // .lay-stage の gap は 6px。列は左だけなので隙間は列の数ぶん
+    const gaps = 6 * stage.querySelectorAll(".lay-side").length;
     // 画面がまだ出ていないと幅が0になる。そのときは前の大きさを残す
     // （0を元に計算すると台が最小まで縮んで、実機の「潰れ」と同じ見た目になる）
     if (stage.clientWidth < 80) return;
     const availW = Math.max(60, stage.clientWidth - used - gaps);
-    // 縦は画面の62%まで。これ以上取ると下の球の一覧が画面から出る
-    const availH = Math.max(140, Math.round(window.innerHeight * 0.62));
+    // 縦は画面の66%まで。台の下に置いていた「直線／描画」の1行（約60px）を
+    // 左の列へ移したぶん、62%から広げてある。
+    // これ以上取ると下の球の一覧が画面から出る
+    const availH = Math.max(140, Math.round(window.innerHeight * 0.66));
 
     const feltW = Math.max(40, Math.min(
       Math.floor(availW - RAIL_PX * 2),
@@ -361,6 +404,7 @@ const LAYOUT = (function () {
         title: b.n === 0 ? "手玉" : b.n + "番",
       });
       paintBall(node, b.n);
+      sizeBall(node);
       node.style.left = (b.x * 100) + "%";
       node.style.top = (b.y * 100) + "%";
       bindDrag(node, i);

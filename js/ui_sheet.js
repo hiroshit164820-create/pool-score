@@ -23,6 +23,78 @@ const SHEET = (function () {
    */
   let jpaOpen = false;
 
+  // 直近に描いた試合。閉じるボタン・背景タップ・Escから描き直すために持つ
+  let lastMatch = null;
+  let lastState = null;
+  // 元の置き場所（画面の中）。閉じたときにここへ戻す
+  let sheetHome = null;
+  let sheetNext = null;
+  let bound = false;
+
+  /**
+   * JPAのスコアシートを重ねて開くための箱を作る（本人の指示 2026-08-22）。
+   *   「スコアシートボタンは押したらぱっと画面に大きく開くようにして。
+   *     現状は縦に狭すぎて見づらい」
+   *
+   * 画面の中に差し込むと、横向きでは高さが 83px しか取れず読めなかった。
+   * 作りは ui_sheetview.js の「終わった試合のスコア表」と同じ
+   * （.modal-backdrop + .modal）。index.html は他の作業と重なるので触らず、
+   * ここで1回だけ組み立てて body に置く。
+   */
+  function ensureModal() {
+    let back = document.getElementById("sheetModal");
+    if (back) return back;
+    const card = UI.el("div", { class: "modal sheet-modal-card" });
+    back = UI.el("div", {
+      class: "modal-backdrop sheet-modal",
+      id: "sheetModal",
+      hidden: "hidden",
+    }, [card]);
+    document.body.appendChild(back);
+    if (!bound) {
+      bound = true;
+      back.addEventListener("click", function (e) {
+        if (e.target === back) close();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !back.hidden) close();
+      });
+    }
+    return back;
+  }
+
+  /** 開いた状態にする（#sheetArea をそのまま重ねの中へ移す） */
+  function openOverlay(area) {
+    const back = ensureModal();
+    const card = back.querySelector(".modal");
+    if (sheetHome === null) {
+      sheetHome = area.parentNode;
+      sheetNext = area.nextSibling;
+    }
+    if (area.parentNode !== card) card.appendChild(area);
+    back.hidden = false;
+  }
+
+  /** 閉じた状態にする（元の置き場所へ戻して重ねを消す） */
+  function closeOverlay(area) {
+    const back = document.getElementById("sheetModal");
+    if (back) back.hidden = true;
+    if (sheetHome && area.parentNode !== sheetHome) {
+      sheetHome.insertBefore(area, sheetNext);
+    }
+  }
+
+  /**
+   * 閉じる。試合画面のボタン（文言・押した状態）も合わせて描き直す。
+   * render() からは呼ばない（MATCH.render が SHEET.render を呼ぶため）
+   */
+  function close() {
+    if (!jpaOpen) return;
+    jpaOpen = false;
+    if (lastMatch) render(lastMatch, lastState);
+    if (typeof MATCH !== "undefined" && MATCH.render) MATCH.render();
+  }
+
   /**
    * その試合でスコアシートを出すか。
    * 種目定義の sheet 指定を見る（ここに種目名の分岐は書かない）。
@@ -38,25 +110,28 @@ const SHEET = (function () {
   function render(match, st) {
     const area = $("sheetArea");
     if (!area) return;
+    lastMatch = match;
+    lastState = st;
     const screen = $("screenMatch");
     const kind = kindFor(match);
     if (!kind) {
+      closeOverlay(area);
       area.hidden = true;
       // シート無しの通常配置に戻す
       if (screen) screen.classList.remove("has-sheet");
       return;
     }
-    // シートが縦を取るぶん、スコアパネルを詰める配置に切り替える。
-    // JPAは閉じているあいだ場所を取らないので、詰める必要も無い
-    // （閉じたまま詰めていると、そのぶんスコアが小さいままになる）
-    const takesRoom = (kind === "bowlard") || jpaOpen;
-    area.hidden = !takesRoom;
+    // JPAのシートは画面に重ねて開く（本人の指示 2026-08-22）ので、
+    // 試合画面の高さは取らない。場所を詰めるのはボウラードだけ
+    const takesRoom = kind === "bowlard";
+    area.hidden = !(takesRoom || (kind === "jpa" && jpaOpen));
     if (screen) {
       screen.classList.toggle("has-sheet", takesRoom);
-      // JPAのシートを開いている間だけ、シートに残りの高さを全部渡す
-      // （開いたまま元の高さ配分だと、下の帯が画面の外へ出る）
-      screen.classList.toggle("jpa-sheet-open", kind === "jpa" && jpaOpen);
+      // 重ねて開くようになったので、画面の高さを奪う指定は使わない
+      screen.classList.remove("jpa-sheet-open");
     }
+    if (kind === "jpa" && jpaOpen) openOverlay(area);
+    else closeOverlay(area);
     UI.clear(area);
 
     if (kind === "bowlard") renderBowlard(area, match, st);
@@ -128,10 +203,7 @@ const SHEET = (function () {
           type: "button",
           class: "small ghost st-close",
           text: "閉じる",
-          onclick: function () {
-            jpaOpen = false;
-            render(match, st);
-          },
+          onclick: function () { close(); },
         }),
       ])
     );
@@ -271,5 +343,5 @@ const SHEET = (function () {
   function isOpen() { return jpaOpen; }
 
   return { render: render, kindFor: kindFor, bowlardThrows: bowlardThrows,
-    toggle: toggle, isOpen: isOpen };
+    toggle: toggle, isOpen: isOpen, close: close };
 })();

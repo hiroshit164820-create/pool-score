@@ -138,7 +138,8 @@ with sync_playwright() as p:
             ".sheet-side.side-%s .sheet-cell.filled" % side,
             "els => els.map(e => ({title: e.getAttribute('title'),"
             " rackEnd: e.classList.contains('rack-end')}))")
-    pg.click("#sheetBtn")
+    # 2026-08-22: シートは画面に重ねて開くので、閉じるのはシートの中の「閉じる」
+    pg.click(".sheet-bar .st-close")
     pg.wait_for_timeout(200)
 
     live_id = pg.evaluate("() => STORE.findOngoing().id")
