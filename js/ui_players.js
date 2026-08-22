@@ -1053,6 +1053,11 @@ const PLAYERS = (function () {
       rows.push(["勝敗数", wl]);
       rows.push(["勝率", rate]);
       rows.push(["ハイラン", g.highRun + "点"]);
+      // 平均得点（本人の指示 2026-08-22）。14-1 は点取りの種目なので、
+      // 1イニングで何点取れているかが腕前の目安になる。
+      // 分母はイニングを数えた試合だけ（数えない試合は分子にも入れていない）
+      rows.push([["平均得点", "（1イニングあたり）"],
+        g.innings ? avg(g.inningScore || 0, g.innings) + "点" : "—"]);
       classRows();
       shotClockRows();
       return rows;
@@ -1120,6 +1125,15 @@ const PLAYERS = (function () {
       // ブレイクエースは 5-9 / 5-10 に入力の手立てが無く常に0になるため出さない
       // （本人の指示 2026-08-21：行ごと消す）
       rows.push(["マスワリ数／率", cntRate(h.masuwari, h.racks)]);
+      // 1ラック内の最大得点（本人の指示 2026-08-22）。
+      // 「獲得得点の履歴」は1試合ぶんの合計なので、1ラックでいくら取れたかは別に出す。
+      // ラック単位の得点は 2026-08-22 から残しはじめたので、
+      // それ以前の試合しか無いうちは「記録なし」と断っておく
+      rows.push(["1ラック内最大得点",
+        h.maxRackScore === null
+          ? ["記録なし", "（2026-08-22以降の試合から）"]
+          : h.maxRackScore + "点",
+        { note: h.maxRackScore === null }]);
     }
     // 各種目の獲得得点履歴（新しい順・多いときは直近20回まで）
     const list = h.scores.slice(0, 20).map(function (x) {

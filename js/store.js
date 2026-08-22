@@ -260,7 +260,7 @@ const STORE = (function () {
     const res = m.result || null;
     const per = (res && res.perSide) || null;
 
-    // イニングと死球。終わっていれば結果から、途中ならイベント列から読む
+    // イニングと無効球。終わっていれば結果から、途中ならイベント列から読む
     let innings = null;
     let dead = 0;
     if (res) {
@@ -290,6 +290,9 @@ const STORE = (function () {
       lastRack: data.lr || 1,
       innings: innings,
       deadBalls: dead,
+      // ラックごとの無効球（本人の指示 2026-08-22）。
+      // 2026-08-22 より前の記録には入っていないので、そのときは空になる
+      rackDead: series.rackDead || [],
       winner: res ? res.winner : null,
       teamPoints: (res && res.jpa && res.jpa.teamPoints) || null,
     }, base);
@@ -436,6 +439,11 @@ const STORE = (function () {
             masuwari: Number(p.masuwari) || 0,
             breakAce: Number(p.breakAce) || 0,
             maxRun: Number(p.maxRun) || 0,
+            // 1ラック内の最大得点（本人の指示 2026-08-22）。
+            // ここだけは 0 に丸めず null を残す。0点は「1ラックも取れなかった」、
+            // null は「この項目を記録していなかった古い試合」で意味が違う
+            maxRackScore: (p.maxRackScore === null || p.maxRackScore === undefined)
+              ? null : Number(p.maxRackScore),
           };
         })
         .sort(function (a, b) { return b.score - a.score; }),
@@ -817,6 +825,10 @@ const STORE = (function () {
           racks: 0, innings: 0,
           // 平均イニング数の分母。「数えない」を選んだ試合のラックは入れない
           inningRacks: 0,
+          // 14-1 の「平均得点（1イニングあたり）」に使う（本人の指示 2026-08-22）。
+          // イニングを数えた試合ぶんだけを積む。数えない試合の得点まで足すと、
+          // 分母に入らない得点が分子にだけ乗って平均が膨らむ
+          inningScore: 0,
           safety: 0, masuwari: 0, breakAce: 0, breaks: 0, fouls: 0,
           highRun: 0,
           scMatches: 0, scShots: 0, scSec: 0, scExt: 0,
@@ -863,6 +875,8 @@ const STORE = (function () {
       if (!(m.options && m.options.countInnings === false)) {
         g.innings += inn;
         g.inningRacks += racksHere;
+        // 14-1 の平均得点に使う。分母（イニング）と同じ試合の得点だけを足す
+        g.inningScore += (r.scores && r.scores[side]) || 0;
       }
 
       ["safety", "masuwari", "breakAce", "breaks", "fouls"].forEach(function (k) {
@@ -971,12 +985,19 @@ const STORE = (function () {
         const h = byHouse[mr.gameId] || {
           gameId: mr.gameId, label: mr.gameLabel || mr.gameId,
           plays: 0, scores: [], racks: 0,
-          masuwari: 0, breakAce: 0, maxRun: null,
+          masuwari: 0, breakAce: 0, maxRun: null, maxRackScore: null,
         };
         h.plays++;
         // 獲得得点の履歴（新しい順）
         h.scores.push({ at: mr.createdAt, score: mine.score });
         h.racks += Number(mr.racks) || 0;
+        // 1ラック内の最大得点（本人の指示 2026-08-22）。
+        // 記録していなかった古い試合（null）は数に入れない
+        if (mine.maxRackScore !== null && mine.maxRackScore !== undefined) {
+          if (h.maxRackScore === null || mine.maxRackScore > h.maxRackScore) {
+            h.maxRackScore = mine.maxRackScore;
+          }
+        }
         h.masuwari += Number(mine.masuwari) || 0;
         h.breakAce += Number(mine.breakAce) || 0;
         if (mine.maxRun !== null && mine.maxRun !== undefined) {

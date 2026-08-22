@@ -321,16 +321,25 @@
 }
 
 /* 操作ボタンは1行に収める（以前は勝敗の印と一緒に並べて2行になっていた） */
+/* 以前は横1列に均等割り（flex:1 1 0 + min-width:0）にしていたが、
+   文字より狭い幅になると button の性質で文字が途中で切れる。
+   「相手に送る」「メモを追加」が切れていたため、幅は文字ぶんを確保し、
+   入らないものは次の行に落とす（本人の指示 2026-08-22）。
+   文字の見え方は端末のフォントで変わるので、幅を決め打ちにしない */
 .match-card .mc-foot {
   margin-top: 8px;
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .match-card .mc-foot button {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* 文字ぶんの幅は必ず確保する（切らない）。
+     ただし左右の余白は詰めて、ふつうの画面幅では1行に収まるようにする
+     （2026-08-20 の指示「操作ボタンが1行に収まる」と両立させるため）。
+     どうしても入らない狭い画面では、切らずに次の行へ落とす */
+  min-width: max-content;
   white-space: nowrap;
   padding-left: 4px;
   padding-right: 4px;
@@ -382,7 +391,10 @@
 
 /* ラックの区切り。以前は黒い内枠だったが、マスの枠線と見分けが付かず
    どこで切れているのか読めなかった。明るいオレンジの枠＋斜線にする */
-.sheet-cell.rack-end {
+/* B側の塗り（.side-b .sheet-cell.filled）は background のまとめ書きなので、
+   同じ強さで書かないと斜線が消える。セレクタを1つ深くして両側に効かせる
+   （2026-08-22: B側だけ斜線が出ていなかった） */
+.sheet-side .sheet-cell.rack-end {
   box-shadow: inset 0 0 0 3px #ff8c1a;
   background-image: repeating-linear-gradient(
     45deg,
@@ -2292,6 +2304,10 @@ button::after {
 .sheet-cell.rack-open {
   border-left: 3px solid var(--ink);
   position: relative;
+  /* マスは中身がはみ出さないよう overflow:hidden にしてあるが、
+     ラック番号の札はマスの外に出す。切られて読めなかった（2026-08-22） */
+  overflow: visible;
+  z-index: 1;
 }
 .sheet-cell.rack-open::after {
   content: attr(data-rack);
@@ -2307,8 +2323,45 @@ button::after {
   line-height: 1.2;
   pointer-events: none;
 }
+/* ラックの区切り（斜線のマス）にも何ラック目かを出す（本人の指示 2026-08-22）。
+   始まりの番号は上、終わりの番号は下に出して、隣り合っても重ならないようにする */
+.sheet-cell.rack-end {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+}
+.sheet-cell.rack-end::before {
+  content: attr(data-rack-end);
+  position: absolute;
+  right: -2px;
+  bottom: -11px;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--ink);
+  background: #ffd9b0;
+  border: 1px solid var(--ink);
+  padding: 0 2px;
+  line-height: 1.2;
+  pointer-events: none;
+}
 .sheet-grid {
   padding-top: 12px;
+  /* 区切りの番号は下にはみ出すので、その分の逃げを作る */
+  padding-bottom: 12px;
+}
+
+/* ラックごとの無効球（本人の指示 2026-08-22） */
+.sheet-dead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.sheet-dead .sd-label {
+  color: var(--text-dim, #6b5c48);
 }
 
 /* スコア修正のイニング調整 */
@@ -2735,12 +2788,17 @@ button::after {
   pointer-events: none;
 }
 
-/* まとめて操作する帯。画面の下に貼り付ける */
+/* まとめて操作する帯。画面の下に貼り付ける。
+   ただし bottom:0 にすると下のタブバー（.tab-bar は position:fixed で
+   高さ 56px + 上の枠 4px）の裏に潜り、3つのボタンがまるごと隠れる。
+   「選んだあと何をすればいいか分からない」状態になっていたため、
+   タブバーの高さぶん持ち上げる（本人の指示 2026-08-22）。
+   safe-area の余白はタブバー側が持っているので、こちらでは足さない */
 .bulk-bar {
   position: sticky;
-  bottom: 0;
+  bottom: calc(60px + env(safe-area-inset-bottom));
   z-index: 20;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px 12px;
   background: var(--surface);
   border-top: var(--bw-thick) solid var(--ink);
   box-shadow: 0 -4px 0 rgba(0, 0, 0, .12);

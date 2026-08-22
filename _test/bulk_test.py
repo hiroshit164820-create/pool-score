@@ -8,7 +8,7 @@
   「既存メモがあるときは既存を『メモ1』として、『メモ2』に自動的に追記する形に」
 
 対象:
-  1. 履歴に「選ぶ」があり、押すと選べる状態になる
+  1. 履歴に「複数選択」があり、押すと選べる状態になる
   2. カードを押すと選べる／もう一度押すと外れる
   3. 選んでいる間は、カードの中のボタン（削除など）を押せない
   4. 何も選んでいないと、まとめての操作は押せない
@@ -16,7 +16,7 @@
   6. まとめてメモ：メモが無い試合にはそのまま入る
   7. まとめてメモ：**すでにメモがある試合は「メモ1」「メモ2」になる**
   8. 3回目は「メモ3」になる（番号が続く）
-  9. 「選ぶのをやめる」で選択が消える
+  9. 「複数選択をやめる」で選択が消える
  10. JSエラーが無い
 
 実行: python _test/bulk_test.py
@@ -116,14 +116,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(700)
     check(cards(pg).count() == 3, "履歴に3件ある", cards(pg).count())
 
-    section("2. 「選ぶ」で選べる状態になる")
-    check(pg.is_visible("#histSelectBtn"), "「選ぶ」がある")
+    section("2. 「複数選択」で選べる状態になる")
+    check(pg.is_visible("#histSelectBtn"), "「複数選択」がある")
     check(pg.locator("#bulkBar").get_attribute("hidden") is not None,
           "ふだんはまとめての帯を出さない")
     pg.click("#histSelectBtn")
     pg.wait_for_timeout(500)
     check(pg.locator("#bulkBar").get_attribute("hidden") is None, "まとめての帯が出る")
-    check((pg.text_content("#histSelectBtn") or "").strip() == "選ぶのをやめる",
+    check((pg.text_content("#histSelectBtn") or "").strip() == "複数選択をやめる",
           "ボタンの文字が変わる", pg.text_content("#histSelectBtn"))
     check(cards(pg).nth(0).evaluate("e => e.classList.contains('is-selectable')"),
           "カードが選べる見た目になる")
@@ -206,14 +206,14 @@ with sync_playwright() as p:
     check(left == n_before - 2, "選んだ2件だけ消える", {"前": n_before, "後": left})
     check("選びたい" in pg.inner_text("#bulkCount"), "選択が空になる")
 
-    section("10. 選ぶのをやめる")
+    section("10. 複数選択をやめる")
     pick(pg, 0)
     pg.click("#histSelectBtn")
     pg.wait_for_timeout(500)
     check(pg.locator("#bulkBar").get_attribute("hidden") is not None, "帯が消える")
     check(not cards(pg).nth(0).evaluate("e => e.classList.contains('is-picked')"),
           "選択も消える")
-    check((pg.text_content("#histSelectBtn") or "").strip() == "選ぶ", "文字が戻る")
+    check((pg.text_content("#histSelectBtn") or "").strip() == "複数選択", "文字が戻る")
     # ふつうの状態ではカードの中のボタンが押せる
     live = cards(pg).nth(0).evaluate("""e => {
       const b = e.querySelector('.mc-foot button');

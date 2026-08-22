@@ -583,6 +583,15 @@ const MONEYUI = (function () {
   function saveResult() {
     if (!shots.length) return null;
     const r = MONEY.tally(game, players, shots, handicaps, liveRacks());
+    // 1ラック内の最大得点（本人の指示 2026-08-22）。
+    // tally の moves はラックごとに「誰が相手1人あたり何点得たか」を1件ずつ積む。
+    // 実際に得た点は per × 相手の人数なので、その最大を人ごとに取る。
+    // 最終得点（totals）は試合ぶんの合計なので、ここでは使えない
+    const maxRack = {};
+    (r.moves || []).forEach(function (mv) {
+      const got = mv.per * mv.from;
+      if (maxRack[mv.by] === undefined || got > maxRack[mv.by]) maxRack[mv.by] = got;
+    });
     const saved = STORE.saveMoneyResult({
       id: matchId,
       gameId: game.id,
@@ -598,6 +607,8 @@ const MONEYUI = (function () {
           name: p.name,
           score: r.totals[p.id] || 0,
           masuwari: mine.length,
+          // 1度も得点していない人は null（0点と「記録なし」を分けるため）
+          maxRackScore: maxRack[p.id] === undefined ? null : maxRack[p.id],
           handicapBalls: (handicapOn[p.id] && handicaps[p.id]) || [],
         };
       }),

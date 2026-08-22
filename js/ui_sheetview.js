@@ -202,6 +202,9 @@ const SHEETVIEW = (function () {
           text: String(n),
         });
         if (newRack) cell.setAttribute("data-rack", "R" + hit.rackNo);
+        // 区切り（斜線）のマスに、何ラック目が終わったのかを出す
+        // （本人の指示 2026-08-22）
+        if (hit && hit.rackEnd) cell.setAttribute("data-rack-end", "R" + hit.rackNo);
         if (hit) prevRack = hit.rackNo;
         grid.appendChild(cell);
       }
@@ -213,8 +216,9 @@ const SHEETVIEW = (function () {
     if (s.innings !== null && s.innings !== undefined) {
       foot.appendChild(UI.el("span", { class: "sf-item", text: "イニング " + s.innings }));
     }
+    // 「死球」は分かりにくいので画面の他の場所と同じ「無効球」にした（本人の指示 2026-08-22）
     if (s.deadBalls) {
-      foot.appendChild(UI.el("span", { class: "sf-item", text: "死球 " + s.deadBalls }));
+      foot.appendChild(UI.el("span", { class: "sf-item", text: "無効球 " + s.deadBalls }));
     }
     const tp = s.teamPoints;
     if (tp) {
@@ -227,6 +231,22 @@ const SHEETVIEW = (function () {
       foot.appendChild(UI.el("span", { class: "sf-item", text: nm + " の勝ち" }));
     }
     if (foot.childNodes.length) body.appendChild(foot);
+
+    // ラックごとの無効球（本人の指示 2026-08-22）。
+    // 合計だけでは「どのラックで流れたのか」が分からないため、ラック別にも並べる。
+    // 2026-08-22 より前の試合には記録が無いので、その場合は何も出ない
+    const items = [];
+    (s.rackDead || []).forEach(function (n, i) {
+      if (n > 0) items.push("R" + (i + 1) + " " + n + "個");
+    });
+    if (items.length) {
+      body.appendChild(
+        UI.el("div", { class: "sheet-dead" }, [
+          UI.el("span", { class: "sd-label", text: "ラックごとの無効球" }),
+          UI.el("span", { class: "sd-list", text: items.join("　") }),
+        ])
+      );
+    }
   }
 
   return { open: open, has: has, close: close_ };

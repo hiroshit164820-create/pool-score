@@ -710,7 +710,8 @@ const HISTORY = (function () {
       Object.keys(picked).forEach(function (k) { delete picked[k]; });
     }
     const b = $("histSelectBtn");
-    if (b) b.textContent = selectMode ? "選ぶのをやめる" : "選ぶ";
+    // 「選ぶ」だけでは何のことか分からないため「複数選択」にした（本人の指示 2026-08-22）
+    if (b) b.textContent = selectMode ? "複数選択をやめる" : "複数選択";
     render();
   }
 

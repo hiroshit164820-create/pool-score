@@ -69,3 +69,5 @@ python	fix_stats_test.py	成績の表記（対戦相手別＝試合数順・パ�
 python	fix_layout_test.py	配置画面とルール選択画面の手直し（左に集約・球を小さく・札の表記・時計の段ずれ、08-22）
 python	fix_match_test.py	試合画面の手直し（横向き連続入力・シート重ね表示・エース／マスワリ・無効球カウント、08-22）
 python	fix_home_test.py	ホーム画面のボタン（金色をやめる・押せると分かる形／08-22）
+python	tune10_test.py	履歴の複数選択・ボタンの文字切れ・成績2項目（08-22 指示5件）
+python	jpasheet_test.py	JPAスコアシート（ラックの札・9番を入れた側の斜線・ラックごとの無効球・無効球の表記／08-22）

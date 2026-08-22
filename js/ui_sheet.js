@@ -149,20 +149,46 @@ const SHEET = (function () {
    * 何点目がどのラックだったかが分かるよう、
    * ラックの最後の点に×印を付ける（公式の記載どおり）。
    */
+  /**
+   * ラックごとの無効球を1行に並べる（本人の指示 2026-08-22）。
+   *
+   * 1個も無効球が無い試合では行ごと出さない。
+   * 無効球が出たラックだけを「R2 3個」の形で並べる（全ラックを0個で埋めない）。
+   */
+  function appendDeadByRack(area, rackDead) {
+    const list = rackDead || [];
+    const items = [];
+    list.forEach(function (n, i) {
+      if (n > 0) items.push("R" + (i + 1) + " " + n + "個");
+    });
+    if (!items.length) return;
+    area.appendChild(
+      UI.el("div", { class: "sheet-dead" }, [
+        UI.el("span", { class: "sd-label", text: "ラックごとの無効球" }),
+        UI.el("span", { class: "sd-list", text: items.join("　") }),
+      ])
+    );
+  }
+
   function jpaSeries(match) {
     const r = resolveGame(match.gameId);
     const scoreOf = r.scoring.scoreOf || function () { return 1; };
     const out = { A: [], B: [] };
     let rackNo = 1;
+    // 直前に球を入れた側。ラックが終わった時点で、その人が9番を入れたとみなす
+    let lastPocketSide = null;
 
     (match.events || []).forEach(function (e) {
       if (e.voided) return;
       if (e.t === "RACK_START") {
-        // 前のラックの最後の点に印を付ける
-        ["A", "B"].forEach(function (side) {
-          const arr = out[side];
-          if (arr.length) arr[arr.length - 1].rackEnd = true;
-        });
+        // 前のラックの最後の点に印を付ける。
+        // 付けるのは「そのラックを取った側」だけ（本人の指示 2026-08-22）。
+        // 両方に付けると、どちらが9番を入れたのか読めなかった
+        if (lastPocketSide && out[lastPocketSide].length) {
+          const arr = out[lastPocketSide];
+          arr[arr.length - 1].rackEnd = true;
+        }
+        lastPocketSide = null;
         rackNo = (e.d && e.d.rackNo) || rackNo + 1;
         return;
       }
@@ -174,6 +200,7 @@ const SHEET = (function () {
           out[e.side].push({ ball: b, rackNo: rackNo, rackEnd: false });
         }
       });
+      lastPocketSide = e.side;
     });
     return out;
   }
@@ -246,6 +273,9 @@ const SHEET = (function () {
           text: String(n),
         });
         if (newRack) cell.setAttribute("data-rack", "R" + hit.rackNo);
+        // 区切り（斜線）のマスに、何ラック目が終わったのかを出す
+        // （本人の指示 2026-08-22）
+        if (hit && hit.rackEnd) cell.setAttribute("data-rack-end", "R" + hit.rackNo);
         if (hit) prevRack = hit.rackNo;
         grid.appendChild(cell);
       }
@@ -258,16 +288,22 @@ const SHEET = (function () {
     foot.appendChild(
       UI.el("span", { class: "sf-item", text: "イニング " + (st.innings + 1) })
     );
-    // 死球・タイムアウトは公式シートの記入項目なので、あれば出す
+    // 無効球・タイムアウトは公式シートの記入項目なので、あれば出す。
+    // 「死球」は分かりにくいので画面の他の場所と同じ「無効球」にした（本人の指示 2026-08-22）
     const dead = (st.stats && st.stats.A ? st.stats.A.deadBalls : 0)
       + (st.stats && st.stats.B ? st.stats.B.deadBalls : 0);
-    if (dead) foot.appendChild(UI.el("span", { class: "sf-item", text: "死球 " + dead }));
+    if (dead) foot.appendChild(UI.el("span", { class: "sf-item", text: "無効球 " + dead }));
     area.appendChild(foot);
+
+    // ラックごとの無効球（本人の指示 2026-08-22）。
+    // 合計だけでは「どのラックで流れたのか」が分からないため、ラック別にも並べる
+    appendDeadByRack(area, st.rackDead);
 
     area.appendChild(
       UI.el("p", {
         class: "hint sheet-src",
-        text: "×印はラックの区切りです。JPA公式スコアシートの記入方式に合わせています。",
+        text: "斜線はラックの区切りで、9番を入れた側に付きます。"
+          + "JPA公式スコアシートの記入方式に合わせています。",
       })
     );
   }

@@ -282,6 +282,13 @@ function initState(match, base) {
     // ラックの区切りは「両者のスコア＋無効球ぶんの点」で見る（本人の指示 2026-08-21）
     deadBalls: 0,
     deadPoints: 0,
+    // ラックごとの無効球の数（本人の指示 2026-08-22）。
+    // スコアシートに「どのラックで何個無効になったか」を書くために使う。
+    // 添字はラック番号-1。手で押した無効球と、9番投入時に残っていた球の両方を数える
+    rackDead: [],
+    // そのラックを取った側（'A'/'B'）。添字はラック番号-1。
+    // スコアシートの斜線を、9番を入れた側にだけ付けるために使う
+    rackWinner: [],
     rackPocketed: { A: [], B: [] },
     // スリーファール管理（同一ラック内・連続）
     foulStreak: { A: 0, B: 0 },
@@ -482,13 +489,41 @@ function applyPocket(st, ev, ctx) {
   if (hitKey) finishRack(st, side, ctx);
 }
 
+/**
+ * ラックごとの無効球を数える（本人の指示 2026-08-22）。
+ *
+ * 添字はラック番号-1。rackNo は最初のラックが 1 だが、
+ * 記録の入り方によっては 0 のまま進むことがあるので下限を 1 にする。
+ */
+function addRackDead(st, n) {
+  if (!n) return;
+  if (!st.rackDead) st.rackDead = [];
+  const i = Math.max(1, st.rackNo || 1) - 1;
+  while (st.rackDead.length <= i) st.rackDead.push(0);
+  st.rackDead[i] += n;
+}
+
+/** そのラックを取った側を残す。添字は addRackDead と同じ */
+function addRackWinner(st, side) {
+  if (!side) return;
+  if (!st.rackWinner) st.rackWinner = [];
+  const i = Math.max(1, st.rackNo || 1) - 1;
+  while (st.rackWinner.length <= i) st.rackWinner.push(null);
+  st.rackWinner[i] = side;
+}
+
 /** ラック確定処理 */
 function finishRack(st, winnerSide, ctx) {
   st.racks[winnerSide]++;
 
+  // このラックを取った側を残す（本人の指示 2026-08-22）。
+  // スコアシートの斜線を、9番を入れた側にだけ付けるために使う
+  addRackWinner(st, winnerSide);
+
   // 無効球（デッドボール）: JPAは9番投入時に盤面の残り球が全て無効
   if (ctx.scoring.deadBallOnKeyBall && st.onTable.length) {
     st.stats[winnerSide].deadBalls += st.onTable.length;
+    addRackDead(st, st.onTable.length);
     st.onTable = [];
   }
 
@@ -737,6 +772,8 @@ function applyDeadBalls(st, ev, ctx) {
   if (ev.side && st.stats[ev.side]) st.stats[ev.side].deadBalls += n;
   st.deadBalls = (st.deadBalls || 0) + n;
   st.deadPoints = (st.deadPoints || 0) + pts;
+  // どのラックで無効になったかも残す（スコアシートに書くため）
+  addRackDead(st, n);
 }
 
 function applyShotClock(st, ev) {
@@ -893,16 +930,29 @@ function sheetKindOf(match) {
 function jpaSeriesOf(match) {
   const r = resolveGame(match.gameId);
   const scoreOf = r.scoring.scoreOf || function () { return 1; };
-  const out = { A: [], B: [], lastRack: 1 };
+  const out = { A: [], B: [], lastRack: 1, rackWinner: [] };
   let rackNo = 1;
+  // 直前に球を入れた側。ラックが終わった時点でその人が9番を入れたとみなす
+  let lastPocketSide = null;
+  // 最初の RACK_START を通ったか（ラック1の始まりを「終わり」と数えないため）
+  let started = false;
 
   ((match && match.events) || []).forEach(function (e) {
     if (e.voided) return;
     if (e.t === "RACK_START") {
-      ["A", "B"].forEach(function (side) {
-        const arr = out[side];
-        if (arr.length) arr[arr.length - 1].rackEnd = true;
-      });
+      // ラックの終わりの斜線は、そのラックを取った側にだけ付ける
+      // （両者に付くと、どちらが9番を入れたのか読めない／本人の指示 2026-08-22）。
+      // 9番を入れた人がラックを終わらせるので、直前に球を入れた側がそれにあたる
+      if (lastPocketSide && out[lastPocketSide].length) {
+        const arr = out[lastPocketSide];
+        arr[arr.length - 1].rackEnd = true;
+      }
+      // 記録するのは「終わったラックを取った側」。
+      // 試合の最初の RACK_START はラック1の始まりであって、
+      // 何かが終わったわけではないので数に入れない（数えると添字が1つずれる）
+      if (started) out.rackWinner.push(lastPocketSide || null);
+      started = true;
+      lastPocketSide = null;
       rackNo = (e.d && e.d.rackNo) || rackNo + 1;
       if (rackNo > out.lastRack) out.lastRack = rackNo;
       return;
@@ -915,6 +965,7 @@ function jpaSeriesOf(match) {
         out[e.side].push({ ball: b, rackNo: rackNo, rackEnd: false });
       }
     });
+    lastPocketSide = e.side;
   });
   return out;
 }
@@ -943,29 +994,54 @@ function buildSheetData(match) {
     if (c.length > data.lr) data.lr = c.length;
     data[side] = { b: b, c: c };
   });
+  // ラックを取った側（w）と、ラックごとの無効球（dd）。本人の指示 2026-08-22。
+  // どちらも中身があるときだけ足す。空の配列まで持たせると、
+  // 共有リンクに使う JSON がその分だけ長くなるため。
+  // 古い記録にはこの2つが無く、読む側は「印は両方に付ける／無効球は出さない」に戻る
+  const w = (ser.rackWinner || []).map(function (s) { return s || ""; });
+  if (w.some(function (s) { return s; })) data.w = w;
+  const dd = deadByRackOf(match);
+  if (dd.some(function (n) { return n > 0; })) data.dd = dd;
   return data;
+}
+
+/**
+ * ラックごとの無効球の数をイベント列から数える（本人の指示 2026-08-22）。
+ *
+ * リデューサを通した派生状態（st.rackDead）と同じものを、
+ * 終わった試合の保存データを作るときにも使えるようにここで組み立てる。
+ */
+function deadByRackOf(match) {
+  const st = reduceMatch(match);
+  return (st && st.rackDead) ? st.rackDead.slice() : [];
 }
 
 /**
  * 保存したデータから、画面が使う得点列に戻す。
  * ラックの最後の点に付く印（rackEnd）は
  * 「そのラックの最後の点で、かつ後にもラックが始まっている」で決まる。
+ *
+ * 2026-08-22 から、印はそのラックを取った側にだけ付ける（sheet.w）。
+ * w を持たない古い記録は、これまでどおり両方に付ける
  */
 function jpaSeriesFromSheet(sheet) {
-  const out = { A: [], B: [] };
+  const out = { A: [], B: [], rackDead: (sheet && sheet.dd) ? sheet.dd.slice() : [] };
   if (!sheet) return out;
   const lr = sheet.lr || 1;
+  const w = sheet.w || null;
   ["A", "B"].forEach(function (side) {
     const d = sheet[side] || { b: [], c: [] };
     const balls = d.b || [];
     let i = 0;
     (d.c || []).forEach(function (cnt, ri) {
       const rackNo = ri + 1;
+      // 取った側が分かる記録なら、その側にだけ印を付ける
+      const mine = w ? (w[ri] === side) : true;
       for (let n = 0; n < cnt; n++) {
         out[side].push({
           ball: balls[i++],
           rackNo: rackNo,
-          rackEnd: n === cnt - 1 && rackNo < lr,
+          rackEnd: n === cnt - 1 && rackNo < lr && mine,
         });
       }
     });
