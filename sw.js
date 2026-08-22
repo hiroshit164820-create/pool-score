@@ -8,7 +8,7 @@
  *   CACHE_VERSION を上げると古いキャッシュを捨てて入れ替える。
  *   ファイルを変更したときは必ずこの数字を上げること。
  */
-const CACHE_VERSION = "v51";
+const CACHE_VERSION = "v52";
 const CACHE_NAME = "pool-score-" + CACHE_VERSION;
 
 const ASSETS = [
@@ -101,7 +101,14 @@ self.addEventListener("fetch", function (e) {
       })
       .catch(function () {
         return caches.match(req).then(function (hit) {
-          return hit || caches.match("./index.html");
+          if (hit) return hit;
+          // キャッシュにも無いとき、以前はどんな要求にも index.html を返していた。
+          // CSS や JS の要求に HTML が返ると、ブラウザは中身の種類が違うとして
+          // 読み捨てる。スタイルがまるごと当たらない画面になるため、
+          // 差し替えてよいのは画面そのものの要求（navigate）だけにする。
+          // 2026-08-22: 実機でレイアウトが崩れた件の原因の一つ
+          if (req.mode === "navigate") return caches.match("./index.html");
+          return Response.error();
         });
       })
   );

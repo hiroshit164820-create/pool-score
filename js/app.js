@@ -5,10 +5,11 @@
   /**
    * 追加ぶんのスタイルを読み込む。
    *
-   * index.html に <link> を足すのが本来だが、同じ時間に別のセッションが
-   * index.html と style.css を編集していたため、書き込みの衝突で
-   * どちらかの変更が消えるのを避けてここから足している。
-   * 手が空いたら index.html の <link> に移してよい。
+   * 2026-08-22: index.html の <link> に移した。ここから差し込む作りだと
+   * スタイルの適用が JS の実行に依存し、実機で当たらないと全画面の
+   * レイアウトが崩れる（幅指定と横並びがまるごと効かない状態になった）。
+   * いまは index.html 側に data-v2css の <link> があるため、この関数は
+   * 何もせずに戻る。古い index.html が残っているときの保険として置いておく。
    */
   (function loadExtraCss() {
     if (document.querySelector('link[data-v2css]')) return;

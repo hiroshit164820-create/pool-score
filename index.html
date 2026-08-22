@@ -16,6 +16,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="ビリヤード">
 <link rel="stylesheet" href="style.css">
+<!-- v2.css は 2026-08-22 まで js/app.js から動的に差し込んでいたが、
+     実機でこれが当たらず全画面のレイアウトが崩れた（幅指定と横並びが
+     まるごと効かない状態）。スタイルの読み込みを JS の実行に依存させない。
+     data-v2css は app.js 側の二重読み込み防止の目印 -->
+<link rel="stylesheet" href="css/v2.css" data-v2css="1">
 </head>
 <body>
 
