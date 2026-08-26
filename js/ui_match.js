@@ -722,6 +722,13 @@ const MATCH = (function () {
    * ボールハンデがある場合は、その人にとって得点になる球のうち
    * 一番若い番号を消費する。ハンデが無ければ盤面の最若番。
    *
+   * 相手にだけハンデが付いている側も「得点になる球」で選ぶ。
+   * この人が得点できるのはキーボール（9番など）だけで、
+   * engine.js の makeScorer も同じ規則で数えている。
+   * 以前はここが盤面の最若番のままだったため、1番から順に落ちるだけで
+   * 点が入らず、9ボールで8回・10ボールで9回押さないと1点にならなかった
+   * （本人の指摘・2026-08-23 に実測して確認）。
+   *
    * 得点になる球が残っていなければ null を返す（呼び出し側で知らせる）。
    */
   function pickBallToPocket(side, st) {
@@ -734,6 +741,13 @@ const MATCH = (function () {
       bh.scoringBalls.forEach(function (b) { allowed[b] = true; });
       const hit = onTable.filter(function (b) { return allowed[b]; });
       return hit.length ? hit[0] : null;
+    }
+    // ボールハンデ戦で、この側にはハンデが無いとき。
+    // JPA や 14-1（ハンデの無い球単位の種目）はここへ来ないので、
+    // 1番から順に消していく従来どおりの動きが保たれる
+    const r = resolveGame(match.gameId);
+    if (hasAnyHandicap() && r.base.keyBall) {
+      return onTable.indexOf(r.base.keyBall) >= 0 ? r.base.keyBall : null;
     }
     return onTable[0];
   }

@@ -248,11 +248,21 @@ with sync_playwright() as p:
     }""")
     check(ev and ev[-1] == 7, "得点にならない1番ではなく7番が消費される", ev)
 
-    # Aをタップ → 1番が入るが0点（ハンデなし側は9番のみ得点）
+    # Aをタップ → ハンデなし側は9番だけが得点なので、9番が消費されて1点。
+    # 2026-08-23 まで「盤面の最若番（1番）を落として0点」になっており、
+    # 何回押しても点が入らなかった（本人の指摘で修正）。
+    # 「ハンデなし側は9番のみ得点」という規則そのものは変わっていない
     pg.click("#panelA")
     pg.wait_for_timeout(400)
-    check(pg.text_content("#scoreA") == "0", "Aは9番以外では点が入らない",
+    check(pg.text_content("#scoreA") == "1", "Aのタップでも1点入る",
           pg.text_content("#scoreA"))
+    ev2 = pg.evaluate("""() => {
+      const idx = JSON.parse(localStorage.getItem('pool_matches_index') || '[]');
+      const m = JSON.parse(localStorage.getItem('pool_match_' + idx[0].id));
+      return m.events.filter(e => e.t === 'POCKET' && e.side === 'A')
+        .map(e => e.d.balls[0]);
+    }""")
+    check(ev2 == [9], "ハンデなし側が消費するのは9番だけ", ev2)
 
     pg.screenshot(path=os.path.join(SHOTS, "62_handicap_match.png"), full_page=False)
 
