@@ -3258,3 +3258,24 @@ select.goal-more.is-picked {
 .detail-card .game-card.is-empty {
   opacity: 0.85;
 }
+
+/* ============ 履歴カードの「⋯」（本人の指示 2026-08-27） ============
+   「記録を直す」を足したらボタンが5つになり、狭い画面で1行に収まらなくなった。
+   選手一覧の .pc-more-body と同じ形で、めったに押さない操作をここへ移す */
+.mc-more {
+  flex: 0 0 auto;
+  min-width: 44px;
+}
+.match-card .mc-more-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2px dashed var(--ink);
+}
+.match-card .mc-more-body > button {
+  flex: 1 1 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}

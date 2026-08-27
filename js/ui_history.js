@@ -22,6 +22,10 @@ const HISTORY = (function () {
      「履歴にチェックボックス付けて、複数選択してからまとめて送信みたいな。
        複数まとめて削除、複数まとめてメモ、も可能にしたい」 */
 
+  // 「⋯」を開いている試合のid（本人の指示 2026-08-27）。
+  // 一度に1枚だけ開く。選手一覧の「⋯」と同じ作り
+  let openMoreFor = null;
+
   // 選ぶ状態か。ふだんは切っておく（誤って選んだまま削除するのを防ぐ）
   let selectMode = false;
   // 選んだ試合のid
@@ -584,27 +588,79 @@ const HISTORY = (function () {
           onclick: function () { editNote(m); },
         })
       );
-      // 削除は取り消せないため、ここだけ確認を挟む
+      // 「⋯」の中にしまう操作（本人の指示 2026-08-27）。
+      // 「記録を直す」を足したらボタンが5つになり、狭い画面（320〜390px）で
+      // 1行に収まらなくなった（2026-08-20 の指示「操作ボタンが1行に収まる」）。
+      // 選手一覧と同じ形で、めったに押さないものをここへ移す。
+      // 削除が誤って押されにくくなる利点もある
       foot.appendChild(
         UI.el("button", {
-          class: "small ghost",
-          text: "削除",
+          class: "small ghost mc-more",
+          "aria-pressed": String(openMoreFor === m.id),
+          "aria-label": "その他の操作",
+          title: "記録を直す・削除",
+          text: "⋯",
           onclick: function () {
-            const who = m.names.A + " 対 " + m.names.B;
-            if (!window.confirm([
-              "この試合の記録を削除します。",
-              "",
-              m.gameLabel + "／" + who,
-              "",
-              "削除すると元に戻せません。よろしいですか？"
-            ].join(String.fromCharCode(10)))) return;
-            STORE.deleteMatch(m.id);
+            openMoreFor = openMoreFor === m.id ? null : m.id;
             render();
-            UI.toast("削除しました。");
           },
         })
       );
       card.appendChild(foot);
+
+      if (openMoreFor === m.id) {
+        const more = UI.el("div", { class: "mc-more-body" });
+        // 記録を直す（本人の指示 2026-08-27）。
+        // 終わった試合を試合画面で開き、「スコア修正」から記録を取り消せる。
+        // 得点の入力は終わった試合では効かないので、増やすことはできず
+        // 消す方向にだけ直せる
+        if (m.finished) {
+          more.appendChild(
+            UI.el("button", {
+              class: "small ghost",
+              text: "記録を直す",
+              onclick: UI.guard(function () {
+                const full = STORE.loadMatch(m.id);
+                if (!full) {
+                  UI.toast("この試合の記録が見つかりません。", "warn");
+                  return;
+                }
+                if (!full.events || !full.events.length) {
+                  // 「保存を軽くする」で1球ごとの記録を間引いた試合。
+                  // 直せる記録が残っていない
+                  UI.toast("この試合は1球ごとの記録が残っていないため直せません。", "warn");
+                  return;
+                }
+                openMoreFor = null;
+                MATCH.open(full);
+                UI.toast("下の「スコア修正」から記録を取り消せます。");
+              }),
+            })
+          );
+        }
+        // 削除は取り消せないため、ここだけ確認を挟む
+        more.appendChild(
+          UI.el("button", {
+            class: "small danger",
+            text: "削除",
+            onclick: function () {
+              const who = m.names.A + " 対 " + m.names.B;
+              if (!window.confirm([
+                "この試合の記録を削除します。",
+                "",
+                m.gameLabel + "／" + who,
+                "",
+                "削除すると元に戻せません。よろしいですか？"
+              ].join(String.fromCharCode(10)))) return;
+              STORE.deleteMatch(m.id);
+              openMoreFor = null;
+              render();
+              UI.toast("削除しました。");
+            },
+          })
+        );
+        card.appendChild(more);
+      }
   }
 
   /**

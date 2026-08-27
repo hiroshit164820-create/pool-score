@@ -267,8 +267,13 @@ def run():
         check(page.locator(".match-card").count() == 1, "リロード後も履歴に記録が残っている")
 
         # ---------- 削除は確認が出る（取り消せない操作） ----------
+        # 2026-08-27 から「削除」は「⋯」の中に入っている
+        # （「記録を直す」を足してボタンが5つになり、狭い画面で
+        #   1行に収まらなくなったため。誤って押しにくくなる利点もある）
+        page.click(".match-card .mc-more")
+        page.wait_for_timeout(400)
         page.once("dialog", lambda d: d.dismiss())
-        page.click('.match-card button:has-text("削除")')
+        page.click('.match-card .mc-more-body button:has-text("削除")')
         page.wait_for_timeout(300)
         check(page.locator(".match-card").count() == 1, "確認でキャンセルすると削除されない")
         # 履歴の下部ボタンは削除したので、下のタブから種目へ移る（2026-08-21）

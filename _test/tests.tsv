@@ -72,3 +72,4 @@ python	fix_home_test.py	ホーム画面のボタン（金色をやめる・押�
 python	tune10_test.py	履歴の複数選択・ボタンの文字切れ・成績2項目（08-22 指示5件）
 python	jpasheet_test.py	JPAスコアシート（ラックの札・9番を入れた側の斜線・ラックごとの無効球・無効球の表記／08-22）
 python	bh_score_test.py	ボールハンデありでスコアが入るか（ハンデの無い側がキーボールを落とす／08-23）
+python	fixhist_test.py	履歴から終わった試合の記録を直す（結果と成績の作り直し・進行中に戻る／08-27）

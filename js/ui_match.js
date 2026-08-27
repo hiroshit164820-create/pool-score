@@ -2024,6 +2024,69 @@ const MATCH = (function () {
     }
   }
 
+  /**
+   * 終わった試合を直すときの断り（本人の指示 2026-08-27）。
+   *
+   * 試合中の取り消しは何度も使うので出さない。
+   * 終わった試合（match.result がある）を履歴から開いたときだけ確かめる。
+   */
+  function confirmEditFinished() {
+    return window.confirm([
+      "この記録を取り消すと、試合結果と成績が計算し直されます。",
+      "",
+      "勝敗が変わって、この試合が「進行中」に戻ることがあります。",
+      "取り消した記録は元に戻せません。",
+      "",
+      "取り消しますか？",
+    ].join(String.fromCharCode(10)));
+  }
+
+  /**
+   * 終わった試合の記録を直したあと、結果を作り直す（本人の指示 2026-08-27）。
+   *
+   * 結果（match.result）は試合終了のときに確定して保存され、
+   * あとから記録を取り消しても作り直されない作りだった。
+   * そのため記録だけ消えて、履歴の点数も成績も元のまま、という
+   * 分かりにくい状態になっていた（2026-08-27 に実測して確認）。
+   *
+   * 勝利条件を満たさなくなった試合は「進行中」に戻す。
+   * 中途半端な結果を残すと、履歴の点数と記録が食い違うため。
+   * 終わった日時は元のままにする（作り直すたびに履歴の並びが動かないように）。
+   *
+   * @returns {boolean} 進行中に戻したら true
+   */
+  function refreshFinishedResult() {
+    if (!match.result) return false;   // 進行中の試合は今までどおり何もしない
+    const prevEndedAt = match.result.endedAt;
+
+    // 「試合終了」の記録は勝者をそのまま書き込む（engine.js の MATCH_END）。
+    // これを数に入れたまま数え直すと、点を取り消しても勝者が残ってしまうので、
+    // いったん外して「残っている記録だけで見た勝敗」を求める
+    const ends = match.events.filter(function (e) {
+      return e.t === "MATCH_END" && !e.voided;
+    });
+    ends.forEach(function (e) { e.voided = true; });
+    const bare = reduceMatch(match);
+    ends.forEach(function (e) { e.voided = false; });
+
+    if (bare.winner) {
+      // まだ勝敗が付いている。勝った側が入れ替わることもあるので書き直す
+      ends.forEach(function (e) {
+        e.d = e.d || {};
+        e.d.winner = bare.winner;
+      });
+      match.result = buildResult(
+        match, prevEndedAt ? new Date(prevEndedAt) : new Date());
+      return false;
+    }
+    // 勝敗が決まらなくなった。記録の上でも終わっていない状態に戻す
+    ends.forEach(function (e) {
+      voidEvent(match, e.seq, "訂正で勝敗が決まらなくなった", new Date());
+    });
+    match.result = null;
+    return true;
+  }
+
   function openRevise() {
     const list = $("evList");
     UI.clear(list);
@@ -2031,6 +2094,11 @@ const MATCH = (function () {
     const evs = match.events.slice().reverse();
     evs.forEach(function (e) {
       if (e.t === "VOID" || e.t === "MATCH_START") return;
+      // 「試合終了」そのものは選ばせない（本人の指示 2026-08-27）。
+      // 終わった試合を履歴から直すとき、ここを取り消せると
+      // 意図せず試合が「進行中」に戻ってしまう。
+      // 勝敗が変わって進行中に戻るのは、得点の記録を取り消した結果としてだけ起きる
+      if (e.t === "MATCH_END") return;
       // 自動の記録は選ばせない（選んでも得点は戻らないため）
       if (isAutoEvent(e)) return;
       const row = UI.el("div", { class: "ev-item" + (e.voided ? " voided" : "") }, [
@@ -2043,13 +2111,22 @@ const MATCH = (function () {
             class: "small danger",
             text: "取り消す",
             onclick: function () {
+              // 終わった試合を直しているときは、結果と成績が計算し直される。
+              // 取り返しがつかないので、押す前に断りを入れる（本人の指示 2026-08-27）
+              if (match.result && !confirmEditFinished()) return;
               voidEvent(match, e.seq, "訂正", new Date());
               // 直後に自動で積まれた記録も一緒に消す
               voidTrailingAuto(e.seq);
+              const back = refreshFinishedResult();
               save();
               render();
               openRevise();
-              UI.toast("記録 #" + e.seq + " を取り消しました。");
+              if (back) {
+                UI.toast("記録 #" + e.seq + " を取り消しました。"
+                  + "勝敗が決まらなくなったので、この試合は「進行中」に戻りました。", "warn");
+              } else {
+                UI.toast("記録 #" + e.seq + " を取り消しました。");
+              }
             },
           })
         );
