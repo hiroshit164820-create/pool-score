@@ -123,6 +123,38 @@ with sync_playwright() as p:
         check(not errs, "JSエラーが出ない", errs)
         pg.close()
 
+        # ---- 1ラック最大1点（本人の確認 2026-08-27） ----
+        # ハンデ球を入れた時点でラックが終わるので、
+        # 同じラックで8番・9番と続けて点を重ねることはない。
+        # 以前は7番で1点入ってもラックが続き、最大3点入っていた
+        pg = br.new_page(viewport={"width": 430, "height": 932})
+        pg.on("pageerror", lambda e: errs.append(str(e)))
+        pg.on("dialog", lambda d: d.accept(""))
+        pg.goto(URL)
+        pg.wait_for_timeout(900)
+        open_handicap_match(pg, game_id, chip)
+        for i in range(1, 3):
+            pg.click("#panelB")
+            pg.wait_for_timeout(350)
+            st = pg.evaluate("""() => {
+              const m = STORE.findOngoing();
+              const mm = m ? STORE.loadMatch(m.id) : null;
+              const ev = mm ? mm.events : [];
+              return {
+                点: parseInt((document.getElementById('scoreB')||{}).textContent||'0', 10),
+                ラック: ev.filter(e => e.t === 'RACK_START').length,
+                球: ev.filter(e => e.t === 'POCKET').map(e => e.d.balls.join(',')),
+              };
+            }""")
+            check(st["点"] == i,
+                  "%s ハンデ球%d回で%d点（1ラック1点）" % (label, i, i), st)
+            check(st["ラック"] == i + 1,
+                  "%s ハンデ球を入れるたびにラックが終わる" % label, st)
+            # 同じ球（ハンデの下限）だけが並ぶ＝毎回あたらしいラックの1球目
+            check(len(set(st["球"])) == 1,
+                  "%s 同じラックで点を重ねていない" % label, st["球"])
+        pg.close()
+
     # ============ ハンデを使わない球単位の種目（壊していないこと） ============
     section("ハンデを使わない種目は1番から順のまま")
     for game_id, label, goal_chip in [

@@ -635,6 +635,26 @@ const MATCH = (function () {
    * 球1個ぶんの得点を記録する（14-1）。
    * ballsPerRack 個たまったら、ブレイクボールを残してラックを組み直す（規程第13章第1条第3項）。
    */
+  /**
+   * その球が入ったらラックが終わるか。
+   *
+   * キーボール（9番など）はいつでもラックの終わり。
+   * ボールハンデが付いている側は、ハンデ球を入れた時点で上がりになる
+   * （本人の確認 2026-08-27：「一般種目の場合ハンデボールを入れた時点で
+   * 1ラックが終了します。そのため1ラック最大1点です」）。
+   * 以前はキーボールだけで区切っていたため、7番で1点入ったあとも
+   * 同じラックが続き、8番・9番でも点が入って1ラックで最大3点になっていた。
+   *
+   * 14-1・ローテーションはキーボールを持たないので、ここでは区切らない
+   * （14個入れたら次、という別の規則で進む）。
+   */
+  function endsRack(side, ball, r) {
+    if (!r.base.keyBall) return false;
+    if (ball === r.base.keyBall) return true;
+    const bh = match.goal.ballHandicap && match.goal.ballHandicap[side];
+    return !!(bh && bh.scoringBalls && bh.scoringBalls.indexOf(ball) >= 0);
+  }
+
   function recordOneBall(side, r) {
     const before = reduceMatch(match);
 
@@ -657,8 +677,8 @@ const MATCH = (function () {
         d: { rackNo: after.rackNo + 1, breakSide: side, auto: true, continuation: true },
       });
       UI.toast("14個入りました。ラックを組み直してください。");
-    } else if (r.base.keyBall && ball === r.base.keyBall && !after.winner) {
-      // キーボール（9番など）が入った＝そのラックは終わり。
+    } else if (endsRack(side, ball, r) && !after.winner) {
+      // その人にとっての「上がり球」が入った＝そのラックは終わり。
       // ボールハンデで球単位に数えている場合、ここで区切らないと
       // 盤面が空のままになり次のラックに進めない。
       // ブレイク権は種目の方式に従って決める
@@ -669,7 +689,7 @@ const MATCH = (function () {
         side: null,
         d: { rackNo: after.rackNo + 1, breakSide: nextBreak, auto: true },
       });
-      UI.toast(r.base.keyBall + "番が入りました。次のラックです。");
+      UI.toast(ball + "番が入りました。次のラックです。");
     } else if (maybeAdvanceRack(r)) {
       // 無効球があると9番が入らないままラックぶんの点が尽きることがある
       UI.toast("このラックの点が出そろいました。次のラックです。");

@@ -29,6 +29,34 @@ def check(cond, label, detail=""):
 def put(pg, n):
     pg.click(".tray-ball[data-ball='%s']" % n)
 
+
+def ball_count(pg):
+    return pg.eval_on_selector_all(".tb-ball", "e => e.length")
+
+
+def wait_balls(pg, n, timeout=4000):
+    """台の上の球が n 個になるまで待つ。固定待ちだと取りこぼす"""
+    try:
+        pg.wait_for_function(
+            "n => document.querySelectorAll('.tb-ball').length === n",
+            arg=n, timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+# UI.guard（ui_setup.js）が「直近200ms以内の同じボタンの連打」を誤タップとして
+# 無視する。戻る／進むを続けて押すときは、この間隔より長く空けないと
+# 2回目が捨てられる（2026-08-27 に観測。実装は意図どおりで、
+# 150ms の固定待ちだったこの検証の側が速すぎた）
+GUARD_MS = 260
+
+
+def tap(pg, selector):
+    """連打とみなされない間隔を空けて押す"""
+    pg.wait_for_timeout(GUARD_MS)
+    pg.click(selector)
+
 with sync_playwright() as p:
     br = p.chromium.launch()
     pg = br.new_page(viewport={"width": 390, "height": 844})
@@ -90,18 +118,21 @@ with sync_playwright() as p:
     print("\n-- 戻る／進むが効く --")
     check(pg.eval_on_selector("#layoutUndoBtn", "e => e.disabled"), "最初は「戻る」が押せない")
     check(pg.eval_on_selector("#layoutRedoBtn", "e => e.disabled"), "最初は「進む」が押せない")
-    put(pg, "1"); put(pg, "2"); put(pg, "3")
-    pg.wait_for_timeout(150)
-    check(pg.eval_on_selector_all(".tb-ball", "e => e.length") == 3, "3個置いた")
-    pg.click("#layoutUndoBtn"); pg.wait_for_timeout(150)
-    n2 = pg.eval_on_selector_all(".tb-ball", "e => e.length")
-    check(n2 == 2, "「一つ前に戻る」で2個", n2)
-    pg.click("#layoutUndoBtn"); pg.wait_for_timeout(150)
-    check(pg.eval_on_selector_all(".tb-ball", "e => e.length") == 1, "もう一度戻って1個（2手以上戻れる）")
-    pg.click("#layoutRedoBtn"); pg.wait_for_timeout(150)
-    check(pg.eval_on_selector_all(".tb-ball", "e => e.length") == 2, "「一つ次に進む」で2個に戻る")
-    pg.click("#layoutRedoBtn"); pg.wait_for_timeout(150)
-    check(pg.eval_on_selector_all(".tb-ball", "e => e.length") == 3, "もう一度進んで3個")
+    # 150ms の固定待ちだと、置いた球の描画が間に合わずに2回に1回落ちていた
+    # （2026-08-27 に実測。実装は正しく、待ち方の問題だった）。
+    # 個数が変わるのを待ってから次へ進む
+    for n in ["1", "2", "3"]:
+        put(pg, n)
+        wait_balls(pg, ["1", "2", "3"].index(n) + 1)
+    check(ball_count(pg) == 3, "3個置いた", ball_count(pg))
+    tap(pg, "#layoutUndoBtn")
+    check(wait_balls(pg, 2), "「一つ前に戻る」で2個", ball_count(pg))
+    tap(pg, "#layoutUndoBtn")
+    check(wait_balls(pg, 1), "もう一度戻って1個（2手以上戻れる）", ball_count(pg))
+    tap(pg, "#layoutRedoBtn")
+    check(wait_balls(pg, 2), "「一つ次に進む」で2個に戻る", ball_count(pg))
+    tap(pg, "#layoutRedoBtn")
+    check(wait_balls(pg, 3), "もう一度進んで3個", ball_count(pg))
 
     print("\n-- 6. 一言メモ --")
     check(pg.is_visible("#layoutMemo"), "メモ欄がある")
